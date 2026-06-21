@@ -43,10 +43,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       <div className="card" style={{ padding: '30px 24px' }}>
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '24px', marginBottom: '8px' }}>
-            🏢 트윈타워 재난대응
+            🏢 트윈타워 재난알람
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-            Supabase 실시간 상황전파 및 임무협업
+            상황전파 협업업무
           </p>
         </div>
 
@@ -69,7 +69,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
 
           <button type="submit" className="btn btn-primary" style={{ height: '48px' }}>
-            시스템 입장
+            System Enter
           </button>
         </form>
       </div>
