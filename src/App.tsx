@@ -181,17 +181,19 @@ const App: React.FC = () => {
   // Not logged in view
   if (!currentUser) {
     return (
-      <Login
-        onLogin={handleLogin}
-        availableVoices={availableVoices}
-        selectedVoiceName={selectedVoiceName}
-        onVoiceChange={handleVoiceChange}
-      />
+      <div id="app">
+        <Login
+          onLogin={handleLogin}
+          availableVoices={availableVoices}
+          selectedVoiceName={selectedVoiceName}
+          onVoiceChange={handleVoiceChange}
+        />
+      </div>
     );
   }
 
   return (
-    <>
+    <div id="app">
       {/* Top sticky bar */}
       <header className="topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -425,7 +427,7 @@ const App: React.FC = () => {
           <span>상황판 (COP)</span>
         </button>
       </nav>
-    </>
+    </div>
   );
 };
 

@@ -3,6 +3,7 @@ import { type Incident, type Responder, type MemberTask, db } from '../services/
 import { DISASTERS } from '../data/disasters';
 import { type Employee } from './Login';
 import { Check, ShieldAlert, MapPin, Award, CheckSquare } from 'lucide-react';
+import { unlockAudio } from '../utils/audio';
 
 interface ResponderViewProps {
   activeIncident: Incident | null;
@@ -101,10 +102,45 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
           <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '18px', marginBottom: '8px' }}>
             비상 대기 중
           </h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.5 }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.5, marginBottom: '16px' }}>
             현재 발령된 비상 상황이 없습니다.<br />
             재난 수신기가 감지되거나 지휘자가 발령하면 여기에 알람이 표시됩니다.
           </p>
+          <button
+            onClick={() => {
+              unlockAudio();
+              if ('speechSynthesis' in window) {
+                speechSynthesis.cancel();
+                const u = new SpeechSynthesisUtterance('재난 알람 및 대원 음성 방송 권한이 활성화되었습니다.');
+                const voices = speechSynthesis.getVoices();
+                const userSelectedName = localStorage.getItem('tt_selected_voice') || '';
+                const v = voices.find(voice => voice.name === userSelectedName);
+                if (v) { u.voice = v; u.lang = v.lang; }
+                else { u.lang = 'ko-KR'; }
+                u.rate = 0.95;
+                speechSynthesis.speak(u);
+              }
+              alert('음성 알람 및 사이렌 재생 권한이 성공적으로 활성화되었습니다.');
+            }}
+            className="btn"
+            style={{
+              marginTop: '12px',
+              width: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'rgba(16, 185, 129, 0.1)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              color: '#34d399',
+              padding: '10px 18px',
+              borderRadius: '10px',
+              fontWeight: 700,
+              fontSize: '13px',
+              cursor: 'pointer'
+            }}
+          >
+            🔊 음성 알람 권한 활성화 및 테스트
+          </button>
         </div>
       ) : (
         // 2. ACTIVE INCIDENT STATE (Mission checklists and status buttons)
