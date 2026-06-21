@@ -94,9 +94,16 @@ export function announceTTS(text: string) {
     const applyVoiceAndSpeak = () => {
       const voices = speechSynthesis.getVoices();
       
-      // Look for Microsoft '인준' (Injun) voice first as requested
-      let selectedVoice = voices.find(v => v.lang.startsWith('ko') && (v.name.includes('인준') || v.name.includes('Injun') || v.name.includes('injun')));
+      // 1. Check user-selected voice from UI (window global or localStorage)
+      const userSelectedName = (window as any).__tt_selected_voice || localStorage.getItem('tt_selected_voice') || '';
+      let selectedVoice = userSelectedName ? voices.find(v => v.name === userSelectedName) : null;
+
+      // 2. Fallback: Look for Microsoft '인준' (Injun) voice
+      if (!selectedVoice) {
+        selectedVoice = voices.find(v => v.lang.startsWith('ko') && (v.name.includes('인준') || v.name.includes('Injun') || v.name.includes('injun')));
+      }
       
+      // 3. Fallback: any Korean voice
       if (!selectedVoice) {
         selectedVoice = voices.find(v => v.lang.startsWith('ko') && (v.name.includes('Google') || v.name.includes('Heami'))) || 
                         voices.find(v => v.lang.startsWith('ko')) ||
