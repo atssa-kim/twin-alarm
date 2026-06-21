@@ -2,7 +2,7 @@
   "name": "vibe-project",
   "private": true,
   "version": "0.0.0",
-  "homepage": "https://atssa-kim.github.io/twin-Alarm",
+  "homepage": "https://atssa-kim.github.io/twin-alarm",
   "type": "module",
   "scripts": {
     "dev": "vite",
