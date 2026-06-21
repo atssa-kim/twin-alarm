@@ -24,9 +24,17 @@ export const ROSTER: Employee[] = [
 
 interface LoginProps {
   onLogin: (user: Employee) => void;
+  availableVoices: SpeechSynthesisVoice[];
+  selectedVoiceName: string;
+  onVoiceChange: (voiceName: string) => void;
 }
 
-export const Login: React.FC<LoginProps> = ({ onLogin }) => {
+export const Login: React.FC<LoginProps> = ({
+  onLogin,
+  availableVoices,
+  selectedVoiceName,
+  onVoiceChange
+}) => {
   const [selectedEmpNo, setSelectedEmpNo] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -186,6 +194,47 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   [{emp.empNo}] {emp.name} - {emp.team} ({emp.role})
                 </option>
               ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="voice-select" style={{
+              fontSize: '12px',
+              fontWeight: 700,
+              color: '#64748b',
+              textTransform: 'uppercase',
+              letterSpacing: '0.8px',
+              marginBottom: '8px',
+              display: 'block'
+            }}>
+              TTS 안내 화자 설정
+            </label>
+            <select
+              id="voice-select"
+              value={selectedVoiceName}
+              onChange={(e) => onVoiceChange(e.target.value)}
+              style={{
+                background: 'rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '12px',
+                padding: '14px 16px',
+                color: '#e2e8f0',
+                fontSize: '14px',
+                width: '100%',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+                cursor: 'pointer'
+              }}
+            >
+              {availableVoices.length === 0 ? (
+                <option value="">사용 가능한 화자 없음 (기본값)</option>
+              ) : (
+                availableVoices.map((voice) => (
+                  <option key={voice.name} value={voice.name}>
+                    {voice.name} ({voice.lang})
+                  </option>
+                ))
+              )}
             </select>
           </div>
 

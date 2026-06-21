@@ -24,14 +24,20 @@ const App: React.FC = () => {
   useEffect(() => {
     const loadVoices = () => {
       if ('speechSynthesis' in window) {
-        const voices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('ko'));
-        setAvailableVoices(voices);
+        const voices = speechSynthesis.getVoices();
+        const koVoices = voices.filter(v => v.lang.startsWith('ko') || v.lang.startsWith('KO'));
+        const filteredVoices = koVoices.length > 0 ? koVoices : voices;
+        setAvailableVoices(filteredVoices);
+        
         // If no voice selected yet, default to Injun
-        if (!selectedVoiceName && voices.length > 0) {
-          const injun = voices.find(v => v.name.includes('인준') || v.name.includes('Injun') || v.name.includes('injun'));
+        if (!selectedVoiceName && filteredVoices.length > 0) {
+          const injun = filteredVoices.find(v => v.name.includes('인준') || v.name.includes('Injun') || v.name.includes('injun'));
           if (injun) {
             setSelectedVoiceName(injun.name);
             localStorage.setItem('tt_selected_voice', injun.name);
+          } else {
+            setSelectedVoiceName(filteredVoices[0].name);
+            localStorage.setItem('tt_selected_voice', filteredVoices[0].name);
           }
         }
       }
@@ -41,7 +47,14 @@ const App: React.FC = () => {
       speechSynthesis.addEventListener('voiceschanged', loadVoices);
       return () => speechSynthesis.removeEventListener('voiceschanged', loadVoices);
     }
-  }, []);
+  }, [selectedVoiceName]);
+
+  // Synchronize selectedVoiceName with global window variable for audio utility
+  useEffect(() => {
+    if (selectedVoiceName) {
+      (window as any).__tt_selected_voice = selectedVoiceName;
+    }
+  }, [selectedVoiceName]);
 
   // Close voice picker when clicking outside
   useEffect(() => {
@@ -56,10 +69,24 @@ const App: React.FC = () => {
     }
   }, [showVoicePicker]);
 
+  const getCleanVoiceName = useCallback((fullName: string) => {
+    if (!fullName) return '화자 선택';
+    if (fullName.includes('인준') || fullName.includes('Injun')) return '인준';
+    if (fullName.includes('혜미') || fullName.includes('Heami')) return '혜미';
+    if (fullName.includes('선희') || fullName.includes('SunHi')) return '선희';
+    if (fullName.includes('민준') || fullName.includes('Minjun')) return '민준';
+    if (fullName.includes('Google') && (fullName.includes('ko') || fullName.includes('KO'))) return '구글 KO';
+    return fullName
+      .replace(/Microsoft\s+/g, '')
+      .replace(/Google\s+/g, '')
+      .replace(/\s+Online\s+\(Natural\)/g, '')
+      .replace(/\s+-\s+Korean.*/g, '')
+      .trim();
+  }, []);
+
   const handleVoiceChange = useCallback((voiceName: string) => {
     setSelectedVoiceName(voiceName);
     localStorage.setItem('tt_selected_voice', voiceName);
-    // Update the global voice setting in audio module
     (window as any).__tt_selected_voice = voiceName;
     setShowVoicePicker(false);
     // Preview the voice
@@ -153,7 +180,14 @@ const App: React.FC = () => {
 
   // Not logged in view
   if (!currentUser) {
-    return <Login onLogin={handleLogin} />;
+    return (
+      <Login
+        onLogin={handleLogin}
+        availableVoices={availableVoices}
+        selectedVoiceName={selectedVoiceName}
+        onVoiceChange={handleVoiceChange}
+      />
+    );
   }
 
   return (
@@ -194,19 +228,26 @@ const App: React.FC = () => {
             <button
               onClick={() => setShowVoicePicker(!showVoicePicker)}
               style={{
-                background: showVoicePicker ? 'rgba(59,130,246,0.2)' : 'transparent',
-                border: showVoicePicker ? '1px solid rgba(59,130,246,0.5)' : '1px solid transparent',
-                borderRadius: '6px',
-                color: showVoicePicker ? '#3b82f6' : 'var(--text-muted)',
+                background: showVoicePicker ? 'rgba(59,130,246,0.15)' : 'rgba(255, 255, 255, 0.05)',
+                border: showVoicePicker ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '8px',
+                color: showVoicePicker ? '#60a5fa' : 'var(--text-muted)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                padding: '4px',
-                transition: 'all 0.2s ease'
+                gap: '6px',
+                padding: '6px 10px',
+                transition: 'all 0.2s ease',
+                fontSize: '12px',
+                fontWeight: 600
               }}
               title="TTS 화자 선택"
             >
-              <Mic size={16} />
+              <Mic size={14} style={{ color: showVoicePicker ? '#60a5fa' : '#94a3b8' }} />
+              <span style={{ maxWidth: '70px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {getCleanVoiceName(selectedVoiceName)}
+              </span>
+              <span style={{ fontSize: '9px', opacity: 0.7 }}>▼</span>
             </button>
 
             {/* Voice dropdown */}
