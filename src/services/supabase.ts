@@ -39,6 +39,23 @@ export interface MemberTask {
   updated_at: number | null;
 }
 
+export interface DisasterRole {
+  id: number;
+  disaster: string;
+  group_name: string | null;
+  role: string;
+  badge: string;
+  bc: string | null;
+  disaster_tasks?: DisasterTask[];
+}
+
+export interface DisasterTask {
+  id: number;
+  role_id: number;
+  task_idx: number;
+  label: string;
+}
+
 // Database helper functions
 export const db = {
   // 1. Declare active incident
@@ -126,5 +143,16 @@ export const db = {
       .eq('id', taskId);
 
     if (error) throw error;
+  },
+
+  // 7. Fetch disaster roles + tasks from DB (replaces local disasters.ts members)
+  async getDisasterRolesWithTasks(disasterKey: string) {
+    const { data, error } = await supabase
+      .from('disaster_roles')
+      .select('*, disaster_tasks(*)')
+      .eq('disaster', disasterKey)
+      .order('id');
+    if (error) throw error;
+    return (data ?? []) as (DisasterRole & { disaster_tasks: DisasterTask[] })[];
   }
 };

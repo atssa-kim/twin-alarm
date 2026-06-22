@@ -51,3 +51,29 @@ COMMIT;
 ALTER TABLE public.incidents DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.responders DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.member_tasks DISABLE ROW LEVEL SECURITY;
+
+-- ──────────────────────────────────────────────
+-- 재난 역할·임무 마스터 데이터 (disa_app 관리)
+-- ──────────────────────────────────────────────
+
+-- 4. disaster_roles (재난 유형별 역할 정의)
+CREATE TABLE IF NOT EXISTS public.disaster_roles (
+    id          SERIAL PRIMARY KEY,
+    disaster    TEXT NOT NULL,       -- 'incidents.disaster' 와 일치
+    group_name  TEXT,                -- '지휘', '대응반' 등 반 구분
+    role        TEXT NOT NULL,       -- 역할 전체 이름
+    badge       TEXT NOT NULL,       -- 로그인 badge 와 매칭 키
+    bc          TEXT,                -- 뱃지 색상 코드
+    UNIQUE(disaster, badge)
+);
+
+-- 5. disaster_tasks (역할별 임무 항목)
+CREATE TABLE IF NOT EXISTS public.disaster_tasks (
+    id          SERIAL PRIMARY KEY,
+    role_id     INT NOT NULL REFERENCES public.disaster_roles(id) ON DELETE CASCADE,
+    task_idx    INT NOT NULL,        -- 표시 순서
+    label       TEXT NOT NULL
+);
+
+ALTER TABLE public.disaster_roles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.disaster_tasks DISABLE ROW LEVEL SECURITY;

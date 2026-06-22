@@ -28,11 +28,12 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
     
     setLoading(true);
     try {
-      const disasterObj = DISASTERS.find(d => d.key === selectedDisasterKey);
-      if (!disasterObj) throw new Error('올바른 재난 유형을 선택해주세요.');
-
       const scope = selectedMode === '훈련' ? 'drill' : 'all';
-      
+
+      // DB에서 역할·임무 마스터 조회
+      const roles = await db.getDisasterRolesWithTasks(selectedDisasterKey);
+      if (!roles.length) throw new Error('임무 데이터가 없습니다. npm run seed 를 먼저 실행하세요.');
+
       // Call declare incident helper
       const incident = await db.declareIncident(
         selectedDisasterKey,
@@ -42,20 +43,22 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
         currentUser.empNo
       );
 
-      // Construct and bulk insert member tasks
+      // Construct and bulk insert member tasks from DB
       const bulkTasks: Omit<MemberTask, 'updated_at'>[] = [];
-      disasterObj.members.forEach(member => {
-        member.tasks.forEach((taskLabel, idx) => {
-          bulkTasks.push({
-            id: `${incident.id}_${member.role}_${idx}`,
-            incident_id: incident.id,
-            emp_no: '',
-            role: member.role,
-            task_idx: idx,
-            label: taskLabel,
-            done: false
+      roles.forEach(role => {
+        (role.disaster_tasks ?? [])
+          .sort((a, b) => a.task_idx - b.task_idx)
+          .forEach(task => {
+            bulkTasks.push({
+              id: `${incident.id}_${role.role}_${task.task_idx}`,
+              incident_id: incident.id,
+              emp_no: '',
+              role: role.role,
+              task_idx: task.task_idx,
+              label: task.label,
+              done: false,
+            });
           });
-        });
       });
 
       if (bulkTasks.length > 0) {

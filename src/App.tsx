@@ -8,7 +8,7 @@ import { triggerEmergencyAlert, unlockAudio } from './utils/audio';
 import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Mic } from 'lucide-react';
 
 const App: React.FC = () => {
-  const { activeIncident, responders, tasks, loading } = useRealtime();
+  const { activeIncident, responders, tasks, loading, disasterRoles } = useRealtime();
   const [currentUser, setCurrentUser] = useState<Employee | null>(null);
   const [currentView, setCurrentView] = useState<'cmd' | 'responder' | 'cop'>('responder');
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -343,6 +343,7 @@ const App: React.FC = () => {
             responders={responders}
             tasks={tasks}
             currentUser={currentUser}
+            disasterRoles={disasterRoles}
           />
         )}
 

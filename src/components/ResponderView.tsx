@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { type Incident, type Responder, type MemberTask, db } from '../services/supabase';
-import { DISASTERS } from '../data/disasters';
+import { type Incident, type Responder, type MemberTask, type DisasterRole, db } from '../services/supabase';
 import { type Employee } from './Login';
 import { Check, ShieldAlert, MapPin, Award, CheckSquare } from 'lucide-react';
 import { unlockAudio } from '../utils/audio';
@@ -10,33 +9,26 @@ interface ResponderViewProps {
   responders: Responder[];
   tasks: MemberTask[];
   currentUser: Employee;
+  disasterRoles: DisasterRole[];
 }
 
 export const ResponderView: React.FC<ResponderViewProps> = ({
   activeIncident,
   responders,
   tasks,
-  currentUser
+  currentUser,
+  disasterRoles
 }) => {
   const [loading, setLoading] = useState(false);
 
-  // Find this responder's current status inside the active incident
   const currentResponder = responders.find(r => r.emp_no === currentUser.empNo);
   const responderStatus = currentResponder ? currentResponder.status : '미응답';
 
-  // Find the manual member configuration that matches this user's role badge
-  const disasterManual = activeIncident 
-    ? DISASTERS.find(d => d.key === activeIncident.disaster)
+  const myRole = activeIncident
+    ? (disasterRoles.find(r => r.badge === currentUser.badge) ?? null)
     : null;
 
-  const manualMember = disasterManual
-    ? disasterManual.members.find(m => m.badge === currentUser.badge)
-    : null;
-
-  // Filter tasks belonging to this responder's role
-  const myTasks = manualMember
-    ? tasks.filter(t => t.role === manualMember.role)
-    : [];
+  const myTasks = myRole ? tasks.filter(t => t.role === myRole.role) : [];
 
   // Register or update responder status
   const updateStatus = async (status: Responder['status']) => {
@@ -220,13 +212,13 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
           </div>
 
           {/* Role and Mission Card Progress */}
-          {manualMember ? (
+          {myRole ? (
             <>
               <div className="card">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
                   <Award size={20} color="var(--color-power)" />
                   <h3 style={{ margin: 0, fontSize: '15px' }}>
-                    나의 임무 카드: <span style={{ color: manualMember.bc }}>{manualMember.role}</span>
+                    나의 임무 카드: <span style={{ color: myRole.bc ?? undefined }}>{myRole.role}</span>
                   </h3>
                 </div>
 
@@ -242,7 +234,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                       className="progress-fill"
                       style={{
                         width: `${myProgressPct}%`,
-                        backgroundColor: myProgressPct === 100 ? 'var(--color-green)' : manualMember.bc || 'var(--color-fire)'
+                        backgroundColor: myProgressPct === 100 ? 'var(--color-green)' : myRole.bc || 'var(--color-fire)'
                       }}
                     ></div>
                   </div>

@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "seed": "npx tsx scripts/seed-disasters.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
