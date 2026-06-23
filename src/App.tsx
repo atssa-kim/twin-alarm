@@ -191,9 +191,6 @@ const App: React.FC = () => {
       <div id="app">
         <Login
           onLogin={handleLogin}
-          availableVoices={availableVoices}
-          selectedVoiceName={selectedVoiceName}
-          onVoiceChange={handleVoiceChange}
           employees={employees}
         />
       </div>
@@ -284,7 +281,9 @@ const App: React.FC = () => {
                 {availableVoices.length === 0 ? (
                   <div style={{ padding: '12px 16px', color: '#64748b', fontSize: '13px' }}>사용 가능한 한국어 화자가 없습니다</div>
                 ) : (
-                  availableVoices.map((voice) => (
+                  [...availableVoices]
+                    .sort((a, b) => getCleanVoiceName(a.name).localeCompare(getCleanVoiceName(b.name), 'ko'))
+                    .map((voice) => (
                     <button
                       key={voice.name}
                       onClick={() => handleVoiceChange(voice.name)}
@@ -306,7 +305,7 @@ const App: React.FC = () => {
                       onMouseLeave={(e) => (e.currentTarget.style.background = selectedVoiceName === voice.name ? 'rgba(59,130,246,0.15)' : 'transparent')}
                     >
                       <span style={{ width: '18px', textAlign: 'center' }}>{selectedVoiceName === voice.name ? '✓' : ''}</span>
-                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{voice.name}</span>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getCleanVoiceName(voice.name)}</span>
                     </button>
                   ))
                 )}
@@ -369,10 +368,14 @@ const App: React.FC = () => {
         display: 'flex',
         background: 'rgba(15, 23, 42, 0.9)',
         backdropFilter: 'blur(12px)',
-        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '20px',
         height: '64px',
         alignItems: 'center',
-        padding: '0 8px'
+        padding: '0 8px',
+        margin: '0 12px 16px',
+        position: 'sticky',
+        bottom: '16px',
       }}>
         {currentUser.isCommander && (
           <button

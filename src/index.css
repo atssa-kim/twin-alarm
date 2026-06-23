@@ -1,8 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800;900&family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+@font-face {
+  font-family: 'LG Smart UI';
+  src: url('/fonts/LG_Smart_UI-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LG Smart UI';
+  src: url('/fonts/LG_Smart_UI-SemiBold.ttf') format('truetype');
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
-  --font-display: 'Outfit', 'Inter', 'Noto Sans KR', sans-serif;
-  --font-body: 'Inter', 'Noto Sans KR', sans-serif;
+  --font-display: 'LG Smart UI', sans-serif;
+  --font-body: 'LG Smart UI', sans-serif;
   
   /* Modern premium dark-themed color palette */
   --bg-app: #090d16;
