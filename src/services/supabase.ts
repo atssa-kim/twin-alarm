@@ -56,6 +56,16 @@ export interface DisasterTask {
   label: string;
 }
 
+export interface EmployeeDB {
+  emp_no: string;
+  name: string;
+  team: string;
+  role: string;
+  is_commander: boolean;
+  email?: string;
+  phone?: string;
+}
+
 // Database helper functions
 export const db = {
   // 1. Declare active incident
@@ -154,5 +164,27 @@ export const db = {
       .order('id');
     if (error) throw error;
     return (data ?? []) as (DisasterRole & { disaster_tasks: DisasterTask[] })[];
-  }
+  },
+
+  // 8. Fetch all employees from DB
+  async getEmployees(): Promise<EmployeeDB[]> {
+    const { data, error } = await supabase
+      .from('employees')
+      .select('*')
+      .order('emp_no');
+    if (error) throw error;
+    return (data ?? []) as EmployeeDB[];
+  },
+
+  // 9. Fetch an employee's badge for a specific disaster
+  async getEmployeeBadge(empNo: string, disaster: string): Promise<string | null> {
+    const { data, error } = await supabase
+      .from('employee_disaster_badges')
+      .select('badge')
+      .eq('emp_no', empNo)
+      .eq('disaster', disaster)
+      .maybeSingle();
+    if (error) throw error;
+    return data?.badge ?? null;
+  },
 };

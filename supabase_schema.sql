@@ -77,3 +77,26 @@ CREATE TABLE IF NOT EXISTS public.disaster_tasks (
 
 ALTER TABLE public.disaster_roles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.disaster_tasks DISABLE ROW LEVEL SECURITY;
+
+-- 6. employees (직원 명부)
+CREATE TABLE IF NOT EXISTS public.employees (
+    emp_no       TEXT PRIMARY KEY,
+    name         TEXT NOT NULL,
+    team         TEXT NOT NULL,   -- '소방파트', '전기파트', '보안1', '보안2', '보안3' 등
+    role         TEXT NOT NULL,   -- '파트장', '파트원', '센터장' 등
+    is_commander BOOLEAN DEFAULT false,
+    email        TEXT,
+    phone        TEXT
+);
+
+-- 7. employee_disaster_badges (직원별 재난 배지 매핑)
+--    team 기반 자동 계산이 아닌, 개인별로 명시 저장하여 예외도 처리 가능
+CREATE TABLE IF NOT EXISTS public.employee_disaster_badges (
+    emp_no   TEXT NOT NULL REFERENCES public.employees(emp_no) ON DELETE CASCADE,
+    disaster TEXT NOT NULL,   -- '화재','정전','누수','태풍/홍수','폭설','지진','가스누출','승강기','테러'
+    badge    TEXT NOT NULL,   -- disaster_roles.badge 와 일치해야 역할·임무가 연결됨
+    PRIMARY KEY (emp_no, disaster)
+);
+
+ALTER TABLE public.employees DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.employee_disaster_badges DISABLE ROW LEVEL SECURITY;

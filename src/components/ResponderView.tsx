@@ -20,12 +20,21 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   disasterRoles
 }) => {
   const [loading, setLoading] = useState(false);
+  const [myBadge, setMyBadge] = useState<string | null>(null);
+
+  // 재난 발령 시 이 직원의 해당 재난 배지를 DB에서 조회
+  useEffect(() => {
+    if (!activeIncident) { setMyBadge(null); return; }
+    db.getEmployeeBadge(currentUser.empNo, activeIncident.disaster)
+      .then(badge => setMyBadge(badge))
+      .catch(() => setMyBadge(null));
+  }, [activeIncident?.id, currentUser.empNo]);
 
   const currentResponder = responders.find(r => r.emp_no === currentUser.empNo);
   const responderStatus = currentResponder ? currentResponder.status : '미응답';
 
-  const myRole = activeIncident
-    ? (disasterRoles.find(r => r.badge === currentUser.badge) ?? null)
+  const myRole = myBadge
+    ? (disasterRoles.find(r => r.badge === myBadge) ?? null)
     : null;
 
   const myTasks = myRole ? tasks.filter(t => t.role === myRole.role) : [];

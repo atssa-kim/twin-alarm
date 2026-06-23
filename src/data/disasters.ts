@@ -300,7 +300,7 @@ export const DISASTERS: Disaster[] = [
     "iconSvg": "<svg viewBox=\"0 0 38 38\" fill=\"none\"><path d=\"M22 5L10 22h10l-4 11 14-17H20L22 5z\" fill=\"white\" opacity=\"0.9\"/></svg>"
   },
   {
-    "key": "홍수",
+    "key": "누수",
     "label": "💧 누수·침수",
     "color": "#1d4ed8",
     "members": [
@@ -432,8 +432,8 @@ export const DISASTERS: Disaster[] = [
     "iconSvg": "<svg viewBox=\"0 0 38 38\" fill=\"none\"><path d=\"M7 20c3-3 5 1 8-2s5-3 8 0 5 1 8-2\" stroke=\"white\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M7 26c3-3 5 1 8-2s5-3 8 0 5 1 8-2\" stroke=\"white\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M15 8v8M19 6v10M23 8v8\" stroke=\"white\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M12 8l3-3 3 3\" stroke=\"white\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>"
   },
   {
-    "key": "태풍",
-    "label": "🌀 풍수해",
+    "key": "태풍/홍수",
+    "label": "🌀 태풍/홍수",
     "color": "#1e40af",
     "members": [
       {

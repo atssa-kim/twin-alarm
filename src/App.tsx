@@ -5,11 +5,13 @@ import { CommanderDashboard } from './components/CommanderDashboard';
 import { ResponderView } from './components/ResponderView';
 import { COPDashboard } from './components/COPDashboard';
 import { triggerEmergencyAlert, unlockAudio } from './utils/audio';
+import { db, type EmployeeDB } from './services/supabase';
 import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Mic } from 'lucide-react';
 
 const App: React.FC = () => {
   const { activeIncident, responders, tasks, loading, disasterRoles } = useRealtime();
   const [currentUser, setCurrentUser] = useState<Employee | null>(null);
+  const [employees, setEmployees] = useState<EmployeeDB[]>([]);
   const [currentView, setCurrentView] = useState<'cmd' | 'responder' | 'cop'>('responder');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showVoicePicker, setShowVoicePicker] = useState(false);
@@ -102,6 +104,11 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // 0. Fetch employee roster from DB
+  useEffect(() => {
+    db.getEmployees().then(setEmployees).catch(console.error);
+  }, []);
+
   // 1. Session persistence for login
   useEffect(() => {
     const savedUser = localStorage.getItem('tt_user_session');
@@ -187,6 +194,7 @@ const App: React.FC = () => {
           availableVoices={availableVoices}
           selectedVoiceName={selectedVoiceName}
           onVoiceChange={handleVoiceChange}
+          employees={employees}
         />
       </div>
     );

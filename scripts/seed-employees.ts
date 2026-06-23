@@ -1,0 +1,268 @@
+/**
+ * 직원 명부 + 재난별 배지 시드 스크립트
+ * 실행: npm run seed-employees
+ *
+ * 작업 순서:
+ *  1. Supabase SQL Editor 에서 supabase_schema.sql 의 employees / employee_disaster_badges 테이블 생성
+ *  2. EMPLOYEES 배열에 실제 직원 데이터 입력 (team 값이 TEAM_BADGE_MAP 키와 일치해야 함)
+ *  3. npm run seed-employees 실행
+ */
+
+import { createClient } from '@supabase/supabase-js';
+import * as fs from 'fs';
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ── .env 로드 ──────────────────────────────────────────────
+const envPath = resolve(__dirname, '../.env');
+const envContent = fs.readFileSync(envPath, 'utf-8');
+const env: Record<string, string> = {};
+for (const line of envContent.split('\n')) {
+  const eq = line.indexOf('=');
+  if (eq > 0) env[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+}
+const supabase = createClient(env['VITE_SUPABASE_URL'], env['VITE_SUPABASE_ANON_KEY']);
+
+// ── 재난 목록 ──────────────────────────────────────────────
+const DISASTERS = ['화재', '정전', '누수', '태풍/홍수', '폭설', '지진', '가스누출', '승강기', '테러'] as const;
+type Disaster = typeof DISASTERS[number];
+
+// ── 팀(team) → 재난 → 배지 매핑표 ────────────────────────
+// team 값은 employees.team 컬럼 값과 반드시 일치해야 합니다.
+// 파트장은 '통제' 역할인 재난에서만 별도 항목, 나머지는 파트 배지를 공유합니다.
+// — 표시(미기재) 재난에서는 해당 직원에게 배지가 없으므로 임무 카드가 표시되지 않습니다.
+const TEAM_BADGE_MAP: Record<string, Partial<Record<Disaster, string>>> = {
+  '센터장': {
+    화재: '총괄', 정전: '총괄', 누수: '총괄', '태풍/홍수': '총괄',
+    폭설: '총괄', 지진: '총괄', 가스누출: '총괄', 승강기: '총괄', 테러: '총괄',
+  },
+
+  // ── 소방 ────────────────────────────────────────────────
+  '소방파트장': {
+    화재: '통제',                               // 통제자 (안전관리자)
+    정전: '상황', 누수: '응급', '태풍/홍수': '상황',
+    폭설: '대응1', 지진: '상황', 가스누출: '대응', 승강기: '대응', 테러: '상황',
+  },
+  '소방파트': {
+    화재: '출동', 정전: '상황', 누수: '응급', '태풍/홍수': '상황',
+    폭설: '대응1', 지진: '상황', 가스누출: '대응', 승강기: '대응', 테러: '상황',
+  },
+
+  // ── 전기 ────────────────────────────────────────────────
+  '전기파트장': {
+    정전: '통제',                               // 통제자 (이길호)
+    화재: '출동', 누수: '복구E', '태풍/홍수': '대응',
+    폭설: '대응2', 지진: '대응2', 가스누출: '지원', 승강기: '대응',
+    // 테러: 해당없음
+  },
+  '전기파트': {
+    화재: '출동', 정전: '대응', 누수: '복구E', '태풍/홍수': '대응',
+    폭설: '대응2', 지진: '대응2', 가스누출: '지원', 승강기: '대응',
+  },
+
+  // ── 기계 ────────────────────────────────────────────────
+  '기계파트장': {
+    '태풍/홍수': '통제', 가스누출: '통제',      // 통제자
+    화재: '소화', 정전: '대응', 누수: '응급',
+    폭설: '대응2', 지진: '대응1',
+    // 승강기, 테러: 해당없음
+  },
+  '기계파트': {
+    화재: '소화', 정전: '대응', 누수: '응급', '태풍/홍수': '대응',
+    폭설: '대응2', 지진: '대응1', 가스누출: '대응',
+  },
+
+  // ── 건축 ────────────────────────────────────────────────
+  '건축파트장': {
+    // 통제 역할 없음 → 파트 배지와 동일
+    화재: '복구', 정전: '대응', 누수: '복구B', '태풍/홍수': '대응',
+    폭설: '대응1', 지진: '대응2', 가스누출: '대피', 테러: '대피',
+  },
+  '건축파트': {
+    화재: '복구', 정전: '대응', 누수: '복구B', '태풍/홍수': '대응',
+    폭설: '대응1', 지진: '대응2', 가스누출: '대피', 테러: '대피',
+  },
+
+  // ── 운영 ────────────────────────────────────────────────
+  '운영파트장': {
+    // 통제 역할 없음 → 파트 배지와 동일
+    화재: '유도', 정전: '지원', 누수: '관리', '태풍/홍수': '지원',
+    폭설: '대응1', 지진: '지원', 가스누출: '지원', 테러: '지원',
+  },
+  '운영파트': {
+    화재: '유도', 정전: '지원', 누수: '관리', '태풍/홍수': '지원',
+    폭설: '대응1', 지진: '지원', 가스누출: '지원', 테러: '지원',
+  },
+
+  // ── 보안 (화재 시 3개 조로 분리) ─────────────────────────
+  '보안1': { // 인명구조조
+    화재: '구조',
+    정전: '지원', 누수: '유도', '태풍/홍수': '지원',
+    폭설: '지원2', 지진: '대피', 가스누출: '대피', 승강기: '통제', 테러: '통제',
+  },
+  '보안2': { // 대피유도조
+    화재: '유도',
+    정전: '지원', 누수: '유도', '태풍/홍수': '지원',
+    폭설: '지원2', 지진: '대피', 가스누출: '대피', 승강기: '통제', 테러: '통제',
+  },
+  '보안3': { // 경계/통제조
+    화재: '통제',
+    정전: '지원', 누수: '유도', '태풍/홍수': '지원',
+    폭설: '지원2', 지진: '대피', 가스누출: '대피', 승강기: '통제', 테러: '통제',
+  },
+
+  // ── 미화 ────────────────────────────────────────────────
+  '미화파트': {
+    화재: '복구', 정전: '대응', 누수: '복구B', '태풍/홍수': '통제',
+    폭설: '지원1', 지진: '대응1', 가스누출: '대피', 승강기: '지원',
+    // 테러: 해당없음
+  },
+
+  // ── 주차 ────────────────────────────────────────────────
+  '주차파트': {
+    화재: '유도', 정전: '유도', 누수: '유도',
+    '태풍/홍수': '지원', 폭설: '지원3',
+    지진: '유도', 가스누출: '유도', 테러: '유도',
+    // 승강기: 해당없음
+  },
+
+  // ── 품질/안전 ────────────────────────────────────────────
+  '품질/안전파트': {
+    화재: '유도', 누수: '지원', 폭설: '대응2',
+    // 나머지 재난: 해당없음
+  },
+};
+
+// ── 직원 데이터 ──────────────────────────────────────────
+// team 값은 반드시 TEAM_BADGE_MAP 의 키와 일치해야 합니다.
+// 교대 직원은 본 파트와 동일한 team 으로 처리 (배지 동일)
+// 보안파트는 화재시 역할에 따라 보안1/보안2/보안3 으로 구분 필요
+const EMPLOYEES: {
+  emp_no: string;
+  name: string;
+  team: string;
+  role: string;
+  is_commander: boolean;
+  email?: string;
+  phone?: string;
+}[] = [
+  // ── 센터장 ─────────────────────────────────────────────
+  { emp_no: 'E-0001', name: '김기창', team: '센터장',     role: '센터장', is_commander: true,  email: 'xgplus@sni.co.kr',   phone: '010-3240-8177' },
+
+  // ── 운영 ───────────────────────────────────────────────
+  { emp_no: 'E-1001', name: '곽우람', team: '운영파트장', role: '파트장',      is_commander: false, email: 'mprokmc@sni.co.kr',  phone: '010-6251-9466' },
+  { emp_no: 'E-1002', name: '엄성철', team: '운영파트',   role: '파트원',      is_commander: false, email: 'sceom@sni.co.kr',    phone: '010-3384-0248' },
+  { emp_no: 'E-1003', name: '박세훈', team: '운영파트',   role: '파트원',      is_commander: false, email: 'sehunpark@sni.co.kr',phone: '010-4776-7305' },
+  { emp_no: 'E-1004', name: '김기복', team: '운영파트',   role: '파트원',      is_commander: false, email: 'Igmbkkb@sni.co.kr',  phone: '010-5682-8498' },
+  { emp_no: 'E-1005', name: '김기환', team: '운영파트',   role: '파트원',      is_commander: false, email: 'kgh90400@sni.co.kr', phone: '010-8593-9040' },
+
+  // ── 기계 (교대 포함, 배지 동일) ───────────────────────
+  { emp_no: 'E-2001', name: '손남열', team: '기계파트장', role: '파트장',      is_commander: false, email: 'k43414268@sni.co.kr',phone: '010-4341-4268' },
+  { emp_no: 'E-2002', name: '이영민', team: '기계파트',   role: '파트원',      is_commander: false, email: 'dldudzh@sni.co.kr',  phone: '010-8003-6154' },
+  { emp_no: 'E-2003', name: '이한승', team: '기계파트',   role: '파트원',      is_commander: false, email: 'lgmblhs2@sni.co.kr', phone: '010-7722-1247' },
+  { emp_no: 'E-2004', name: '홍진표', team: '기계파트',   role: '파트원',      is_commander: false, email: 'hjpas1@sni.co.kr',   phone: '010-5157-2185' },
+  { emp_no: 'E-2005', name: '장태선', team: '기계파트',   role: '파트원',      is_commander: false, email: 'zelgadis7391@sni.co.kr',phone: '010-6324-9939' },
+  { emp_no: 'E-2006', name: '박동선', team: '기계파트',   role: '파트원',      is_commander: false, email: 'P93071077@sni.co.kr', phone: '010-9258-8010' },
+  { emp_no: 'E-2007', name: '김범재', team: '기계파트',   role: '파트원(교대)',is_commander: false, email: 'sneeze@sni.co.kr',   phone: '010-9016-0123' },
+  { emp_no: 'E-2008', name: '윤창현', team: '기계파트',   role: '파트원(교대)',is_commander: false, email: 'bulpaesino@sni.co.kr',phone: '010-6794-2700' },
+  { emp_no: 'E-2009', name: '김성',   team: '기계파트',   role: '파트원(교대)',is_commander: false, email: 'gobani@sni.co.kr',   phone: '010-8967-6164' },
+  { emp_no: 'E-2010', name: '유지원', team: '기계파트',   role: '파트원(교대)',is_commander: false, email: 'ues2967@sni.co.kr',  phone: '010-5687-2967' },
+  { emp_no: 'E-2011', name: '강석중', team: '기계파트',   role: '파트원(교대)',is_commander: false, email: 'kangsj72@sni.co.kr', phone: '010-7645-3388' },
+  { emp_no: 'E-2012', name: '석경민', team: '기계파트',   role: '파트원(교대)',is_commander: false, email: 'csq3309@sni.co.kr',  phone: '010-9498-8201' },
+  { emp_no: 'E-2013', name: '손경배', team: '기계파트',   role: '파트원(교대)',is_commander: false, email: 'sonkb@sni.co.kr',    phone: '010-2707-4712' },
+  { emp_no: 'E-2014', name: '김예찬', team: '기계파트',   role: '파트원(교대)',is_commander: false, email: 'zkzldhgk@sni.co.kr', phone: '010-5443-8917' },
+
+  // ── 전기 (교대 포함, 배지 동일) ───────────────────────
+  { emp_no: 'E-3001', name: '이길호', team: '전기파트장', role: '파트장',      is_commander: false, email: 'kannylord@sni.co.kr', phone: '010-5654-0564' },
+  { emp_no: 'E-3002', name: '장현철', team: '전기파트',   role: '파트원',      is_commander: false, email: 'jhc1006@sni.co.kr',   phone: '010-5595-8285' },
+  { emp_no: 'E-3003', name: '김태경', team: '전기파트',   role: '파트원',      is_commander: false, email: 'kimgyuchol@sni.co.kr',phone: '010-4211-8049' },
+  { emp_no: 'E-3004', name: '이환수', team: '전기파트',   role: '파트원',      is_commander: false, email: 'Ihs0318@sni.co.kr',   phone: '010-3387-8910' },
+  { emp_no: 'E-3005', name: '김상훈', team: '전기파트',   role: '파트원',      is_commander: false, email: 'guswlr4@sni.co.kr',   phone: '010-5046-1866' },
+  { emp_no: 'E-3006', name: '김현직', team: '전기파트',   role: '파트원',      is_commander: false, email: 'ksh1866@sni.co.kr',   phone: '010-2328-2474' },
+  { emp_no: 'E-3007', name: '이찬희', team: '전기파트',   role: '파트원(교대)',is_commander: false, email: 'chunww1@sni.co.kr',   phone: '010-4809-5710' },
+  { emp_no: 'E-3008', name: '심현보', team: '전기파트',   role: '파트원(교대)',is_commander: false, email: 'shb4561@sni.co.kr',   phone: '010-4004-4561' },
+  { emp_no: 'E-3009', name: '김성환', team: '전기파트',   role: '파트원(교대)',is_commander: false, email: 'manager100@sni.co.kr',phone: '010-4141-8945' },
+  { emp_no: 'E-3010', name: '이태경', team: '전기파트',   role: '파트원(교대)',is_commander: false, email: 'leetae8171@sni.co.kr',phone: '010-6255-8171' },
+
+  // ── 소방 (교대 포함, 배지 동일) ───────────────────────
+  // 소방파트장(김견수)은 화재 시 '통제' 역할 → is_commander: true (지휘본부 접근)
+  { emp_no: 'E-4001', name: '김견수', team: '소방파트장', role: '파트장(안전관리자)', is_commander: true,  email: 'kyensu_kim@sni.co.kr',phone: '010-9071-3061' },
+  { emp_no: 'E-4002', name: '송치선', team: '소방파트',   role: '파트원',      is_commander: false, email: 'song5059@sni.co.kr',  phone: '010-4659-5059' },
+  { emp_no: 'E-4003', name: '이동건', team: '소방파트',   role: '파트원',      is_commander: false, email: 'DongKun_Lee@sni.co.kr',phone: '010-2575-2806' },
+  { emp_no: 'E-4004', name: '정민석', team: '소방파트',   role: '파트원',      is_commander: false, email: 'mins_jeong@sni.co.kr',phone: '010-8752-8967' },
+  { emp_no: 'E-4005', name: '안준혁', team: '소방파트',   role: '파트원(교대)',is_commander: false, email: 'AJH90@sni.co.kr',     phone: '010-3449-3784' },
+  { emp_no: 'E-4006', name: '김병기', team: '소방파트',   role: '파트원(교대)',is_commander: false, email: 'KBG82@sni.co.kr',     phone: '010-9248-3016' },
+  { emp_no: 'E-4007', name: '박범수', team: '소방파트',   role: '파트원(교대)',is_commander: false, email: 'Pray_bs@sni.co.kr',   phone: '010-9437-1985' },
+  { emp_no: 'E-4008', name: '김상백', team: '소방파트',   role: '파트원(교대)',is_commander: false, email: 'ksb408@sni.co.kr',    phone: '010-2503-7305' },
+
+  // ── 건축 ───────────────────────────────────────────────
+  { emp_no: 'E-5001', name: '이수용', team: '건축파트장', role: '파트장',      is_commander: false, email: 'suyong@sni.co.kr',    phone: '010-2966-0477' },
+  { emp_no: 'E-5002', name: '최낙철', team: '건축파트',   role: '파트원',      is_commander: false, email: 'narkcholchoi@sni.co.kr',phone: '010-9229-4949' },
+  { emp_no: 'E-5003', name: '염혜진', team: '건축파트',   role: '파트원',      is_commander: false, email: 'hejing@sni.co.kr',    phone: '010-6305-1131' },
+  { emp_no: 'E-5004', name: '김규영', team: '건축파트',   role: '파트원',      is_commander: false, email: 'xgplus@sni.co.kr',    phone: '010-7514-9713' },
+  { emp_no: 'E-5005', name: '최인규', team: '건축파트',   role: '파트원',      is_commander: false, email: 'inkyutj@sni.co.kr',   phone: '010-7130-5219' },
+  { emp_no: 'E-5006', name: '서영진', team: '건축파트',   role: '파트원',      is_commander: false, email: 'syjin19@sni.co.kr',   phone: '010-3633-7850' },
+  { emp_no: 'E-5007', name: '김정훈', team: '건축파트',   role: '파트원',      is_commander: false, email: 'kjhsj0707@sni.co.kr', phone: '010-3936-2530' },
+  { emp_no: 'E-5008', name: '박진범', team: '건축파트',   role: '파트원',      is_commander: false, email: 'rkausantk@sni.co.kr', phone: '010-5954-4893' },
+  { emp_no: 'E-5009', name: '윤희진', team: '건축파트',   role: '파트원',      is_commander: false, email: 'yhjyhj@sni.co.kr',    phone: '010-7180-6471' },
+
+  // ── 품질/안전 ──────────────────────────────────────────
+  { emp_no: 'E-6001', name: '안상오', team: '품질/안전파트', role: '파트장',   is_commander: false, email: 'ASO82@sni.co.kr',     phone: '010-7557-3009' },
+  { emp_no: 'E-6002', name: '김홍신', team: '품질/안전파트', role: '파트원',   is_commander: false, email: 'wlsqja846@sni.co.kr', phone: '010-8596-8299' },
+
+  // ── 보안 (화재시 보안1/2/3 구분 필수 — 별도 확인 후 추가) ─
+  // { emp_no: 'E-7001', name: '김근흥', team: '보안1', role: '보안원', is_commander: false },
+  // { emp_no: 'E-7002', name: '김영철', team: '보안2', role: '보안원', is_commander: false },
+  // { emp_no: 'E-7003', name: '김우현', team: '보안1', role: '보안원', is_commander: false },
+  // { emp_no: 'E-7004', name: '전민규', team: '보안2', role: '보안원', is_commander: false },
+
+  // ── 미화 (별도 확인 후 추가) ──────────────────────────
+  // { emp_no: 'E-8001', name: '지정운', team: '미화파트', role: '파트원', is_commander: false },
+
+  // ── 주차 (별도 확인 후 추가) ──────────────────────────
+  // { emp_no: 'E-9001', name: '박세훈', team: '주차파트', role: '파트원', is_commander: false },
+];
+
+// ── 시드 실행 ──────────────────────────────────────────────
+async function seed() {
+  console.log(`\n직원 시드 시작 (${EMPLOYEES.length}명)...\n`);
+
+  for (const emp of EMPLOYEES) {
+    // 1. employees upsert
+    const { error: empErr } = await supabase
+      .from('employees')
+      .upsert(emp, { onConflict: 'emp_no' });
+    if (empErr) { console.error(`  ✗ ${emp.name} 직원 오류:`, empErr.message); continue; }
+
+    // 2. employee_disaster_badges upsert (팀 매핑 기준)
+    const teamMap = TEAM_BADGE_MAP[emp.team];
+    if (!teamMap) {
+      console.warn(`  ⚠ ${emp.name} — team "${emp.team}" 이(가) TEAM_BADGE_MAP 에 없습니다.`);
+      continue;
+    }
+
+    const badges: { emp_no: string; disaster: string; badge: string }[] = [];
+    for (const disaster of DISASTERS) {
+      const badge = teamMap[disaster];
+      if (badge) badges.push({ emp_no: emp.emp_no, disaster, badge });
+    }
+
+    if (badges.length > 0) {
+      const { error: badgeErr } = await supabase
+        .from('employee_disaster_badges')
+        .upsert(badges, { onConflict: 'emp_no,disaster' });
+      if (badgeErr) console.error(`  ✗ ${emp.name} 배지 오류:`, badgeErr.message);
+    }
+
+    const badgeSummary = DISASTERS
+      .map(d => teamMap[d] ? `${d}:${teamMap[d]}` : null)
+      .filter(Boolean).join(', ');
+    console.log(`  ✓ ${emp.name} (${emp.team}) → ${badgeSummary}`);
+  }
+
+  console.log('\n완료!');
+}
+
+seed().catch(console.error);
