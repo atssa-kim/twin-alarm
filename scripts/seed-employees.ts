@@ -212,17 +212,19 @@ const EMPLOYEES: {
   { emp_no: 'E-6001', name: '안상오', team: '품질/안전파트', role: '파트장',   is_commander: false, email: 'ASO82@sni.co.kr',     phone: '010-7557-3009' },
   { emp_no: 'E-6002', name: '김홍신', team: '품질/안전파트', role: '파트원',   is_commander: false, email: 'wlsqja846@sni.co.kr', phone: '010-8596-8299' },
 
-  // ── 보안 (화재시 보안1/2/3 구분 필수 — 별도 확인 후 추가) ─
-  // { emp_no: 'E-7001', name: '김근흥', team: '보안1', role: '보안원', is_commander: false },
-  // { emp_no: 'E-7002', name: '김영철', team: '보안2', role: '보안원', is_commander: false },
-  // { emp_no: 'E-7003', name: '김우현', team: '보안1', role: '보안원', is_commander: false },
-  // { emp_no: 'E-7004', name: '전민규', team: '보안2', role: '보안원', is_commander: false },
+  // ── 보안 (화재시 보안1/2/3 구분) ─────────────────────
+  { emp_no: 'E-7001', name: '김우현', team: '보안1', role: '파트원', is_commander: false, email: 'kwh12@snipartner.co.kr',             phone: '010-9396-7173' },
+  { emp_no: 'E-7002', name: '김정수', team: '보안2', role: '파트원', is_commander: false, email: 'agito2001@snipartner.co.kr',         phone: '010-9201-0039' },
+  { emp_no: 'E-7003', name: '김병찬', team: '보안2', role: '파트원', is_commander: false, email: 'greenday@snipartner.co.kr',          phone: '010-7750-9488' },
+  { emp_no: 'E-7004', name: '길성용', team: '보안3', role: '파트원', is_commander: false, email: 'ksy84@snipartner.co.kr',             phone: '010-7199-5276' },
+  { emp_no: 'E-7005', name: '김성진', team: '보안3', role: '파트원', is_commander: false, email: 'sungjin1116.kim@lgepartner.com',     phone: '010-6579-1116' },
+  { emp_no: 'E-7006', name: '문상균', team: '보안3', role: '파트원', is_commander: false, email: 'sanggyun.moon@snipartner.co.kr',     phone: '010-6625-2621' },
 
-  // ── 미화 (별도 확인 후 추가) ──────────────────────────
-  // { emp_no: 'E-8001', name: '지정운', team: '미화파트', role: '파트원', is_commander: false },
+  // ── 주차 ───────────────────────────────────────────────
+  { emp_no: 'E-9001', name: '김재석', team: '주차파트', role: '파트원', is_commander: false, email: 'ooollpp@snipartner.co.kr',        phone: '010-5618-3369' },
 
-  // ── 주차 (별도 확인 후 추가) ──────────────────────────
-  // { emp_no: 'E-9001', name: '박세훈', team: '주차파트', role: '파트원', is_commander: false },
+  // ── 미화 ───────────────────────────────────────────────
+  { emp_no: 'E-8001', name: '지정운', team: '미화파트', role: '파트원', is_commander: false, email: 'jjw082300@snipartner.co.kr',      phone: '010-3653-1016' },
 ];
 
 // ── 시드 실행 ──────────────────────────────────────────────
