@@ -135,6 +135,12 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
       });
 
       if (bulkTasks.length > 0) await db.initializeMemberTasks(bulkTasks);
+
+      // 훈련 모드 + 사전 참여인원 설정된 경우 자동 적용
+      if (selectedMode === '훈련' && selectedEmps.size > 0) {
+        const selected = employees.filter(e => selectedEmps.has(e.emp_no));
+        await db.setTrainingParticipants(incident.id, selected, []);
+      }
     } catch (err: any) {
       alert('상황 발령 중 오류가 발생했습니다: ' + err.message);
     } finally {
@@ -203,7 +209,15 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
 
   // ── 참여인원 모달 ───────────────────────────────────
   const openParticipantModal = () => {
-    setSelectedEmps(new Set(responders.map(r => r.emp_no)));
+    if (activeIncident) {
+      // 발령 중: 현재 대원 목록 기준
+      setSelectedEmps(new Set(responders.map(r => r.emp_no)));
+    } else {
+      // 발령 전: 아무도 선택 안 된 경우 전체 선택 기본값
+      if (selectedEmps.size === 0) {
+        setSelectedEmps(new Set(employees.map(e => e.emp_no)));
+      }
+    }
     setShowParticipants(true);
   };
 
@@ -226,7 +240,11 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   };
 
   const saveParticipants = async () => {
-    if (!activeIncident) return;
+    if (!activeIncident) {
+      // 발령 전: 선택만 저장하고 닫기 (발령 시 자동 적용)
+      setShowParticipants(false);
+      return;
+    }
     setSavingParticipants(true);
     try {
       const selected = employees.filter(e => selectedEmps.has(e.emp_no));
@@ -377,7 +395,16 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
               />
             </div>
 
-            <button type="submit" className="btn btn-danger" disabled={loading} style={{ marginTop: '10px' }}>
+            {/* 훈련 시 참여인원 사전 설정 */}
+            {selectedMode === '훈련' && (
+              <button type="button" onClick={openParticipantModal} className="btn"
+                style={{ borderColor: 'rgba(99,102,241,0.5)', color: '#818cf8', background: 'rgba(99,102,241,0.1)' }}>
+                <UserCheck size={18} />
+                훈련 참여인원 설정{selectedEmps.size > 0 ? ` (${selectedEmps.size}명 선택됨)` : ''}
+              </button>
+            )}
+
+            <button type="submit" className="btn btn-danger" disabled={loading} style={{ marginTop: '4px' }}>
               <Play size={18} fill="white" />
               즉시 비상 발령 (사이렌/임무 생성)
             </button>
@@ -608,7 +635,11 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
             {/* 저장 버튼 */}
             <div style={{ padding: '12px 16px 20px', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
               <button onClick={saveParticipants} disabled={savingParticipants} className="btn btn-primary">
-                {savingParticipants ? '저장 중...' : `💾 ${selectedEmps.size}명 참여인원 확정`}
+                {savingParticipants
+                  ? '저장 중...'
+                  : activeIncident
+                    ? `💾 ${selectedEmps.size}명 참여인원 확정`
+                    : `✅ ${selectedEmps.size}명 선택 완료 (발령 시 자동 적용)`}
               </button>
             </div>
           </div>
