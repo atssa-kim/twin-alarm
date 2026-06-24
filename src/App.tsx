@@ -7,7 +7,7 @@ import { COPDashboard } from './components/COPDashboard';
 import { triggerEmergencyAlert, unlockAudio } from './utils/audio';
 import { db, type EmployeeDB } from './services/supabase';
 import { requestNotificationPermission, onForegroundMessage } from './services/notifications';
-import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Mic } from 'lucide-react';
+import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Mic, ExternalLink } from 'lucide-react';
 
 const App: React.FC = () => {
   const { activeIncident, responders, tasks, loading, disasterRoles } = useRealtime();
@@ -233,6 +233,30 @@ const App: React.FC = () => {
             <Shield size={20} color="var(--color-green)" />
           )}
           <span className="topbar-title">Twin-alarm</span>
+          {currentUser.isCommander && (
+            <a
+              href="https://atssa-kim.github.io/disa_app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                background: 'rgba(139,92,246,0.15)',
+                border: '1px solid rgba(139,92,246,0.35)',
+                borderRadius: '8px',
+                padding: '4px 8px',
+                color: '#a78bfa',
+                fontSize: '11px',
+                fontWeight: 700,
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <ExternalLink size={11} />
+              disa_app
+            </a>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -358,6 +382,61 @@ const App: React.FC = () => {
         </div>
       </header>
 
+      {/* Top Navigation Menu (topbar 바로 아래 고정) */}
+      <nav style={{
+        display: 'flex',
+        background: 'rgba(15, 23, 42, 0.9)',
+        backdropFilter: 'blur(12px)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '16px',
+        height: '56px',
+        alignItems: 'center',
+        padding: '0 8px',
+        margin: '8px 12px 0',
+        position: 'sticky',
+        top: '57px',
+        zIndex: 90,
+      }}>
+        {currentUser.isCommander && (
+          <button
+            onClick={() => setCurrentView('cmd')}
+            style={{
+              flex: 1, background: 'transparent', border: 'none',
+              color: currentView === 'cmd' ? '#3b82f6' : 'var(--text-muted)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+            }}
+          >
+            <LayoutDashboard size={17} />
+            <span>지휘본부</span>
+          </button>
+        )}
+        <button
+          onClick={() => setCurrentView('responder')}
+          style={{
+            flex: 1, background: 'transparent', border: 'none',
+            color: currentView === 'responder' ? '#3b82f6' : 'var(--text-muted)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+          }}
+        >
+          <ClipboardCheck size={17} />
+          <span>나의 임무</span>
+        </button>
+        <button
+          onClick={() => setCurrentView('cop')}
+          style={{
+            flex: 1, background: 'transparent', border: 'none',
+            color: currentView === 'cop' ? '#3b82f6' : 'var(--text-muted)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+          }}
+        >
+          <Radio size={17} />
+          <span>상황판 (COP)</span>
+        </button>
+      </nav>
+
       {/* Main Content Area */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
         {currentView === 'cmd' && currentUser.isCommander && (
@@ -388,82 +467,6 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Bottom Navigation Menu */}
-      <nav style={{
-        display: 'flex',
-        background: 'rgba(15, 23, 42, 0.9)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '20px',
-        height: '64px',
-        alignItems: 'center',
-        padding: '0 8px',
-        margin: '0 12px 16px',
-        position: 'sticky',
-        bottom: '16px',
-      }}>
-        {currentUser.isCommander && (
-          <button
-            onClick={() => setCurrentView('cmd')}
-            style={{
-              flex: 1,
-              background: 'transparent',
-              border: 'none',
-              color: currentView === 'cmd' ? '#3b82f6' : 'var(--text-muted)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '4px',
-              fontSize: '11px',
-              fontWeight: 700,
-              cursor: 'pointer'
-            }}
-          >
-            <LayoutDashboard size={18} />
-            <span>지휘본부</span>
-          </button>
-        )}
-
-        <button
-          onClick={() => setCurrentView('responder')}
-          style={{
-            flex: 1,
-            background: 'transparent',
-            border: 'none',
-            color: currentView === 'responder' ? '#3b82f6' : 'var(--text-muted)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            fontSize: '11px',
-            fontWeight: 700,
-            cursor: 'pointer'
-          }}
-        >
-          <ClipboardCheck size={18} />
-          <span>나의 임무</span>
-        </button>
-
-        <button
-          onClick={() => setCurrentView('cop')}
-          style={{
-            flex: 1,
-            background: 'transparent',
-            border: 'none',
-            color: currentView === 'cop' ? '#3b82f6' : 'var(--text-muted)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            fontSize: '11px',
-            fontWeight: 700,
-            cursor: 'pointer'
-          }}
-        >
-          <Radio size={18} />
-          <span>상황판 (COP)</span>
-        </button>
-      </nav>
     </div>
   );
 };
