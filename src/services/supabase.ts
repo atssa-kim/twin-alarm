@@ -36,7 +36,7 @@ export interface MemberTask {
   task_idx: number;
   label: string;
   done: boolean;
-  done_by: string | null;
+  done_by?: string | null; // DB 컬럼 추가 필요: ALTER TABLE member_tasks ADD COLUMN IF NOT EXISTS done_by TEXT;
   updated_at: number | null;
 }
 
@@ -138,7 +138,7 @@ export const db = {
   },
 
   // 5. Bulk insert tasks for an incident
-  async initializeMemberTasks(tasks: Omit<MemberTask, 'updated_at'>[]) {
+  async initializeMemberTasks(tasks: Omit<MemberTask, 'updated_at' | 'done_by'>[]) {
     const { error } = await supabase
       .from('member_tasks')
       .insert(tasks);

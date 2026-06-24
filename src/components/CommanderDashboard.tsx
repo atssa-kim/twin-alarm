@@ -54,7 +54,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
       );
 
       // Construct and bulk insert member tasks from DB
-      const bulkTasks: Omit<MemberTask, 'updated_at'>[] = [];
+      const bulkTasks: Omit<MemberTask, 'updated_at' | 'done_by'>[] = [];
       roles.forEach(role => {
         (role.disaster_tasks ?? [])
           .sort((a, b) => a.task_idx - b.task_idx)
@@ -67,7 +67,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
               task_idx: task.task_idx,
               label: task.label,
               done: false,
-              done_by: null,
             });
           });
       });
