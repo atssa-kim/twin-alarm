@@ -49,13 +49,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
   const teams = useMemo(() => {
     const teamSet = new Set<string>();
     for (const e of employees) {
-      const t = normalizeTeam(e.team);
-      if (t === '상황실') {
-        // 상황실 직원은 두 그룹으로 분리
+      if (e.role.includes('교대')) {
+        // 교대 직원은 role 기준으로 분리 (DB team 값과 무관)
         if (e.role.includes('BMS') || e.role.includes('방재')) teamSet.add('상황실');
         else teamSet.add('교대근무자');
       } else {
-        teamSet.add(t);
+        teamSet.add(normalizeTeam(e.team));
       }
     }
     return Array.from(teamSet).sort((a, b) => {
@@ -71,32 +70,21 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
   const filteredEmployees = useMemo(() => {
     if (!selectedTeam) return [];
 
-    let filtered: EmployeeDB[];
     if (selectedTeam === '상황실') {
-      filtered = employees.filter(e =>
-        e.team === '상황실' && (e.role.includes('BMS') || e.role.includes('방재'))
-      );
-      return filtered.sort((a, b) => {
-        const rd = getShiftRank(a.role) - getShiftRank(b.role);
-        return rd !== 0 ? rd : a.name.localeCompare(b.name, 'ko');
-      });
+      return employees
+        .filter(e => e.role.includes('교대') && (e.role.includes('BMS') || e.role.includes('방재')))
+        .sort((a, b) => getShiftRank(a.role) - getShiftRank(b.role) || a.name.localeCompare(b.name, 'ko'));
     }
     if (selectedTeam === '교대근무자') {
-      filtered = employees.filter(e =>
-        e.team === '상황실' && !e.role.includes('BMS') && !e.role.includes('방재')
-      );
-      return filtered.sort((a, b) => {
-        const rd = getShiftRank(a.role) - getShiftRank(b.role);
-        return rd !== 0 ? rd : a.name.localeCompare(b.name, 'ko');
-      });
+      return employees
+        .filter(e => e.role.includes('교대') && !e.role.includes('BMS') && !e.role.includes('방재'))
+        .sort((a, b) => getShiftRank(a.role) - getShiftRank(b.role) || a.name.localeCompare(b.name, 'ko'));
     }
 
+    // 일반 팀: 교대 직원 제외 (상황실/교대근무자 그룹으로 별도 관리)
     return employees
-      .filter(e => normalizeTeam(e.team) === selectedTeam)
-      .sort((a, b) => {
-        const rd = getRoleRank(a.role) - getRoleRank(b.role);
-        return rd !== 0 ? rd : a.name.localeCompare(b.name, 'ko');
-      });
+      .filter(e => normalizeTeam(e.team) === selectedTeam && !e.role.includes('교대'))
+      .sort((a, b) => getRoleRank(a.role) - getRoleRank(b.role) || a.name.localeCompare(b.name, 'ko'));
   }, [employees, selectedTeam]);
 
   const handleTeamChange = (team: string) => {
