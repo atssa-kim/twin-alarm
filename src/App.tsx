@@ -207,7 +207,7 @@ const App: React.FC = () => {
           ) : (
             <Shield size={20} color="var(--color-green)" />
           )}
-          <span className="topbar-title">TwinTower Ops</span>
+          <span className="topbar-title">Twin-alarm</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

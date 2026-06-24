@@ -70,6 +70,7 @@ body {
   box-shadow: var(--shadow-premium);
   border-left: 1px solid rgba(255, 255, 255, 0.05);
   border-right: 1px solid rgba(255, 255, 255, 0.05);
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
