@@ -23,7 +23,11 @@ for (const line of envContent.split('\n')) {
   const eq = line.indexOf('=');
   if (eq > 0) env[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
 }
-const supabase = createClient(env['VITE_SUPABASE_URL'], env['VITE_SUPABASE_ANON_KEY']);
+const supabaseKey = env['SUPABASE_SERVICE_ROLE_KEY'] || env['VITE_SUPABASE_ANON_KEY'];
+if (!env['SUPABASE_SERVICE_ROLE_KEY']) {
+  console.warn('⚠️  SUPABASE_SERVICE_ROLE_KEY 미설정 — anon key 사용 (RLS 활성화 시 쓰기 실패 가능)');
+}
+const supabase = createClient(env['VITE_SUPABASE_URL'], supabaseKey);
 
 // ── 재난 목록 ──────────────────────────────────────────────
 const DISASTERS = ['화재', '정전', '누수', '태풍/홍수', '폭설', '지진', '가스누출', '승강기', '테러'] as const;
@@ -231,13 +235,38 @@ const EMPLOYEES: {
 
   // ── 미화 ───────────────────────────────────────────────
   { emp_no: 'E-8001', name: '지정운', team: '미화파트', role: '파트원', is_commander: false, email: 'jjw082300@snipartner.co.kr',      phone: '010-3653-1016' },
+
+  // ── 상황실 교대 근무자 (A/B/C/D조) ──────────────────────
+  // role 에 A/B/C/D 포함 → 지휘본부 A조/B조/C조/D조 빠른선택 필터에서 동작
+  // (BMS)=BMS전담, (전기)=전기전공, (방재)=소방방재, (보안)=보안, (운전)=운전
+  // ※ 이름이 불명확한 항목(이민혁·박혜주·이재혁)은 실제 명단 확인 후 수정하세요
+  { emp_no: 'SS-A01', name: '강세봉', team: '상황실', role: '교대초장(A조)', is_commander: false },
+  { emp_no: 'SS-A02', name: '심현복', team: '상황실', role: '교대원(A조)',   is_commander: false },
+  { emp_no: 'SS-A03', name: '이민혁', team: '상황실', role: '교대원(A조)',   is_commander: false },  // ※확인필요
+  { emp_no: 'SS-A04', name: '김병태', team: '상황실', role: '교대원(A조)',   is_commander: false },
+
+  { emp_no: 'SS-B01', name: '성경원', team: '상황실', role: '교대초장(B조)', is_commander: false },
+  { emp_no: 'SS-B02', name: '김성현', team: '상황실', role: '교대원(B조)',   is_commander: false },
+  { emp_no: 'SS-B03', name: '박범순', team: '상황실', role: '교대원(B조)',   is_commander: false },
+  { emp_no: 'SS-B04', name: '유찬정', team: '상황실', role: '교대원(B조)',   is_commander: false },
+
+  { emp_no: 'SS-C01', name: '안준혁', team: '상황실', role: '교대초장(C조)', is_commander: false },
+  { emp_no: 'SS-C02', name: '이태경', team: '상황실', role: '교대원(C조)',   is_commander: false },
+  { emp_no: 'SS-C03', name: '박혜주', team: '상황실', role: '교대원(C조)',   is_commander: false },  // ※확인필요
+  { emp_no: 'SS-C04', name: '김성',   team: '상황실', role: '교대원(C조)',   is_commander: false },
+
+  { emp_no: 'SS-D01', name: '강병기', team: '상황실', role: '교대초장(D조)', is_commander: false },
+  { emp_no: 'SS-D02', name: '소경태', team: '상황실', role: '교대원(D조)',   is_commander: false },
+  { emp_no: 'SS-D03', name: '이재혁', team: '상황실', role: '교대원(D조)',   is_commander: false },  // ※확인필요
+  { emp_no: 'SS-D04', name: '유지영', team: '상황실', role: '교대원(D조)',   is_commander: false },
 ];
 
 // ── 상황실 전용 역할/임무 시드 ────────────────────────────
 async function seedSituationRoomRoles() {
   console.log('\n상황실 역할/임무 시드 시작...\n');
 
-  const tasks = [
+  // 비화재 재난용 공통 임무
+  const genericTasks = [
     '◇ 상황 접수 및 보고',
     '┖ 재난 위치·종류·규모 확인',
     '┖ 지휘관(센터장)에게 즉시 보고',
@@ -251,11 +280,74 @@ async function seedSituationRoomRoles() {
     '┖ 상황 종료 보고 작성',
   ];
 
+  // 화재 감지기동작 시 임무 (감지기 발령 즉시 부여)
+  const fireDetectorTasks = [
+    '◇ 1분 이내',
+    '┖ Ch1,2 무전기로 보안·시설파트·주차 상황전파 출동요청',
+    '┖ 상황실 BMS 및 1층 보안근무자 현장출동',
+    '┖ 야간) 전기근무자 현장출동, 운전근무자 상황실 이동',
+    '┖ 주간) 초기출동조(소방·전기 근무자) 비상장비 착용·휴대 출동',
+    '┖ 수신기 감지위치 도면 사진찍어 단톡 공지',
+    '┖ 소방·보안근무자 무전기로 위치 상세 설명',
+    '┖ (기타) 자탐구역·재연구역·방수구역 도면제공',
+    '┖ 층별 근무자 비상연락 — 화재여부 확인 요청',
+    '┖ 미화·층별보안·입주사 담당 가까운 위치 근무자 연락',
+    '┖ 해당 위치 카메라 검색 (서관 2~36층·동관 5층 확인불가)',
+    '◇ 1분 이후 소방설비 확인',
+    '┖ 비상방송·경종·시각경보 정상동작 확인 (화재층 및 직상4개층)',
+    '┖ 전층 출입통제설비·스피드게이트 동작상태 확인',
+    '┖ 기타 소화·경보·소화활동 소방설비 동작상태 확인',
+    '┖ 방화셔터·방화문 피난방화설비 동작상태 확인',
+    '┖ 전층 공조설비 OFF + 샌드위치가압설비 동작확인',
+    '┖ 비상조명 점등 상태 확인',
+    '┖ 입주사 담당자등 비상문자 발송',
+    '┖ 관계자(센터장·안전관리자등) 연락',
+    '┖ 민원전화 응대 (임무 후 후순위)',
+    '┖ 대피 질의시 "일단 대피하시고 안내방송 참조" 안내',
+    '◇ 비화재보 처리 (비화재보 판명시)',
+    '┖ 경보·비상방송 정지 우선조치',
+    '┖ 기타 소방설비 연동정지',
+    '┖ 경보층에 오보임을 알리는 안내방송 송출',
+    '┖ 경보층 확인',
+    '┖ 출입통제·조명·공조설비등 화재연동 복구',
+    '┖ IOC RMS 정지요청',
+    '┖ 관계자(센터장·안전관리자) 전화 보고',
+    '┖ 주간(07~20시): 문자 발송 (SNI·주엘지·해당입주사 담당자)',
+    '┖ 야간(20~07시): 오전 07시 해당층 입주사 + LG 담당자',
+    '┖ 문자보고 프로세서 (BMS Phone 010-7716-8449)',
+  ];
+
+  // 화재 확인 시 임무 (화재 승격 후 추가 부여)
+  const fireEscalateTasks = [
+    '◇ 화재시 설비 연동',
+    '┖ 출입통제설비 해정(Unlocked), 스피드게이트 Open 연동확인',
+    '┖ 일반용 E/V 파킹(수동), 비상용-운전자 연락, 오티스 연락',
+    '┖ 피난유도: 평일주간 우선경보 → 소방계획서 기준',
+    '┖ 야간·휴일: 전층 피난유도',
+    '◇ 화재시 비상연락',
+    '┖ 119 화재신고, 상세히 정보제공',
+    '┖ 주간: 자위소방대 비상연락(무전·톡), 관계자(센터장·안전관리자)',
+    '┖ 주간: 어린이집·VIP보안 화재전파',
+    '┖ 야간: 시설·미화·보안·주차 근무자, 특히 미화감독 연락',
+    '┖ 관계자·입주사 담당자등 화재상황 문자 보고',
+    '┖ 종합상황실 상황보고',
+    '┖ 화재진행·설비동작·119·요구조자·피난상황 현황판 작성',
+    '◇ 화재진압 후',
+    '┖ 경보·비상방송 정지등 소방시설 연동정지 및 수신반 복구',
+    '┖ 승강기운행·출입통제·스피드게이트·공조설비등 복구',
+    '┖ IOC RMS 정지요청',
+    '┖ 화재진압에 따른 전층 안내방송 송출',
+    '┖ 입주사 담당자등 상황종료 문자 발송',
+  ];
+
   for (const disaster of DISASTERS) {
+    const tasks = disaster === '화재' ? fireDetectorTasks : genericTasks;
+
+    // badge '상황실' — 감지기동작 시 즉시 부여 임무
     const { data: role, error: roleErr } = await supabase
       .from('disaster_roles')
       .upsert(
-        { disaster, group_name: '상황실', role: '상황실 운영', badge: '상황실', bc: '#312e81' },
+        { disaster, group_name: '상황실', role: '📻 상황실', badge: '상황실', bc: '#312e81' },
         { onConflict: 'disaster,badge' }
       )
       .select()
@@ -267,13 +359,37 @@ async function seedSituationRoomRoles() {
     }
 
     await supabase.from('disaster_tasks').delete().eq('role_id', role.id);
-
     const taskRows = tasks.map((label, idx) => ({ role_id: role.id, task_idx: idx, label }));
     const { error: taskErr } = await supabase.from('disaster_tasks').insert(taskRows);
     if (taskErr) {
       console.error(`  ✗ 상황실 임무 오류 [${disaster}]:`, taskErr.message);
     } else {
       console.log(`  ✓ ${disaster} 상황실 — ${taskRows.length}개 임무`);
+    }
+
+    // 화재 전용: badge '상황실/화재' — 화재 승격 후 추가 부여 임무
+    if (disaster === '화재') {
+      const { data: fireRole, error: fireRoleErr } = await supabase
+        .from('disaster_roles')
+        .upsert(
+          { disaster: '화재', group_name: '상황실', role: '📻 상황실/화재', badge: '상황실/화재', bc: '#1e40af' },
+          { onConflict: 'disaster,badge' }
+        )
+        .select()
+        .single();
+
+      if (fireRoleErr) {
+        console.error('  ✗ 상황실/화재 역할 오류:', fireRoleErr.message);
+      } else {
+        await supabase.from('disaster_tasks').delete().eq('role_id', fireRole.id);
+        const fireTaskRows = fireEscalateTasks.map((label, idx) => ({ role_id: fireRole.id, task_idx: idx, label }));
+        const { error: fireTaskErr } = await supabase.from('disaster_tasks').insert(fireTaskRows);
+        if (fireTaskErr) {
+          console.error('  ✗ 상황실/화재 임무 오류:', fireTaskErr.message);
+        } else {
+          console.log(`  ✓ 화재 상황실/화재 — ${fireTaskRows.length}개 임무 (화재 승격 시 추가)`);
+        }
+      }
     }
   }
 
