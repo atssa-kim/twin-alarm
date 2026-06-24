@@ -62,6 +62,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   // 참여인원 인라인 패널
   const [showParticipants, setShowParticipants] = useState(false);
   const [selectedEmps, setSelectedEmps] = useState<Set<string>>(new Set());
+  const [expandedCell, setExpandedCell] = useState<{ team: string; type: 'day' | 'night' } | null>(null);
 
   const isFireDisaster = selectedDisasterKey === '화재';
 
@@ -90,6 +91,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const handleDeclare = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!location.trim()) return alert('위치를 입력하세요.');
+    if (selectedMode === '훈련' && selectedEmps.size === 0) return alert('참여인원을 선택해주세요.');
 
     const isInitial = isFireDisaster && fireSubMode === 'initial';
     const modeLabel = isFireDisaster
@@ -194,7 +196,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   // ── 상황 종료 ──────────────────────────────────────
   const handleClose = async () => {
     if (!activeIncident) return;
-    if (!window.confirm('상황을 종료하시겠습니까? 모든 출동 기록과 임무 진행률이 초기화됩니다.')) return;
+    if (!window.confirm('정말 종료할까요?')) return;
     stopAllAlerts();
     setLoading(true);
     try {
@@ -328,11 +330,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                     {selectedMode === '훈련' ? '🏋️ 전체훈련' : '🔥 화재상황'}
                   </button>
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px', lineHeight: 1.5 }}>
-                  {fireSubMode === 'initial'
-                    ? '초기출동조(총괄·상황실·통제·출동)만 소집 → 이후 승격 가능'
-                    : (selectedMode === '훈련' ? '전체 대원 즉시 소집' : '전체 대원 즉시 소집')}
-                </div>
               </div>
             )}
 
@@ -373,7 +370,10 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                       {[
                         { label: '전체', fn: () => setSelectedEmps(new Set(employees.map(e => e.emp_no))), color: '#818cf8' },
                         { label: '☀️ 주간', fn: () => setSelectedEmps(new Set(employees.filter(e => !isShiftEmployee(e.role)).map(e => e.emp_no))), color: '#fbbf24' },
-                        { label: '🌙 야간', fn: () => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role)).map(e => e.emp_no))), color: '#a5b4fc' },
+                        { label: 'A조', fn: () => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role) && e.role.includes('A')).map(e => e.emp_no))), color: '#a5b4fc' },
+                        { label: 'B조', fn: () => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role) && e.role.includes('B')).map(e => e.emp_no))), color: '#86efac' },
+                        { label: 'C조', fn: () => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role) && e.role.includes('C')).map(e => e.emp_no))), color: '#fdba74' },
+                        { label: 'D조', fn: () => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role) && e.role.includes('D')).map(e => e.emp_no))), color: '#f9a8d4' },
                         { label: '해제', fn: () => setSelectedEmps(new Set()), color: '#475569' },
                       ].map(({ label, fn, color }) => (
                         <button key={label} type="button" onClick={fn} style={{
@@ -386,10 +386,11 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
 
                     {/* 파트 × 주간/야간 그리드 */}
                     <div style={{ padding: '0 8px' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 72px 72px', padding: '5px 4px 3px', fontSize: '10px', color: '#475569', fontWeight: 700 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr 72px 72px', padding: '5px 4px 3px', fontSize: '10px', color: '#475569', fontWeight: 700 }}>
+                        <span />
                         <span>파트</span>
                         <span style={{ textAlign: 'center' }}>☀️ 주간</span>
-                        <span style={{ textAlign: 'center' }}>🌙 야간</span>
+                        <span style={{ textAlign: 'center' }}>🌙 교대</span>
                       </div>
                       {groupedEmployees.map(([team, emps]) => {
                         const dayEmps = emps.filter(e => !isShiftEmployee(e.role));
@@ -397,7 +398,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                         const dayN = dayEmps.filter(e => selectedEmps.has(e.emp_no)).length;
                         const nightN = nightEmps.filter(e => selectedEmps.has(e.emp_no)).length;
 
-                        const toggle = (grp: EmployeeDB[]) => {
+                        const toggleGroup = (grp: EmployeeDB[]) => {
                           const all = grp.every(e => selectedEmps.has(e.emp_no));
                           setSelectedEmps(prev => {
                             const next = new Set(prev);
@@ -407,17 +408,29 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                           });
                         };
 
-                        const cell = (n: number, total: number, grp: EmployeeDB[], isNight: boolean) => {
+                        const toggleOne = (empNo: string) => {
+                          setSelectedEmps(prev => {
+                            const next = new Set(prev);
+                            next.has(empNo) ? next.delete(empNo) : next.add(empNo);
+                            return next;
+                          });
+                        };
+
+                        const isDayExpanded = expandedCell?.team === team && expandedCell.type === 'day';
+                        const isNightExpanded = expandedCell?.team === team && expandedCell.type === 'night';
+
+                        const cell = (n: number, total: number, type: 'day' | 'night') => {
                           if (!total) return <span />;
                           const full = n === total;
                           const partial = n > 0 && !full;
-                          const baseColor = isNight ? '#a5b4fc' : '#fbbf24';
+                          const baseColor = type === 'night' ? '#a5b4fc' : '#fbbf24';
+                          const isExp = type === 'day' ? isDayExpanded : isNightExpanded;
                           return (
-                            <button type="button" onClick={() => toggle(grp)} style={{
+                            <button type="button" onClick={() => setExpandedCell(isExp ? null : { team, type })} style={{
                               margin: '2px', padding: '4px 0', borderRadius: '6px',
                               fontSize: '11px', fontWeight: 700, textAlign: 'center', cursor: 'pointer',
-                              border: `1px solid ${n > 0 ? baseColor + '66' : 'rgba(255,255,255,0.08)'}`,
-                              background: full ? baseColor + '22' : partial ? baseColor + '0d' : 'rgba(255,255,255,0.03)',
+                              border: isExp ? `2px solid ${baseColor}` : `1px solid ${n > 0 ? baseColor + '66' : 'rgba(255,255,255,0.08)'}`,
+                              background: isExp ? baseColor + '33' : full ? baseColor + '22' : partial ? baseColor + '0d' : 'rgba(255,255,255,0.03)',
                               color: n > 0 ? baseColor : '#334155',
                             }}>
                               {n}/{total}명
@@ -425,12 +438,63 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                           );
                         };
 
+                        const subList = (grp: EmployeeDB[], type: 'day' | 'night') => {
+                          const baseColor = type === 'night' ? '#a5b4fc' : '#fbbf24';
+                          const label = type === 'day' ? '☀️ 주간' : '🌙 교대';
+                          const allSel = grp.every(e => selectedEmps.has(e.emp_no));
+                          return (
+                            <div style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '6px 10px 8px' }}>
+                              <div
+                                onClick={() => toggleGroup(grp)}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 2px 7px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '5px' }}
+                              >
+                                <span style={{ fontSize: '11px', color: baseColor, fontWeight: 700 }}>{team} · {label}</span>
+                                <span style={{ fontSize: '10px', color: allSel ? baseColor : '#475569', fontWeight: 600 }}>{allSel ? '전체 해제' : '전체 선택'}</span>
+                              </div>
+                              {grp.map(emp => {
+                                const checked = selectedEmps.has(emp.emp_no);
+                                return (
+                                  <div key={emp.emp_no} onClick={() => toggleOne(emp.emp_no)} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '5px 2px', cursor: 'pointer' }}>
+                                    <div style={{
+                                      width: '15px', height: '15px', borderRadius: '4px', flexShrink: 0,
+                                      border: `2px solid ${checked ? baseColor : 'rgba(255,255,255,0.18)'}`,
+                                      background: checked ? baseColor + '33' : 'transparent',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    }}>
+                                      {checked && <span style={{ color: baseColor, fontSize: '10px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
+                                    </div>
+                                    <span style={{ fontSize: '12px', flex: 1, color: checked ? '#e2e8f0' : '#94a3b8' }}>{emp.name}</span>
+                                    <span style={{ fontSize: '10px', color: '#475569' }}>{emp.role}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        };
+
+                        const allInTeam = [...dayEmps, ...nightEmps];
+                        const allTeamSel = allInTeam.length > 0 && allInTeam.every(e => selectedEmps.has(e.emp_no));
+                        const someTeamSel = !allTeamSel && allInTeam.some(e => selectedEmps.has(e.emp_no));
                         return (
-                          <div key={team} style={{ display: 'grid', gridTemplateColumns: '1fr 72px 72px', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                            <span style={{ fontSize: '11px', color: '#64748b', padding: '0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{team}</span>
-                            {cell(dayN, dayEmps.length, dayEmps, false)}
-                            {cell(nightN, nightEmps.length, nightEmps, true)}
-                          </div>
+                          <React.Fragment key={team}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr 72px 72px', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                              <div onClick={() => toggleGroup(allInTeam)} style={{
+                                width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0,
+                                border: `2px solid ${allTeamSel || someTeamSel ? '#818cf8' : 'rgba(255,255,255,0.18)'}`,
+                                background: allTeamSel ? '#818cf8' : someTeamSel ? '#818cf844' : 'transparent',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', margin: '0 auto',
+                              }}>
+                                {allTeamSel && <span style={{ color: 'white', fontSize: '9px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
+                                {someTeamSel && <span style={{ color: '#818cf8', fontSize: '10px', lineHeight: 1, fontWeight: 900 }}>−</span>}
+                              </div>
+                              <span style={{ fontSize: '11px', color: '#64748b', padding: '0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{team}</span>
+                              {cell(dayN, dayEmps.length, 'day')}
+                              {cell(nightN, nightEmps.length, 'night')}
+                            </div>
+                            {isDayExpanded && dayEmps.length > 0 && subList(dayEmps, 'day')}
+                            {isNightExpanded && nightEmps.length > 0 && subList(nightEmps, 'night')}
+                          </React.Fragment>
                         );
                       })}
                     </div>
