@@ -176,6 +176,11 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     .replace('파트장', '파트')
     .replace(/^보안[123]$/, '보안파트');
 
+  // 화재 감지기동작 시 초기출동조 여부 판단
+  const FIRE_INITIAL_BADGES = new Set(['총괄', '상황실', '통제', '출동']);
+  const isFireInitial = activeIncident?.disaster === '화재' && activeIncident?.scope === 'fire_initial';
+  const isWaitingForEscalation = isFireInitial && myBadge !== null && !FIRE_INITIAL_BADGES.has(myBadge ?? '');
+
   return (
     <div className="content">
       {!activeIncident ? (
@@ -236,15 +241,18 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
         <>
           {/* Active Incident Banner */}
           <div className="banner alarm-active" style={{
-            background: activeIncident.mode === '실제'
+            background: activeIncident.mode.startsWith('실제')
               ? 'linear-gradient(135deg, rgba(239,68,68,0.2) 0%, rgba(220,38,38,0.3) 100%)'
               : 'linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(217,119,6,0.25) 100%)',
-            borderColor: activeIncident.mode === '실제' ? 'var(--color-fire)' : 'var(--color-power)'
+            borderColor: activeIncident.mode.startsWith('실제') ? 'var(--color-fire)' : 'var(--color-power)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-              <div className="banner-title" style={{ color: activeIncident.mode === '실제' ? 'var(--color-fire)' : 'var(--color-power)', minWidth: 0, overflow: 'hidden' }}>
+              <div className="banner-title" style={{ color: activeIncident.mode.startsWith('실제') ? 'var(--color-fire)' : 'var(--color-power)', minWidth: 0, overflow: 'hidden' }}>
                 <ShieldAlert size={18} style={{ flexShrink: 0 }} />
-                <span style={{ fontSize: '15px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeIncident.mode === '실제' ? '🚨 실제 비상 상황' : '🎓 대응 훈련'}</span>
+                <span style={{ fontSize: '15px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {activeIncident.mode.startsWith('실제') ? '🚨 실제 비상 상황' : '🎓 대응 훈련'}
+                  {isFireInitial && <span style={{ fontSize: '11px', marginLeft: '6px', opacity: 0.8 }}>· 감지기동작</span>}
+                </span>
               </div>
               <span style={{ fontSize: '11px', background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '6px', flexShrink: 0 }}>
                 {activeIncident.disaster}
@@ -255,6 +263,21 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
               <span>위치: <strong>{activeIncident.location}</strong></span>
             </div>
           </div>
+
+          {/* 화재 감지기동작: 초기출동조 외 대원 대기 안내 */}
+          {isWaitingForEscalation && (
+            <div className="card" style={{ textAlign: 'center', padding: '32px 20px', borderColor: 'rgba(245,158,11,0.3)' }}>
+              <div style={{ fontSize: '36px', marginBottom: '12px' }}>⏳</div>
+              <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '8px', color: '#fbbf24' }}>
+                대기 중
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                현재 <strong style={{ color: '#fbbf24' }}>감지기동작 단계</strong>입니다.<br />
+                초기출동조가 현장을 확인 중입니다.<br />
+                지휘관이 승격하면 임무가 부여됩니다.
+              </div>
+            </div>
+          )}
 
           {/* Responder Status */}
           <div className="card">
