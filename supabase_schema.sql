@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS public.member_tasks (
     task_idx INTEGER NOT NULL,
     label TEXT NOT NULL,
     done BOOLEAN NOT NULL DEFAULT FALSE,
+    done_by TEXT,
     updated_at BIGINT
 );
 

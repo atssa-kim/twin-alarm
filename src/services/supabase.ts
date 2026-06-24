@@ -36,6 +36,7 @@ export interface MemberTask {
   task_idx: number;
   label: string;
   done: boolean;
+  done_by: string | null;
   updated_at: number | null;
 }
 
@@ -146,10 +147,10 @@ export const db = {
   },
 
   // 6. Toggle task status
-  async toggleTaskDone(taskId: string, done: boolean) {
+  async toggleTaskDone(taskId: string, done: boolean, doneBy: string | null = null) {
     const { error } = await supabase
       .from('member_tasks')
-      .update({ done, updated_at: Date.now() })
+      .update({ done, done_by: done ? doneBy : null, updated_at: Date.now() })
       .eq('id', taskId);
 
     if (error) throw error;

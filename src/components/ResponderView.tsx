@@ -50,6 +50,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   const [myBadge, setMyBadge] = useState<string | null>(null);
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [optimisticDone, setOptimisticDone] = useState<Record<string, boolean>>({});
+  const [optimisticStatus, setOptimisticStatus] = useState<Responder['status'] | null>(null);
   const incidentIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -60,7 +61,14 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   }, [activeIncident?.id, currentUser.empNo]);
 
   const currentResponder = responders.find(r => r.emp_no === currentUser.empNo);
-  const responderStatus = currentResponder ? currentResponder.status : '미응답';
+  const responderStatus = optimisticStatus ?? (currentResponder ? currentResponder.status : '미응답');
+
+  // Realtime 응답 오면 optimistic 상태 정리
+  useEffect(() => {
+    if (currentResponder && optimisticStatus === currentResponder.status) {
+      setOptimisticStatus(null);
+    }
+  }, [currentResponder?.status]);
 
   const myRole = myBadge
     ? (disasterRoles.find(r => r.badge === myBadge) ?? null)
@@ -114,6 +122,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
 
   const updateStatus = async (status: Responder['status']) => {
     if (!activeIncident) return;
+    setOptimisticStatus(status);
     setStatusLoading(true);
     try {
       await db.setResponderStatus(
@@ -125,6 +134,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
         status
       );
     } catch (err: any) {
+      setOptimisticStatus(null);
       alert('상태 업데이트 중 오류가 발생했습니다: ' + err.message);
     } finally {
       setStatusLoading(false);
@@ -138,12 +148,23 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   }, [activeIncident]);
 
   const handleTaskToggle = async (task: MemberTask) => {
-    // 이미 완료된 임무는 재클릭 무시 (중복체크 방지)
-    if (task.done) return;
+    if (task.done) {
+      const checker = task.done_by ?? '다른 대원';
+      const ok = window.confirm(`${checker}이(가) 이미 완료했어요.\n해제할까요?`);
+      if (!ok) return;
+      setOptimisticDone(prev => ({ ...prev, [task.id]: false }));
+      try {
+        await db.toggleTaskDone(task.id, false, null);
+      } catch (err: any) {
+        setOptimisticDone(prev => ({ ...prev, [task.id]: true }));
+        alert('임무 해제 중 오류가 발생했습니다: ' + err.message);
+      }
+      return;
+    }
     // Optimistic update: 즉시 UI 반영
     setOptimisticDone(prev => ({ ...prev, [task.id]: true }));
     try {
-      await db.toggleTaskDone(task.id, true);
+      await db.toggleTaskDone(task.id, true, currentUser.name);
     } catch (err: any) {
       // 실패 시 롤백
       setOptimisticDone(prev => ({ ...prev, [task.id]: false }));
