@@ -4,7 +4,7 @@ import { type Employee, Login } from './components/Login';
 import { CommanderDashboard } from './components/CommanderDashboard';
 import { ResponderView } from './components/ResponderView';
 import { COPDashboard } from './components/COPDashboard';
-import { triggerEmergencyAlert, unlockAudio } from './utils/audio';
+import { triggerEmergencyAlert, stopAllAlerts, unlockAudio } from './utils/audio';
 import { db, type EmployeeDB } from './services/supabase';
 import { requestNotificationPermission, onForegroundMessage } from './services/notifications';
 import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck } from 'lucide-react';
@@ -20,6 +20,8 @@ const App: React.FC = () => {
     return localStorage.getItem('tt_selected_voice') || '';
   });
   const lastAlertIdRef = useRef<string | null>(null);
+  const lastModeRef = useRef<string | null>(null);
+  const lastModeIncidentIdRef = useRef<string | null>(null);
 
   // Load available voices
   useEffect(() => {
@@ -139,7 +141,7 @@ const App: React.FC = () => {
         triggerEmergencyAlert(
           data.disaster || n.title || '재난',
           data.location || '',
-          data.mode === '훈련'
+          data.mode || '실제'
         );
       }
     });
@@ -150,17 +152,35 @@ const App: React.FC = () => {
   useEffect(() => {
     if (activeIncident && activeIncident.id !== lastAlertIdRef.current) {
       lastAlertIdRef.current = activeIncident.id;
+      lastModeRef.current = activeIncident.mode;
+      lastModeIncidentIdRef.current = activeIncident.id;
       if (soundEnabled) {
         triggerEmergencyAlert(
           activeIncident.disaster,
           activeIncident.location,
-          activeIncident.mode === '훈련'
+          activeIncident.mode
         );
       }
     } else if (!activeIncident) {
       lastAlertIdRef.current = null;
+      lastModeRef.current = null;
+      lastModeIncidentIdRef.current = null;
     }
   }, [activeIncident, soundEnabled]);
+
+  // 3. Detect escalation (mode change within same incident) and re-announce TTS
+  useEffect(() => {
+    if (!activeIncident) return;
+    const prevMode = lastModeRef.current;
+    const prevId = lastModeIncidentIdRef.current;
+    lastModeRef.current = activeIncident.mode;
+    lastModeIncidentIdRef.current = activeIncident.id;
+
+    // Same incident, mode changed → escalation
+    if (prevId === activeIncident.id && prevMode !== null && prevMode !== activeIncident.mode && soundEnabled) {
+      triggerEmergencyAlert(activeIncident.disaster, activeIncident.location, activeIncident.mode);
+    }
+  }, [activeIncident?.mode]);
 
   // Loading Screen
   if (loading) {
@@ -231,8 +251,10 @@ const App: React.FC = () => {
           {/* Sound toggle button */}
           <button
             onClick={() => {
-              setSoundEnabled(!soundEnabled);
+              const next = !soundEnabled;
+              setSoundEnabled(next);
               unlockAudio();
+              if (!next) stopAllAlerts();
             }}
             style={{
               background: 'transparent',

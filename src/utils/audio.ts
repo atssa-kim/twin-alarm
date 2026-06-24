@@ -1,6 +1,8 @@
 // Synthesized Emergency Sound Generator (AudioContext + TTS)
 
 let audioCtx: AudioContext | null = null;
+let activeOscillators: OscillatorNode[] = [];
+let activeGainNode: GainNode | null = null;
 
 export function unlockAudio() {
   try {
@@ -25,6 +27,31 @@ export function unlockAudio() {
   } catch (e) {}
 }
 
+export function stopSiren() {
+  try {
+    if (audioCtx && activeOscillators.length > 0) {
+      const now = audioCtx.currentTime;
+      if (activeGainNode) {
+        activeGainNode.gain.cancelScheduledValues(now);
+        activeGainNode.gain.setValueAtTime(activeGainNode.gain.value, now);
+        activeGainNode.gain.linearRampToValueAtTime(0, now + 0.06);
+      }
+      activeOscillators.forEach(osc => {
+        try { osc.stop(now + 0.07); } catch (_) {}
+      });
+    }
+  } catch (e) {}
+  activeOscillators = [];
+  activeGainNode = null;
+}
+
+export function stopAllAlerts() {
+  stopSiren();
+  try {
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+  } catch (_) {}
+}
+
 export function playSynthesizedSiren() {
   try {
     unlockAudio();
@@ -43,13 +70,12 @@ export function playSynthesizedSiren() {
 
     osc.type = 'sawtooth';
     osc2.type = 'square';
-    osc2.detune.value = -1200; // Octave below for thickness
+    osc2.detune.value = -1200;
 
     osc.frequency.setValueAtTime(lo, now);
     osc2.frequency.setValueAtTime(lo, now);
 
     let t = now;
-    // Siren wail: smooth sweep between low and high frequencies
     while (t < now + dur) {
       osc.frequency.linearRampToValueAtTime(hi, t + period / 2);
       osc.frequency.linearRampToValueAtTime(lo, t + period);
@@ -72,6 +98,16 @@ export function playSynthesizedSiren() {
     osc.stop(now + dur);
     osc2.stop(now + dur);
 
+    // Track for early stop
+    activeOscillators = [osc, osc2];
+    activeGainNode = g;
+
+    // Auto-clear refs after siren ends
+    setTimeout(() => {
+      activeOscillators = [];
+      activeGainNode = null;
+    }, (dur + 0.1) * 1000);
+
     if (navigator.vibrate) {
       navigator.vibrate([400, 200, 400, 200, 400, 200, 600]);
     }
@@ -87,25 +123,25 @@ export function announceTTS(text: string) {
       return;
     }
 
+    // 음성안내 시작 시 사이렌 중지
+    stopSiren();
     speechSynthesis.cancel();
+
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.volume = 1.0;
 
     const applyVoiceAndSpeak = () => {
       const voices = speechSynthesis.getVoices();
-      
-      // 1. Check user-selected voice from UI (window global or localStorage)
+
       const userSelectedName = (window as any).__tt_selected_voice || localStorage.getItem('tt_selected_voice') || '';
       let selectedVoice = userSelectedName ? voices.find(v => v.name === userSelectedName) : null;
 
-      // 2. Fallback: Look for Microsoft '인준' (Injun) voice
       if (!selectedVoice) {
         selectedVoice = voices.find(v => v.lang.startsWith('ko') && (v.name.includes('인준') || v.name.includes('Injun') || v.name.includes('injun')));
       }
-      
-      // 3. Fallback: any Korean voice
+
       if (!selectedVoice) {
-        selectedVoice = voices.find(v => v.lang.startsWith('ko') && (v.name.includes('Google') || v.name.includes('Heami'))) || 
+        selectedVoice = voices.find(v => v.lang.startsWith('ko') && (v.name.includes('Google') || v.name.includes('Heami'))) ||
                         voices.find(v => v.lang.startsWith('ko')) ||
                         voices[0];
       }
@@ -117,7 +153,7 @@ export function announceTTS(text: string) {
         utterance.lang = 'ko-KR';
       }
       utterance.pitch = 1.0;
-      utterance.rate = 0.95; // Slightly slower for emergency clarity
+      utterance.rate = 0.95;
       speechSynthesis.speak(utterance);
     };
 
@@ -136,8 +172,23 @@ export function announceTTS(text: string) {
   }
 }
 
-export function triggerEmergencyAlert(disasterName: string, location: string, isTraining: boolean) {
-  const prefix = isTraining ? '훈련 상황' : '실제 상황';
-  const announcementText = `${prefix}! ${location}에서 ${disasterName} 발생! ${prefix}! ${location}에서 ${disasterName} 발생! 전 소집 대원은 신속히 출동해 주시기 바랍니다.`;
+// mode: '훈련/감지기' | '훈련/전체' | '실제/감지기' | '실제/화재' | '훈련' | '실제'
+export function triggerEmergencyAlert(disasterName: string, location: string, mode: string) {
+  let announcementText: string;
+
+  if (mode === '훈련/감지기') {
+    announcementText = `훈련상황! 훈련상황! ${location}에서 감지기동작!`;
+  } else if (mode === '훈련/전체') {
+    announcementText = `훈련화재상황! 훈련화재상황! ${location}에서 화재상황!`;
+  } else if (mode === '실제/감지기') {
+    announcementText = `비상상황! 비상상황! ${location}에서 감지기동작!`;
+  } else if (mode === '실제/화재') {
+    announcementText = `화재상황! 화재상황! ${location}에서 화재발생! 전 소집 대원은 신속히 출동해 주시기 바랍니다.`;
+  } else if (mode.startsWith('훈련')) {
+    announcementText = `훈련상황! 훈련상황! ${location}에서 ${disasterName} 발생!`;
+  } else {
+    announcementText = `실제 비상상황! 실제 비상상황! ${location}에서 ${disasterName} 발생! 전 소집 대원은 신속히 출동해 주시기 바랍니다.`;
+  }
+
   announceTTS(announcementText);
 }

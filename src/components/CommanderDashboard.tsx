@@ -1,6 +1,7 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { type Incident, type Responder, type MemberTask, type EmployeeDB, db } from '../services/supabase';
 import { DISASTERS } from '../data/disasters';
+import { stopAllAlerts } from '../utils/audio';
 import { Play, Square, ShieldAlert, Users, MapPin, Mic, UserCheck, TrendingUp } from 'lucide-react';
 
 // 화재 초기출동조 배지 (감지기동작 시 1차 소집)
@@ -133,14 +134,15 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const handleFireEscalate = async () => {
     if (!activeIncident) return;
     const isTraining = activeIncident.mode.startsWith('훈련');
+    const newMode = isTraining ? '훈련/전체' : '실제/화재';
     const newScope = isTraining ? 'drill' : 'all';
     const label = isTraining ? '전체훈련' : '화재상황';
     if (!window.confirm(`[${label}]으로 승격하시겠습니까?\n나머지 대원이 추가 소집됩니다.`)) return;
 
     setLoading(true);
     try {
-      // scope 업데이트
-      await db.escalateIncident(activeIncident.id, activeIncident.mode, newScope);
+      // mode + scope 업데이트 (Realtime으로 다른 기기에 TTS 재발령)
+      await db.escalateIncident(activeIncident.id, newMode, newScope);
 
       // 아직 생성되지 않은 역할의 임무만 추가
       const allRoles = await db.getDisasterRolesWithTasks(activeIncident.disaster);
@@ -176,6 +178,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const handleClose = async () => {
     if (!activeIncident) return;
     if (!window.confirm('상황을 종료하시겠습니까? 모든 출동 기록과 임무 진행률이 초기화됩니다.')) return;
+    stopAllAlerts();
     setLoading(true);
     try {
       await db.closeIncident(activeIncident.id);
@@ -384,7 +387,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
               {activeIsInitial && <span style={{ fontSize: '12px', background: 'rgba(245,158,11,0.2)', color: '#fbbf24', padding: '2px 8px', borderRadius: '6px', marginLeft: '8px' }}>감지기동작</span>}
             </div>
             <div style={{ fontSize: '20px', fontWeight: 900, marginTop: '8px', fontFamily: 'var(--font-display)' }}>
-              {activeIncident.disaster} 발생
+              {activeIsTraining ? `${activeIncident.disaster}훈련상황` : `${activeIncident.disaster} 발생`}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: 'var(--text-muted)', marginTop: '8px' }}>
               <MapPin size={16} />

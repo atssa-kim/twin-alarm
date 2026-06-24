@@ -141,12 +141,6 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     }
   };
 
-  useEffect(() => {
-    if (activeIncident && responderStatus === '미응답') {
-      updateStatus('출동중');
-    }
-  }, [activeIncident]);
-
   const handleTaskToggle = async (task: MemberTask) => {
     if (task.done) {
       const checker = task.done_by ?? '다른 대원';
@@ -175,6 +169,9 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   const displayTeam = currentUser.team
     .replace('파트장', '파트')
     .replace(/^보안[123]$/, '보안파트');
+
+  const isSituationRoom = myBadge === '상황실';
+  const roleColor = isSituationRoom ? '#facc15' : (myRole?.bc ?? undefined);
 
   // 화재 감지기동작 시 초기출동조 여부 판단
   const FIRE_INITIAL_BADGES = new Set(['총괄', '상황실', '통제', '출동']);
@@ -279,42 +276,47 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
             </div>
           )}
 
-          {/* Responder Status */}
-          <div className="card">
-            <label>나의 대응 상태</label>
-            <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-              {(['출동중', '현장', '복귀'] as const).map((s) => {
-                const colors: Record<string, string> = { '출동중': 'var(--color-power)', '현장': 'var(--color-water)', '복귀': 'var(--color-green)' };
-                const labels: Record<string, string> = { '출동중': '🚨 출동중', '현장': '📍 도착', '복귀': '✅ 복귀' };
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    className="btn"
-                    style={{
-                      flex: 1, padding: '10px 4px', fontSize: '12px',
-                      background: responderStatus === s ? colors[s] : 'rgba(255,255,255,0.05)',
-                      border: responderStatus === s ? 'none' : '1px solid rgba(255,255,255,0.1)'
-                    }}
-                    onClick={() => updateStatus(s)}
-                    disabled={statusLoading}
-                  >
-                    {labels[s]}
-                  </button>
-                );
-              })}
+          {/* Responder Status - 상황실은 숨김 */}
+          {!isSituationRoom && (
+            <div className="card">
+              <label>나의 대응 상태</label>
+              <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                {(['출동중', '현장', '복귀'] as const).map((s) => {
+                  const colors: Record<string, string> = { '출동중': 'var(--color-power)', '현장': 'var(--color-water)', '복귀': 'var(--color-green)' };
+                  const labels: Record<string, string> = { '출동중': '🚨 출동중', '현장': '📍 도착', '복귀': '✅ 복귀' };
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      className="btn"
+                      style={{
+                        flex: 1, padding: '10px 4px', fontSize: '12px',
+                        background: responderStatus === s ? colors[s] : 'rgba(255,255,255,0.05)',
+                        border: responderStatus === s ? 'none' : '1px solid rgba(255,255,255,0.1)'
+                      }}
+                      onClick={() => updateStatus(s)}
+                      disabled={statusLoading}
+                    >
+                      {labels[s]}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {myRole ? (
             <>
               {/* Progress Card */}
-              <div className="card">
+              <div className="card" style={isSituationRoom ? { borderColor: 'rgba(250,204,21,0.4)', background: 'rgba(250,204,21,0.05)' } : {}}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-                  <Award size={20} color="var(--color-power)" />
-                  <h3 style={{ margin: 0, fontSize: '15px' }}>
-                    나의 임무 카드: <span style={{ color: myRole.bc ?? undefined }}>{myRole.role}</span>
+                  <Award size={20} color={roleColor ?? 'var(--color-power)'} />
+                  <h3 style={{ margin: 0, fontSize: '15px', flex: 1 }}>
+                    나의 임무 카드: <span style={{ color: roleColor }}>{myRole.role}</span>
                   </h3>
+                  <span style={{ fontSize: '12px', color: isSituationRoom ? '#facc15' : 'var(--text-muted)', fontWeight: 700 }}>
+                    나({currentUser.name})
+                  </span>
                 </div>
                 <div className="progress-container">
                   <div className="progress-header">
@@ -328,7 +330,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                       className="progress-fill"
                       style={{
                         width: `${myProgressPct}%`,
-                        backgroundColor: myProgressPct === 100 ? 'var(--color-green)' : myRole.bc || 'var(--color-fire)'
+                        backgroundColor: myProgressPct === 100 ? 'var(--color-green)' : (roleColor || 'var(--color-fire)')
                       }}
                     />
                   </div>
