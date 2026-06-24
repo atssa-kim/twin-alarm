@@ -55,7 +55,14 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
   const filteredEmployees = useMemo(() => {
     if (!selectedTeam) return [];
     return employees
-      .filter((e) => normalizeTeam(e.team) === selectedTeam)
+      .filter((e) => {
+        if (normalizeTeam(e.team) !== selectedTeam) return false;
+        // 상황실은 BMS·방재 인원만 로그인 가능
+        if (selectedTeam === '상황실') {
+          return e.role.includes('BMS') || e.role.includes('방재');
+        }
+        return true;
+      })
       .sort((a, b) => {
         const rd = getRoleRank(a.role) - getRoleRank(b.role);
         return rd !== 0 ? rd : a.name.localeCompare(b.name, 'ko');
