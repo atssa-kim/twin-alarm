@@ -202,10 +202,10 @@ const EMPLOYEES: {
   { emp_no: 'E-4002', name: '송치선', team: '소방파트',   role: '파트원',      is_commander: false, email: 'song5059@sni.co.kr',  phone: '010-4659-5059' },
   { emp_no: 'E-4003', name: '이동건', team: '소방파트',   role: '파트원',      is_commander: false, email: 'DongKun_Lee@sni.co.kr',phone: '010-2575-2806' },
   { emp_no: 'E-4004', name: '정민석', team: '소방파트',   role: '파트원',      is_commander: false, email: 'mins_jeong@sni.co.kr',phone: '010-8752-8967' },
-  { emp_no: 'E-4005', name: '안준혁', team: '상황실',     role: '교대조장(C조·방재)', is_commander: false, email: 'AJH90@sni.co.kr',     phone: '010-3449-3784' },
-  { emp_no: 'E-4006', name: '김병기', team: '상황실',     role: '교대조장(D조·방재)', is_commander: false, email: 'KBG82@sni.co.kr',     phone: '010-9248-3016' },
-  { emp_no: 'E-4007', name: '박범수', team: '상황실',     role: '교대원(B조·방재)',   is_commander: false, email: 'Pray_bs@sni.co.kr',   phone: '010-9437-1985' },
-  { emp_no: 'E-4008', name: '김상백', team: '상황실',     role: '교대원(A조·방재)',   is_commander: false, email: 'ksb408@sni.co.kr',    phone: '010-2503-7305' },
+  { emp_no: 'E-4005', name: '안준혁', team: '상황실',     role: '교대조장(C조·방재)', is_commander: true,  email: 'AJH90@sni.co.kr',     phone: '010-3449-3784' },
+  { emp_no: 'E-4006', name: '김병기', team: '상황실',     role: '교대조장(D조·방재)', is_commander: true,  email: 'KBG82@sni.co.kr',     phone: '010-9248-3016' },
+  { emp_no: 'E-4007', name: '박범수', team: '상황실',     role: '교대원(B조·방재)',   is_commander: true,  email: 'Pray_bs@sni.co.kr',   phone: '010-9437-1985' },
+  { emp_no: 'E-4008', name: '김상백', team: '상황실',     role: '교대원(A조·방재)',   is_commander: true,  email: 'ksb408@sni.co.kr',    phone: '010-2503-7305' },
 
   // ── 건축 ───────────────────────────────────────────────
   { emp_no: 'E-5001', name: '이수용', team: '건축파트장', role: '파트장',      is_commander: false, email: 'suyong@sni.co.kr',    phone: '010-2966-0477' },
