@@ -194,7 +194,7 @@ const EMPLOYEES: {
   { emp_no: 'E-3010', name: '이태경', team: '전기파트',   role: '파트원(교대)',is_commander: false, email: 'leetae8171@sni.co.kr',phone: '010-6255-8171' },
 
   // ── 소방 (교대 포함, 배지 동일) ───────────────────────
-  { emp_no: 'E-4001', name: '김견수', team: '소방파트장', role: '파트장(안전관리자)', is_commander: false, email: 'kyensu_kim@sni.co.kr',phone: '010-9071-3061' },
+  { emp_no: 'E-4001', name: '김견수', team: '소방파트장', role: '파트장(안전관리자)', is_commander: true,  email: 'kyensu_kim@sni.co.kr',phone: '010-9071-3061' },
   { emp_no: 'E-4002', name: '송치선', team: '소방파트',   role: '파트원',      is_commander: false, email: 'song5059@sni.co.kr',  phone: '010-4659-5059' },
   { emp_no: 'E-4003', name: '이동건', team: '소방파트',   role: '파트원',      is_commander: false, email: 'DongKun_Lee@sni.co.kr',phone: '010-2575-2806' },
   { emp_no: 'E-4004', name: '정민석', team: '소방파트',   role: '파트원',      is_commander: false, email: 'mins_jeong@sni.co.kr',phone: '010-8752-8967' },

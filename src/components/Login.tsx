@@ -16,7 +16,7 @@ const getRoleRank = (role: string): number => {
 };
 
 const TEAM_ORDER = [
-  '센터장', '상황실', '기계파트', '전기파트', '소방파트', '운영파트',
+  '상황실', '센터장', '기계파트', '전기파트', '소방파트', '운영파트',
   '품질파트', '건축파트', '보안파트', '주차파트', '미화파트',
 ];
 
@@ -312,7 +312,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
           {error && <div className="login-error">{error}</div>}
 
           <button type="submit" className="btn-bold-enter">
-            System Enter
+            로그인
           </button>
         </form>
       </div>
