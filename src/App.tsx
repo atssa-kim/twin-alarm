@@ -7,7 +7,7 @@ import { COPDashboard } from './components/COPDashboard';
 import { triggerEmergencyAlert, unlockAudio } from './utils/audio';
 import { db, type EmployeeDB } from './services/supabase';
 import { requestNotificationPermission, onForegroundMessage } from './services/notifications';
-import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, ExternalLink } from 'lucide-react';
+import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck } from 'lucide-react';
 
 const App: React.FC = () => {
   const { activeIncident, responders, tasks, loading, disasterRoles } = useRealtime();
@@ -216,31 +216,15 @@ const App: React.FC = () => {
           ) : (
             <Shield size={20} color="var(--color-green)" />
           )}
-          <span className="topbar-title">Twin-alarm</span>
-          {currentUser.isCommander && (
-            <a
-              href="https://atssa-kim.github.io/disa_app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                background: 'rgba(139,92,246,0.15)',
-                border: '1px solid rgba(139,92,246,0.35)',
-                borderRadius: '8px',
-                padding: '4px 8px',
-                color: '#a78bfa',
-                fontSize: '11px',
-                fontWeight: 700,
-                textDecoration: 'none',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <ExternalLink size={11} />
-              disa_app
-            </a>
-          )}
+          <a
+            href="https://atssa-kim.github.io/disa_app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="topbar-title"
+            style={{ textDecoration: 'none', cursor: 'pointer' }}
+          >
+            Twin-alarm/대응
+          </a>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
