@@ -39,6 +39,12 @@ const TEAM_BADGE_MAP: Record<string, Partial<Record<Disaster, string>>> = {
     폭설: '총괄', 지진: '총괄', 가스누출: '총괄', 승강기: '총괄', 테러: '총괄',
   },
 
+  // ── 상황실 (비상발령 전담, 총괄 배지) ─────────────────────
+  '상황실': {
+    화재: '총괄', 정전: '총괄', 누수: '총괄', '태풍/홍수': '총괄',
+    폭설: '총괄', 지진: '총괄', 가스누출: '총괄', 승강기: '총괄', 테러: '총괄',
+  },
+
   // ── 소방 ────────────────────────────────────────────────
   '소방파트장': {
     화재: '통제',                               // 통제자 (안전관리자)
@@ -148,8 +154,9 @@ const EMPLOYEES: {
   email?: string;
   phone?: string;
 }[] = [
-  // ── 센터장 ─────────────────────────────────────────────
-  { emp_no: 'E-0001', name: '김기창', team: '센터장',     role: '센터장', is_commander: true,  email: 'xgplus@sni.co.kr',   phone: '010-3240-8177' },
+  // ── 센터장 / 상황실 ────────────────────────────────────
+  { emp_no: 'E-0001', name: '김기창', team: '센터장',  role: '센터장', is_commander: true, email: 'xgplus@sni.co.kr',  phone: '010-3240-8177' },
+  { emp_no: 'E-0002', name: '상황실', team: '상황실',  role: '상황실', is_commander: true, email: 'fire@sni.co.kr',    phone: '02-3773-1119'  },
 
   // ── 운영 ───────────────────────────────────────────────
   { emp_no: 'E-1001', name: '곽우람', team: '운영파트장', role: '파트장',      is_commander: false, email: 'mprokmc@sni.co.kr',  phone: '010-6251-9466' },
@@ -187,8 +194,7 @@ const EMPLOYEES: {
   { emp_no: 'E-3010', name: '이태경', team: '전기파트',   role: '파트원(교대)',is_commander: false, email: 'leetae8171@sni.co.kr',phone: '010-6255-8171' },
 
   // ── 소방 (교대 포함, 배지 동일) ───────────────────────
-  // 소방파트장(김견수)은 화재 시 '통제' 역할 → is_commander: true (지휘본부 접근)
-  { emp_no: 'E-4001', name: '김견수', team: '소방파트장', role: '파트장(안전관리자)', is_commander: true,  email: 'kyensu_kim@sni.co.kr',phone: '010-9071-3061' },
+  { emp_no: 'E-4001', name: '김견수', team: '소방파트장', role: '파트장(안전관리자)', is_commander: false, email: 'kyensu_kim@sni.co.kr',phone: '010-9071-3061' },
   { emp_no: 'E-4002', name: '송치선', team: '소방파트',   role: '파트원',      is_commander: false, email: 'song5059@sni.co.kr',  phone: '010-4659-5059' },
   { emp_no: 'E-4003', name: '이동건', team: '소방파트',   role: '파트원',      is_commander: false, email: 'DongKun_Lee@sni.co.kr',phone: '010-2575-2806' },
   { emp_no: 'E-4004', name: '정민석', team: '소방파트',   role: '파트원',      is_commander: false, email: 'mins_jeong@sni.co.kr',phone: '010-8752-8967' },
