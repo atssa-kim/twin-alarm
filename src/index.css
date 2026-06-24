@@ -165,6 +165,8 @@ img, svg, video, canvas, audio, iframe, embed, object {
   border: 1px solid var(--border-glow);
   border-radius: 18px;
   padding: 20px;
+  width: 100%;
+  box-sizing: border-box;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   transition: var(--transition-smooth);
 }
@@ -373,6 +375,8 @@ input:focus, select:focus {
   border-radius: 18px;
   padding: 14px 16px;
   margin-bottom: 16px;
+  width: 100%;
+  box-sizing: border-box;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(185, 28, 28, 0.25) 100%);
   border-color: rgba(239, 68, 68, 0.3);

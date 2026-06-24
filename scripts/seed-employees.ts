@@ -39,10 +39,10 @@ const TEAM_BADGE_MAP: Record<string, Partial<Record<Disaster, string>>> = {
     폭설: '총괄', 지진: '총괄', 가스누출: '총괄', 승강기: '총괄', 테러: '총괄',
   },
 
-  // ── 상황실 (비상발령 전담, 총괄 배지) ─────────────────────
+  // ── 상황실 (비상발령 전담, 전용 배지) ─────────────────────
   '상황실': {
-    화재: '총괄', 정전: '총괄', 누수: '총괄', '태풍/홍수': '총괄',
-    폭설: '총괄', 지진: '총괄', 가스누출: '총괄', 승강기: '총괄', 테러: '총괄',
+    화재: '상황실', 정전: '상황실', 누수: '상황실', '태풍/홍수': '상황실',
+    폭설: '상황실', 지진: '상황실', 가스누출: '상황실', 승강기: '상황실', 테러: '상황실',
   },
 
   // ── 소방 ────────────────────────────────────────────────
@@ -233,6 +233,53 @@ const EMPLOYEES: {
   { emp_no: 'E-8001', name: '지정운', team: '미화파트', role: '파트원', is_commander: false, email: 'jjw082300@snipartner.co.kr',      phone: '010-3653-1016' },
 ];
 
+// ── 상황실 전용 역할/임무 시드 ────────────────────────────
+async function seedSituationRoomRoles() {
+  console.log('\n상황실 역할/임무 시드 시작...\n');
+
+  const tasks = [
+    '◇ 상황 접수 및 보고',
+    '┖ 재난 위치·종류·규모 확인',
+    '┖ 지휘관(센터장)에게 즉시 보고',
+    '┖ 비상발령 시스템 가동 확인 (사이렌·방송)',
+    '◇ 유관기관 연락',
+    '┖ 소방서 신고 (☎ 119)',
+    '┖ 경찰서 신고 (☎ 112)',
+    '◇ 현장 지원 및 기록',
+    '┖ 대원 집결 현황 실시간 확인',
+    '┖ 대응 진행 상황 기록',
+    '┖ 상황 종료 보고 작성',
+  ];
+
+  for (const disaster of DISASTERS) {
+    const { data: role, error: roleErr } = await supabase
+      .from('disaster_roles')
+      .upsert(
+        { disaster, group_name: '상황실', role: '상황실 운영', badge: '상황실', bc: '#312e81' },
+        { onConflict: 'disaster,badge' }
+      )
+      .select()
+      .single();
+
+    if (roleErr) {
+      console.error(`  ✗ 상황실 역할 오류 [${disaster}]:`, roleErr.message);
+      continue;
+    }
+
+    await supabase.from('disaster_tasks').delete().eq('role_id', role.id);
+
+    const taskRows = tasks.map((label, idx) => ({ role_id: role.id, task_idx: idx, label }));
+    const { error: taskErr } = await supabase.from('disaster_tasks').insert(taskRows);
+    if (taskErr) {
+      console.error(`  ✗ 상황실 임무 오류 [${disaster}]:`, taskErr.message);
+    } else {
+      console.log(`  ✓ ${disaster} 상황실 — ${taskRows.length}개 임무`);
+    }
+  }
+
+  console.log('\n상황실 시드 완료!');
+}
+
 // ── 시드 실행 ──────────────────────────────────────────────
 async function seed() {
   console.log(`\n직원 시드 시작 (${EMPLOYEES.length}명)...\n`);
@@ -270,7 +317,8 @@ async function seed() {
     console.log(`  ✓ ${emp.name} (${emp.team}) → ${badgeSummary}`);
   }
 
-  console.log('\n완료!');
+  console.log('\n직원 시드 완료!');
+  await seedSituationRoomRoles();
 }
 
 seed().catch(console.error);
