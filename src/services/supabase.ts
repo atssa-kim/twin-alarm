@@ -153,7 +153,18 @@ export const db = {
       .update({ done, done_by: done ? doneBy : null, updated_at: Date.now() })
       .eq('id', taskId);
 
-    if (error) throw error;
+    if (error) {
+      // done_by 컬럼이 아직 DB에 없는 경우 → 컬럼 없이 재시도
+      if (error.message?.includes('done_by')) {
+        const { error: e2 } = await supabase
+          .from('member_tasks')
+          .update({ done, updated_at: Date.now() })
+          .eq('id', taskId);
+        if (e2) throw e2;
+        return;
+      }
+      throw error;
+    }
   },
 
   // 7. Fetch disaster roles + tasks from DB (replaces local disasters.ts members)
