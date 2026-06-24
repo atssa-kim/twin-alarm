@@ -11,12 +11,18 @@ const normalizeTeam = (team: string): string => {
 const getRoleRank = (role: string): number => {
   if (role.startsWith('파트장')) return 0;
   if (role === '파트원') return 1;
-  if (role.startsWith('파트원')) return 2; // 파트원(교대) 등 변형 포함
+  if (role.startsWith('파트원')) return 2;
   return 3;
 };
 
+const getShiftRank = (role: string): number => {
+  const m = role.match(/([A-D])조/);
+  if (!m) return 9;
+  return ['A', 'B', 'C', 'D'].indexOf(m[1]);
+};
+
 const TEAM_ORDER = [
-  '상황실', '센터장', '기계파트', '전기파트', '소방파트', '운영파트',
+  '상황실', '교대근무자', '센터장', '기계파트', '전기파트', '소방파트', '운영파트',
   '품질파트', '건축파트', '보안파트', '주차파트', '미화파트',
 ];
 
@@ -41,7 +47,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
   const [error, setError] = useState('');
 
   const teams = useMemo(() => {
-    const teamSet = new Set(employees.map((e) => normalizeTeam(e.team)));
+    const teamSet = new Set<string>();
+    for (const e of employees) {
+      const t = normalizeTeam(e.team);
+      if (t === '상황실') {
+        // 상황실 직원은 두 그룹으로 분리
+        if (e.role.includes('BMS') || e.role.includes('방재')) teamSet.add('상황실');
+        else teamSet.add('교대근무자');
+      } else {
+        teamSet.add(t);
+      }
+    }
     return Array.from(teamSet).sort((a, b) => {
       const ia = TEAM_ORDER.indexOf(a);
       const ib = TEAM_ORDER.indexOf(b);
@@ -54,11 +70,29 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
 
   const filteredEmployees = useMemo(() => {
     if (!selectedTeam) return [];
+
+    let filtered: EmployeeDB[];
+    if (selectedTeam === '상황실') {
+      filtered = employees.filter(e =>
+        e.team === '상황실' && (e.role.includes('BMS') || e.role.includes('방재'))
+      );
+      return filtered.sort((a, b) => {
+        const rd = getShiftRank(a.role) - getShiftRank(b.role);
+        return rd !== 0 ? rd : a.name.localeCompare(b.name, 'ko');
+      });
+    }
+    if (selectedTeam === '교대근무자') {
+      filtered = employees.filter(e =>
+        e.team === '상황실' && !e.role.includes('BMS') && !e.role.includes('방재')
+      );
+      return filtered.sort((a, b) => {
+        const rd = getShiftRank(a.role) - getShiftRank(b.role);
+        return rd !== 0 ? rd : a.name.localeCompare(b.name, 'ko');
+      });
+    }
+
     return employees
-      .filter((e) => {
-        if (normalizeTeam(e.team) !== selectedTeam) return false;
-        return true;
-      })
+      .filter(e => normalizeTeam(e.team) === selectedTeam)
       .sort((a, b) => {
         const rd = getRoleRank(a.role) - getRoleRank(b.role);
         return rd !== 0 ? rd : a.name.localeCompare(b.name, 'ko');
