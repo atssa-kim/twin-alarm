@@ -297,7 +297,13 @@ const App: React.FC = () => {
           </button>
         )}
         <button
-          onClick={() => setCurrentView('responder')}
+          onClick={() => {
+            if (!activeIncident) {
+              window.open('https://atssa-kim.github.io/disa_app/', '_blank');
+            } else {
+              setCurrentView('responder');
+            }
+          }}
           style={{
             flex: 1, background: 'transparent', border: 'none',
             color: currentView === 'responder' ? '#3b82f6' : 'var(--text-muted)',
