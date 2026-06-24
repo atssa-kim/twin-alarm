@@ -176,7 +176,18 @@ export const db = {
     return (data ?? []) as EmployeeDB[];
   },
 
-  // 9. Fetch an employee's badge for a specific disaster
+  // 9. FCM 푸시 토큰 저장 (upsert — 동일 토큰이면 갱신)
+  async saveFcmToken(empNo: string, token: string): Promise<void> {
+    const { error } = await supabase
+      .from('push_subscriptions')
+      .upsert(
+        { emp_no: empNo, fcm_token: token, updated_at: Date.now() },
+        { onConflict: 'fcm_token' }
+      );
+    if (error) throw error;
+  },
+
+  // 10. Fetch an employee's badge for a specific disaster
   async getEmployeeBadge(empNo: string, disaster: string): Promise<string | null> {
     const { data, error } = await supabase
       .from('employee_disaster_badges')

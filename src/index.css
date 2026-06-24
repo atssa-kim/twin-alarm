@@ -45,6 +45,12 @@
   margin: 0;
   padding: 0;
   -webkit-tap-highlight-color: transparent;
+  max-width: 100%;
+}
+
+html {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
 }
 
 body {
@@ -52,10 +58,16 @@ body {
   color: var(--text-main);
   font-family: var(--font-body);
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: center;
   overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+img, svg, video, canvas, audio, iframe, embed, object {
+  max-width: 100%;
 }
 
 /* App container - mobile mock UI inside desktop, responsive full screen on mobile */
@@ -175,6 +187,8 @@ label {
 
 input, select {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: 48px;
   background: rgba(10, 15, 30, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.1);

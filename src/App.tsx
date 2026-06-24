@@ -6,6 +6,7 @@ import { ResponderView } from './components/ResponderView';
 import { COPDashboard } from './components/COPDashboard';
 import { triggerEmergencyAlert, unlockAudio } from './utils/audio';
 import { db, type EmployeeDB } from './services/supabase';
+import { requestNotificationPermission, onForegroundMessage } from './services/notifications';
 import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Mic } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -123,11 +124,18 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleLogin = (user: Employee) => {
+  const handleLogin = async (user: Employee) => {
     setCurrentUser(user);
     localStorage.setItem('tt_user_session', JSON.stringify(user));
     setCurrentView(user.isCommander ? 'cmd' : 'responder');
     unlockAudio();
+    // FCM 토큰 발급 및 저장 (백그라운드 알람 등록)
+    try {
+      const token = await requestNotificationPermission();
+      if (token) await db.saveFcmToken(user.empNo, token);
+    } catch (e) {
+      console.warn('[FCM] 등록 실패:', e);
+    }
   };
 
   const handleLogout = () => {
@@ -136,6 +144,23 @@ const App: React.FC = () => {
       localStorage.removeItem('tt_user_session');
     }
   };
+
+  // FCM 포그라운드 메시지 수신 (앱이 열려있을 때 FCM 도착)
+  useEffect(() => {
+    if (!currentUser) return;
+    const unsub = onForegroundMessage((payload) => {
+      const n = payload.notification || {};
+      const data = payload.data || {};
+      if (soundEnabled) {
+        triggerEmergencyAlert(
+          data.disaster || n.title || '재난',
+          data.location || '',
+          data.mode === '훈련'
+        );
+      }
+    });
+    return unsub;
+  }, [currentUser, soundEnabled]);
 
   // 2. Play emergency sound alert when a new active incident is triggered
   useEffect(() => {
