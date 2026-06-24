@@ -1,25 +1,35 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { type Incident, type Responder, type MemberTask, db } from '../services/supabase';
 import { DISASTERS } from '../data/disasters';
-import { Play, Square, ShieldAlert, Users, MapPin } from 'lucide-react';
+import { Play, Square, ShieldAlert, Users, MapPin, Mic } from 'lucide-react';
 
 interface CommanderDashboardProps {
   activeIncident: Incident | null;
   responders: Responder[];
   tasks: MemberTask[];
   currentUser: { empNo: string; name: string };
+  availableVoices: SpeechSynthesisVoice[];
+  selectedVoiceName: string;
+  getCleanVoiceName: (name: string) => string;
+  handleVoiceChange: (name: string) => void;
 }
 
 export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   activeIncident,
   responders,
   tasks,
-  currentUser
+  currentUser,
+  availableVoices,
+  selectedVoiceName,
+  getCleanVoiceName,
+  handleVoiceChange,
 }) => {
   const [selectedDisasterKey, setSelectedDisasterKey] = useState('화재');
   const [selectedMode, setSelectedMode] = useState('훈련');
   const [location, setLocation] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showVoicePicker, setShowVoicePicker] = useState(false);
+  const voicePickerRef = useRef<HTMLDivElement>(null);
 
   // 1. Declare incident and bulk insert manual tasks
   const handleDeclare = async (e: React.FormEvent) => {
@@ -57,6 +67,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
               task_idx: task.task_idx,
               label: task.label,
               done: false,
+              done_by: null,
             });
           });
       });
@@ -113,10 +124,66 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
         // 1. INCIDENT DECLARATION VIEW
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-            <ShieldAlert color="var(--color-fire)" size={28} />
-            <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '18px', margin: 0 }}>
+            <ShieldAlert color="var(--color-fire)" size={24} style={{ flexShrink: 0 }} />
+            <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '17px', margin: 0, flex: 1 }}>
               신규 비상 상황 발령
             </h3>
+            {/* 화자변경 버튼 */}
+            <div ref={voicePickerRef} style={{ position: 'relative', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => setShowVoicePicker(v => !v)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  background: showVoicePicker ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.05)',
+                  border: showVoicePicker ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px', padding: '6px 10px',
+                  color: showVoicePicker ? '#60a5fa' : 'var(--text-muted)',
+                  fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                <Mic size={13} />
+                화자변경
+              </button>
+
+              {showVoicePicker && (
+                <div style={{
+                  position: 'absolute', top: '100%', right: 0, marginTop: '6px',
+                  background: 'rgba(15,23,42,0.97)', backdropFilter: 'blur(16px)',
+                  border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
+                  padding: '6px 0', minWidth: '200px', maxHeight: '260px',
+                  overflowY: 'auto', zIndex: 200, boxShadow: '0 12px 40px rgba(0,0,0,0.5)'
+                }}>
+                  <div style={{ padding: '6px 14px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>🎙 TTS 화자 선택</span>
+                  </div>
+                  {availableVoices.length === 0 ? (
+                    <div style={{ padding: '10px 14px', color: '#64748b', fontSize: '13px' }}>사용 가능한 화자 없음</div>
+                  ) : (
+                    [...availableVoices]
+                      .sort((a, b) => getCleanVoiceName(a.name).localeCompare(getCleanVoiceName(b.name), 'ko'))
+                      .map(voice => (
+                        <button
+                          key={voice.name}
+                          type="button"
+                          onClick={() => { handleVoiceChange(voice.name); setShowVoicePicker(false); }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '8px',
+                            width: '100%', padding: '9px 14px',
+                            background: selectedVoiceName === voice.name ? 'rgba(59,130,246,0.15)' : 'transparent',
+                            border: 'none',
+                            color: selectedVoiceName === voice.name ? '#60a5fa' : '#e2e8f0',
+                            fontSize: '13px', cursor: 'pointer', textAlign: 'left',
+                          }}
+                        >
+                          <span style={{ width: '16px', textAlign: 'center' }}>{selectedVoiceName === voice.name ? '✓' : ''}</span>
+                          <span>{getCleanVoiceName(voice.name)}</span>
+                        </button>
+                      ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <form onSubmit={handleDeclare} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

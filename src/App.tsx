@@ -7,7 +7,7 @@ import { COPDashboard } from './components/COPDashboard';
 import { triggerEmergencyAlert, unlockAudio } from './utils/audio';
 import { db, type EmployeeDB } from './services/supabase';
 import { requestNotificationPermission, onForegroundMessage } from './services/notifications';
-import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Mic, ExternalLink } from 'lucide-react';
+import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, ExternalLink } from 'lucide-react';
 
 const App: React.FC = () => {
   const { activeIncident, responders, tasks, loading, disasterRoles } = useRealtime();
@@ -15,13 +15,11 @@ const App: React.FC = () => {
   const [employees, setEmployees] = useState<EmployeeDB[]>([]);
   const [currentView, setCurrentView] = useState<'cmd' | 'responder' | 'cop'>('responder');
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [showVoicePicker, setShowVoicePicker] = useState(false);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceName, setSelectedVoiceName] = useState<string>(() => {
     return localStorage.getItem('tt_selected_voice') || '';
   });
   const lastAlertIdRef = useRef<string | null>(null);
-  const voicePickerRef = useRef<HTMLDivElement>(null);
 
   // Load available voices
   useEffect(() => {
@@ -59,19 +57,6 @@ const App: React.FC = () => {
     }
   }, [selectedVoiceName]);
 
-  // Close voice picker when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (voicePickerRef.current && !voicePickerRef.current.contains(e.target as Node)) {
-        setShowVoicePicker(false);
-      }
-    };
-    if (showVoicePicker) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showVoicePicker]);
-
   const getCleanVoiceName = useCallback((fullName: string) => {
     if (!fullName) return '화자 선택';
     if (fullName.includes('인준') || fullName.includes('Injun')) return '인준';
@@ -91,7 +76,6 @@ const App: React.FC = () => {
     setSelectedVoiceName(voiceName);
     localStorage.setItem('tt_selected_voice', voiceName);
     (window as any).__tt_selected_voice = voiceName;
-    setShowVoicePicker(false);
     // Preview the voice
     if ('speechSynthesis' in window) {
       speechSynthesis.cancel();
@@ -279,89 +263,6 @@ const App: React.FC = () => {
             {soundEnabled ? '🔊' : '🔇'}
           </button>
 
-          {/* Voice picker toggle */}
-          <div ref={voicePickerRef} style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowVoicePicker(!showVoicePicker)}
-              style={{
-                background: showVoicePicker ? 'rgba(59,130,246,0.15)' : 'rgba(255, 255, 255, 0.05)',
-                border: showVoicePicker ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '8px',
-                color: showVoicePicker ? '#60a5fa' : 'var(--text-muted)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 10px',
-                transition: 'all 0.2s ease',
-                fontSize: '12px',
-                fontWeight: 600
-              }}
-              title="TTS 화자 선택"
-            >
-              <Mic size={14} style={{ color: showVoicePicker ? '#60a5fa' : '#94a3b8' }} />
-              <span style={{ maxWidth: '70px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {getCleanVoiceName(selectedVoiceName)}
-              </span>
-              <span style={{ fontSize: '9px', opacity: 0.7 }}>▼</span>
-            </button>
-
-            {/* Voice dropdown */}
-            {showVoicePicker && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: '8px',
-                background: 'rgba(15, 23, 42, 0.95)',
-                backdropFilter: 'blur(16px)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '12px',
-                padding: '8px 0',
-                minWidth: '240px',
-                maxHeight: '280px',
-                overflowY: 'auto',
-                zIndex: 1000,
-                boxShadow: '0 12px 40px rgba(0,0,0,0.5)'
-              }}>
-                <div style={{ padding: '8px 16px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>🎙 TTS 화자 선택</span>
-                </div>
-                {availableVoices.length === 0 ? (
-                  <div style={{ padding: '12px 16px', color: '#64748b', fontSize: '13px' }}>사용 가능한 한국어 화자가 없습니다</div>
-                ) : (
-                  [...availableVoices]
-                    .sort((a, b) => getCleanVoiceName(a.name).localeCompare(getCleanVoiceName(b.name), 'ko'))
-                    .map((voice) => (
-                    <button
-                      key={voice.name}
-                      onClick={() => handleVoiceChange(voice.name)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        width: '100%',
-                        padding: '10px 16px',
-                        background: selectedVoiceName === voice.name ? 'rgba(59,130,246,0.15)' : 'transparent',
-                        border: 'none',
-                        color: selectedVoiceName === voice.name ? '#60a5fa' : '#e2e8f0',
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        transition: 'background 0.15s ease'
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = selectedVoiceName === voice.name ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = selectedVoiceName === voice.name ? 'rgba(59,130,246,0.15)' : 'transparent')}
-                    >
-                      <span style={{ width: '18px', textAlign: 'center' }}>{selectedVoiceName === voice.name ? '✓' : ''}</span>
-                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getCleanVoiceName(voice.name)}</span>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-
           <span className="badge badge-live">LIVE</span>
           
           <button
@@ -445,6 +346,10 @@ const App: React.FC = () => {
             responders={responders}
             tasks={tasks}
             currentUser={currentUser}
+            availableVoices={availableVoices}
+            selectedVoiceName={selectedVoiceName}
+            getCleanVoiceName={getCleanVoiceName}
+            handleVoiceChange={handleVoiceChange}
           />
         )}
 
