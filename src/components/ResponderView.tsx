@@ -206,12 +206,12 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
               : 'linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(217,119,6,0.25) 100%)',
             borderColor: activeIncident.mode === '실제' ? 'var(--color-fire)' : 'var(--color-power)'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="banner-title" style={{ color: activeIncident.mode === '실제' ? 'var(--color-fire)' : 'var(--color-power)' }}>
-                <ShieldAlert size={20} />
-                <span>{activeIncident.mode === '실제' ? '🚨 실제 비상 상황' : '🎓 대응 훈련 상황'}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+              <div className="banner-title" style={{ color: activeIncident.mode === '실제' ? 'var(--color-fire)' : 'var(--color-power)', minWidth: 0, overflow: 'hidden' }}>
+                <ShieldAlert size={18} style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: '15px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeIncident.mode === '실제' ? '🚨 실제 비상 상황' : '🎓 대응 훈련'}</span>
               </div>
-              <span style={{ fontSize: '11px', background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '6px' }}>
+              <span style={{ fontSize: '11px', background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '6px', flexShrink: 0 }}>
                 {activeIncident.disaster}
               </span>
             </div>
@@ -224,17 +224,17 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
           {/* Responder Status */}
           <div className="card">
             <label>나의 대응 상태</label>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+            <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
               {(['출동중', '현장', '복귀'] as const).map((s) => {
                 const colors: Record<string, string> = { '출동중': 'var(--color-power)', '현장': 'var(--color-water)', '복귀': 'var(--color-green)' };
-                const labels: Record<string, string> = { '출동중': '🚨 출동중', '현장': '📍 현장도착', '복귀': '✅ 복귀완료' };
+                const labels: Record<string, string> = { '출동중': '🚨 출동중', '현장': '📍 도착', '복귀': '✅ 복귀' };
                 return (
                   <button
                     key={s}
                     type="button"
                     className="btn"
                     style={{
-                      flex: 1, padding: '12px', fontSize: '13px',
+                      flex: 1, padding: '10px 4px', fontSize: '12px',
                       background: responderStatus === s ? colors[s] : 'rgba(255,255,255,0.05)',
                       border: responderStatus === s ? 'none' : '1px solid rgba(255,255,255,0.1)'
                     }}

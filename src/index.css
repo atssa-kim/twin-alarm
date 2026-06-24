@@ -151,10 +151,12 @@ img, svg, video, canvas, audio, iframe, embed, object {
 /* Content Area */
 .content {
   flex: 1;
-  padding: 20px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Premium Card with Glassmorphism */
@@ -162,7 +164,7 @@ img, svg, video, canvas, audio, iframe, embed, object {
   background: var(--bg-card);
   border: 1px solid var(--border-glow);
   border-radius: 18px;
-  padding: 20px;
+  padding: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   transition: var(--transition-smooth);
 }
@@ -313,12 +315,12 @@ input:focus, select:focus {
 .task-item {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 10px 12px;
   border-radius: 12px;
   background: rgba(10, 15, 30, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.04);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   cursor: pointer;
   transition: var(--transition-smooth);
 }
@@ -352,9 +354,13 @@ input:focus, select:focus {
 }
 
 .task-label {
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.45;
   color: var(--text-main);
+  word-break: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
+  flex: 1;
 }
 
 .task-item.done .task-label {
@@ -365,7 +371,7 @@ input:focus, select:focus {
 /* Header with emergency alert color styling */
 .banner {
   border-radius: 18px;
-  padding: 20px;
+  padding: 14px 16px;
   margin-bottom: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(185, 28, 28, 0.25) 100%);
