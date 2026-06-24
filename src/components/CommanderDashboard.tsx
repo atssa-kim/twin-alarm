@@ -520,14 +520,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
               </button>
             )}
 
-            {/* 훈련 시 참여인원 설정 */}
-            {activeIsTraining && (
-              <button onClick={openParticipantModal} className="btn btn-secondary" disabled={loading}
-                style={{ borderColor: 'rgba(99,102,241,0.5)', color: '#818cf8' }}>
-                <UserCheck size={18} />
-                훈련 참여인원 설정 ({responders.length}명)
-              </button>
-            )}
 
             <button onClick={handleClose} className="btn btn-danger" disabled={loading}>
               <Square size={16} fill="white" />
