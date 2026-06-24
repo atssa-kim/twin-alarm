@@ -85,14 +85,20 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
           border-radius: 12px;
           padding: 14px 16px;
           color: #111;
-          font-size: 14px;
+          font-size: 20px;
           width: 100%;
           outline: none;
           box-sizing: border-box;
-          letter-spacing: 6px;
-          font-weight: 700;
+          letter-spacing: 8px;
+          font-weight: 900;
         }
-        .login-pw-input::placeholder { letter-spacing: 0; font-weight: 400; color: #aaa; }
+        .login-pw-input:focus {
+          background: #fff;
+          color: #111;
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 3px rgba(59,130,246,0.25);
+        }
+        .login-pw-input::placeholder { letter-spacing: 0; font-weight: 400; font-size: 14px; color: #aaa; }
         .login-error {
           background: rgba(239,68,68,0.15);
           border: 1px solid rgba(239,68,68,0.3);
