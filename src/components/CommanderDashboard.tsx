@@ -1,24 +1,38 @@
-import React, { useRef, useState } from 'react';
-import { type Incident, type Responder, type MemberTask, db } from '../services/supabase';
+import React, { useRef, useState, useMemo } from 'react';
+import { type Incident, type Responder, type MemberTask, type EmployeeDB, db } from '../services/supabase';
 import { DISASTERS } from '../data/disasters';
-import { Play, Square, ShieldAlert, Users, MapPin, Mic } from 'lucide-react';
+import { Play, Square, ShieldAlert, Users, MapPin, Mic, UserCheck } from 'lucide-react';
 
 interface CommanderDashboardProps {
   activeIncident: Incident | null;
   responders: Responder[];
   tasks: MemberTask[];
   currentUser: { empNo: string; name: string };
+  employees: EmployeeDB[];
   availableVoices: SpeechSynthesisVoice[];
   selectedVoiceName: string;
   getCleanVoiceName: (name: string) => string;
   handleVoiceChange: (name: string) => void;
 }
 
+const TEAM_ORDER = [
+  '상황실', '센터장',
+  '기계파트장', '기계파트',
+  '전기파트장', '전기파트',
+  '소방파트장', '소방파트',
+  '운영파트장', '운영파트',
+  '건축파트장', '건축파트',
+  '품질/안전파트',
+  '보안1', '보안2', '보안3',
+  '주차파트', '미화파트',
+];
+
 export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   activeIncident,
   responders,
   tasks,
   currentUser,
+  employees,
   availableVoices,
   selectedVoiceName,
   getCleanVoiceName,
@@ -31,30 +45,88 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const [showVoicePicker, setShowVoicePicker] = useState(false);
   const voicePickerRef = useRef<HTMLDivElement>(null);
 
-  // 1. Declare incident and bulk insert manual tasks
+  // 참여인원 모달
+  const [showParticipants, setShowParticipants] = useState(false);
+  const [selectedEmps, setSelectedEmps] = useState<Set<string>>(new Set());
+  const [savingParticipants, setSavingParticipants] = useState(false);
+
+  // 직원 목록을 팀 순서대로 그룹화
+  const groupedEmployees = useMemo(() => {
+    const map: Record<string, EmployeeDB[]> = {};
+    for (const e of employees) {
+      if (!map[e.team]) map[e.team] = [];
+      map[e.team].push(e);
+    }
+    const ordered: [string, EmployeeDB[]][] = [];
+    for (const t of TEAM_ORDER) {
+      if (map[t]) ordered.push([t, map[t]]);
+    }
+    // TEAM_ORDER에 없는 팀 추가
+    for (const [t, emps] of Object.entries(map)) {
+      if (!TEAM_ORDER.includes(t)) ordered.push([t, emps]);
+    }
+    return ordered;
+  }, [employees]);
+
+  const openParticipantModal = () => {
+    // 현재 responders로 초기화
+    const current = new Set(responders.map(r => r.emp_no));
+    setSelectedEmps(current);
+    setShowParticipants(true);
+  };
+
+  const toggleEmp = (empNo: string) => {
+    setSelectedEmps(prev => {
+      const next = new Set(prev);
+      if (next.has(empNo)) next.delete(empNo);
+      else next.add(empNo);
+      return next;
+    });
+  };
+
+  const toggleTeam = (teamEmps: EmployeeDB[]) => {
+    const allSelected = teamEmps.every(e => selectedEmps.has(e.emp_no));
+    setSelectedEmps(prev => {
+      const next = new Set(prev);
+      if (allSelected) teamEmps.forEach(e => next.delete(e.emp_no));
+      else teamEmps.forEach(e => next.add(e.emp_no));
+      return next;
+    });
+  };
+
+  const selectAll = () => setSelectedEmps(new Set(employees.map(e => e.emp_no)));
+  const clearAll = () => setSelectedEmps(new Set());
+
+  const saveParticipants = async () => {
+    if (!activeIncident) return;
+    setSavingParticipants(true);
+    try {
+      const selected = employees.filter(e => selectedEmps.has(e.emp_no));
+      await db.setTrainingParticipants(activeIncident.id, selected, responders);
+      setShowParticipants(false);
+    } catch (err: any) {
+      alert('참여인원 저장 오류: ' + err.message);
+    } finally {
+      setSavingParticipants(false);
+    }
+  };
+
+  // 1. Declare incident
   const handleDeclare = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!location.trim()) return alert('위치를 입력하세요.');
     if (!window.confirm(`[${selectedMode}] ${selectedDisasterKey} 발령하시겠습니까?\n위치: ${location}`)) return;
-    
+
     setLoading(true);
     try {
       const scope = selectedMode === '훈련' ? 'drill' : 'all';
-
-      // DB에서 역할·임무 마스터 조회
       const roles = await db.getDisasterRolesWithTasks(selectedDisasterKey);
       if (!roles.length) throw new Error('임무 데이터가 없습니다. npm run seed 를 먼저 실행하세요.');
 
-      // Call declare incident helper
       const incident = await db.declareIncident(
-        selectedDisasterKey,
-        selectedMode,
-        location.trim(),
-        scope,
-        currentUser.empNo
+        selectedDisasterKey, selectedMode, location.trim(), scope, currentUser.empNo
       );
 
-      // Construct and bulk insert member tasks from DB
       const bulkTasks: Omit<MemberTask, 'updated_at' | 'done_by'>[] = [];
       roles.forEach(role => {
         (role.disaster_tasks ?? [])
@@ -72,9 +144,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
           });
       });
 
-      if (bulkTasks.length > 0) {
-        await db.initializeMemberTasks(bulkTasks);
-      }
+      if (bulkTasks.length > 0) await db.initializeMemberTasks(bulkTasks);
     } catch (err: any) {
       alert('상황 발령 중 오류가 발생했습니다: ' + err.message);
     } finally {
@@ -85,7 +155,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const handleClose = async () => {
     if (!activeIncident) return;
     if (!window.confirm('상황을 종료하시겠습니까? 모든 출동 기록과 임무 진행률이 초기화됩니다.')) return;
-    
     setLoading(true);
     try {
       await db.closeIncident(activeIncident.id);
@@ -96,39 +165,22 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
     }
   };
 
-  const handleEscalate = async () => {
-    if (!activeIncident) return;
-    if (!window.confirm('실제 상황으로 승격하시겠습니까? 모든 반원에게 전면 출동 지시가 전달됩니다.')) return;
-
-    setLoading(true);
-    try {
-      await db.escalateIncident(activeIncident.id, '실제', 'all');
-    } catch (err: any) {
-      alert('상황 승격 중 오류가 발생했습니다: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Progress Calculations
   const totalTasksCount = tasks.length;
   const completedTasksCount = tasks.filter(t => t.done).length;
   const overallProgressPct = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
 
-  // Responders statistics
   const respondersByStatus = (status: Responder['status']) => responders.filter(r => r.status === status);
 
   return (
     <div className="content">
       {!activeIncident ? (
-        // 1. INCIDENT DECLARATION VIEW
+        // ── 발령 화면 ────────────────────────────────────
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
             <ShieldAlert color="var(--color-fire)" size={24} style={{ flexShrink: 0 }} />
             <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '17px', margin: 0, flex: 1 }}>
               신규 비상 상황 발령
             </h3>
-            {/* 화자변경 버튼 */}
             <div ref={voicePickerRef} style={{ position: 'relative', flexShrink: 0 }}>
               <button
                 type="button"
@@ -142,8 +194,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                   fontSize: '12px', fontWeight: 700, cursor: 'pointer',
                 }}
               >
-                <Mic size={13} />
-                화자변경
+                <Mic size={13} />화자변경
               </button>
 
               {showVoicePicker && (
@@ -152,7 +203,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                   background: 'rgba(15,23,42,0.97)', backdropFilter: 'blur(16px)',
                   border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
                   padding: '6px 0', minWidth: '200px', maxHeight: '260px',
-                  overflowY: 'auto', zIndex: 200, boxShadow: '0 12px 40px rgba(0,0,0,0.5)'
+                  overflowY: 'auto', zIndex: 200, boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
                 }}>
                   <div style={{ padding: '6px 14px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '4px' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>🎙 TTS 화자 선택</span>
@@ -195,9 +246,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                 onChange={(e) => setSelectedDisasterKey(e.target.value)}
               >
                 {DISASTERS.map((d) => (
-                  <option key={d.key} value={d.key}>
-                    {d.label}
-                  </option>
+                  <option key={d.key} value={d.key}>{d.label}</option>
                 ))}
               </select>
             </div>
@@ -205,11 +254,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
             <div>
               <label>발령 구분</label>
               <div className="segmented-control">
-                <button
-                  type="button"
-                  className={`segmented-btn ${selectedMode === '훈련' ? 'active' : ''}`}
-                  onClick={() => setSelectedMode('훈련')}
-                >
+                <button type="button" className={`segmented-btn ${selectedMode === '훈련' ? 'active' : ''}`} onClick={() => setSelectedMode('훈련')}>
                   🎓 훈련상황
                 </button>
                 <button
@@ -242,13 +287,13 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
           </form>
         </div>
       ) : (
-        // 2. ACTIVE INCIDENT MONITORING VIEW
+        // ── 발령 중 모니터링 화면 ────────────────────────
         <>
           <div className="banner alarm-active" style={{
-            background: activeIncident.mode === '실제' 
-              ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(220, 38, 38, 0.4) 100%)'
-              : 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.3) 100%)',
-            borderColor: activeIncident.mode === '실제' ? 'var(--color-fire)' : 'var(--color-water)'
+            background: activeIncident.mode === '실제'
+              ? 'linear-gradient(135deg, rgba(239,68,68,0.25) 0%, rgba(220,38,38,0.4) 100%)'
+              : 'linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(37,99,235,0.3) 100%)',
+            borderColor: activeIncident.mode === '실제' ? 'var(--color-fire)' : 'var(--color-water)',
           }}>
             <div className="banner-title" style={{ color: activeIncident.mode === '실제' ? 'var(--color-fire)' : '#60a5fa' }}>
               <ShieldAlert size={22} />
@@ -263,20 +308,14 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
             </div>
           </div>
 
-          {/* Overall Progress Gauge */}
+          {/* 전체 임무 수행률 */}
           <div className="card">
             <div className="progress-header">
               <span>전체 공동 임무 수행률</span>
               <strong style={{ fontSize: '18px', color: 'var(--color-green)' }}>{overallProgressPct}%</strong>
             </div>
             <div className="progress-track" style={{ height: '12px' }}>
-              <div
-                className="progress-fill"
-                style={{
-                  width: `${overallProgressPct}%`,
-                  background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)'
-                }}
-              ></div>
+              <div className="progress-fill" style={{ width: `${overallProgressPct}%`, background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)' }}></div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
               <span>완료 임무: {completedTasksCount}건</span>
@@ -284,13 +323,13 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
             </div>
           </div>
 
-          {/* Responders stats */}
+          {/* 대원 출동 현황 */}
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
               <Users size={20} color="var(--color-water)" />
               <h3 style={{ margin: 0, fontSize: '15px' }}>대원 출동 현황 ({responders.length}명 소집)</h3>
             </div>
-            
+
             <div className="cop-grid" style={{ marginBottom: '16px' }}>
               <div className="cop-stat-card">
                 <div className="cop-stat-val" style={{ color: 'var(--color-power)' }}>{respondersByStatus('출동중').length}</div>
@@ -309,11 +348,10 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                 </div>
               ) : (
                 responders.map((resp) => {
-                  let dotColor = '#94a3b8'; // 미응답
+                  let dotColor = '#94a3b8';
                   if (resp.status === '출동중') dotColor = 'var(--color-power)';
                   if (resp.status === '현장') dotColor = 'var(--color-water)';
                   if (resp.status === '복귀') dotColor = 'var(--color-green)';
-                  
                   return (
                     <div key={resp.emp_no} className="roster-row">
                       <div>
@@ -333,20 +371,157 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
             </div>
           </div>
 
-          {/* Commander Actions */}
+          {/* 지휘관 액션 버튼 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {activeIncident.mode === '훈련' && (
-              <button onClick={handleEscalate} className="btn btn-secondary" disabled={loading} style={{ borderColor: 'var(--color-fire)', color: 'var(--color-fire)' }}>
-                🚨 실제 비상 상황으로 승격
+              <button
+                onClick={openParticipantModal}
+                className="btn btn-secondary"
+                disabled={loading}
+                style={{ borderColor: 'rgba(99,102,241,0.5)', color: '#818cf8' }}
+              >
+                <UserCheck size={18} />
+                훈련 참여인원 설정 ({selectedEmps.size > 0 ? selectedEmps.size : responders.length}명)
               </button>
             )}
-            
             <button onClick={handleClose} className="btn btn-danger" disabled={loading}>
               <Square size={16} fill="white" />
               상황 종료 및 리셋
             </button>
           </div>
         </>
+      )}
+
+      {/* ── 참여인원 설정 모달 ────────────────────────── */}
+      {showParticipants && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 500,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+          display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+        }}>
+          <div style={{
+            background: 'var(--bg-app)', borderRadius: '24px 24px 0 0',
+            maxHeight: '85dvh', display: 'flex', flexDirection: 'column',
+            border: '1px solid rgba(255,255,255,0.1)', borderBottom: 'none',
+          }}>
+            {/* 헤더 */}
+            <div style={{
+              padding: '16px 20px 12px', display: 'flex', alignItems: 'center',
+              borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0,
+            }}>
+              <UserCheck size={20} color="#818cf8" style={{ marginRight: '10px' }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 800, fontSize: '16px' }}>훈련 참여인원 설정</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  {selectedEmps.size}명 선택됨
+                </div>
+              </div>
+              <button
+                onClick={() => setShowParticipants(false)}
+                style={{ background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', color: 'var(--text-main)', cursor: 'pointer', fontSize: '16px' }}
+              >✕</button>
+            </div>
+
+            {/* 전체 선택/해제 */}
+            <div style={{ padding: '10px 20px', display: 'flex', gap: '8px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <button
+                onClick={selectAll}
+                style={{ flex: 1, padding: '8px', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: '10px', color: '#818cf8', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+              >전체 선택</button>
+              <button
+                onClick={clearAll}
+                style={{ flex: 1, padding: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: 'var(--text-muted)', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+              >전체 해제</button>
+            </div>
+
+            {/* 직원 목록 */}
+            <div style={{ overflowY: 'auto', flex: 1, padding: '8px 16px 16px' }}>
+              {groupedEmployees.map(([team, emps]) => {
+                const allChecked = emps.every(e => selectedEmps.has(e.emp_no));
+                const someChecked = emps.some(e => selectedEmps.has(e.emp_no));
+                return (
+                  <div key={team} style={{ marginBottom: '8px' }}>
+                    {/* 팀 헤더 */}
+                    <div
+                      onClick={() => toggleTeam(emps)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '8px 12px', borderRadius: '10px',
+                        background: 'rgba(255,255,255,0.04)', cursor: 'pointer',
+                        marginBottom: '2px',
+                      }}
+                    >
+                      <div style={{
+                        width: '18px', height: '18px', borderRadius: '5px', flexShrink: 0,
+                        border: `2px solid ${allChecked ? '#818cf8' : someChecked ? '#818cf8' : 'rgba(255,255,255,0.2)'}`,
+                        background: allChecked ? '#818cf8' : someChecked ? 'rgba(129,140,248,0.3)' : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        {allChecked && <span style={{ color: 'white', fontSize: '12px', lineHeight: 1 }}>✓</span>}
+                        {!allChecked && someChecked && <span style={{ color: '#818cf8', fontSize: '12px', lineHeight: 1 }}>−</span>}
+                      </div>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)', flex: 1 }}>{team}</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                        {emps.filter(e => selectedEmps.has(e.emp_no)).length}/{emps.length}명
+                      </span>
+                    </div>
+
+                    {/* 팀원 목록 */}
+                    {emps.map(emp => {
+                      const checked = selectedEmps.has(emp.emp_no);
+                      const responded = responders.find(r => r.emp_no === emp.emp_no);
+                      const isActive = responded && responded.status !== '미응답';
+                      return (
+                        <div
+                          key={emp.emp_no}
+                          onClick={() => !isActive && toggleEmp(emp.emp_no)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            padding: '7px 12px 7px 36px', borderRadius: '8px',
+                            cursor: isActive ? 'default' : 'pointer',
+                            opacity: isActive ? 0.8 : 1,
+                          }}
+                        >
+                          <div style={{
+                            width: '16px', height: '16px', borderRadius: '4px', flexShrink: 0,
+                            border: `2px solid ${checked ? '#818cf8' : 'rgba(255,255,255,0.2)'}`,
+                            background: checked ? '#818cf8' : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            {checked && <span style={{ color: 'white', fontSize: '11px', lineHeight: 1 }}>✓</span>}
+                          </div>
+                          <span style={{ fontSize: '14px', flex: 1 }}>{emp.name}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{emp.role}</span>
+                          {responded && (
+                            <span style={{
+                              fontSize: '11px', fontWeight: 700,
+                              color: isActive ? 'var(--color-green)' : '#94a3b8',
+                              background: isActive ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)',
+                              padding: '2px 6px', borderRadius: '6px',
+                            }}>
+                              {responded.status}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 저장 버튼 */}
+            <div style={{ padding: '12px 16px 20px', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <button
+                onClick={saveParticipants}
+                disabled={savingParticipants}
+                className="btn btn-primary"
+              >
+                {savingParticipants ? '저장 중...' : `💾 ${selectedEmps.size}명 참여인원 확정`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

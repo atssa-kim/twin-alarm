@@ -199,6 +199,46 @@ export const db = {
     if (error) throw error;
   },
 
+  // 11. Set training participants (pre-populate responders with 미응답)
+  async setTrainingParticipants(
+    incidentId: string,
+    selectedEmps: EmployeeDB[],
+    currentResponders: Responder[]
+  ): Promise<void> {
+    const currentEmpNos = new Set(currentResponders.map(r => r.emp_no));
+    const selectedEmpNos = new Set(selectedEmps.map(e => e.emp_no));
+
+    // Insert new (not already in responders)
+    const toAdd = selectedEmps.filter(e => !currentEmpNos.has(e.emp_no));
+    if (toAdd.length > 0) {
+      const { error } = await supabase.from('responders').upsert(
+        toAdd.map(e => ({
+          incident_id: incidentId,
+          emp_no: e.emp_no,
+          name: e.name,
+          team: e.team,
+          role: e.role,
+          status: '미응답' as const,
+          updated_at: Date.now(),
+        })),
+        { onConflict: 'incident_id,emp_no' }
+      );
+      if (error) throw error;
+    }
+
+    // Remove deselected that haven't responded yet
+    const toRemove = currentResponders.filter(
+      r => !selectedEmpNos.has(r.emp_no) && r.status === '미응답'
+    );
+    for (const r of toRemove) {
+      await supabase
+        .from('responders')
+        .delete()
+        .eq('incident_id', incidentId)
+        .eq('emp_no', r.emp_no);
+    }
+  },
+
   // 10. Fetch an employee's badge for a specific disaster
   async getEmployeeBadge(empNo: string, disaster: string): Promise<string | null> {
     const { data, error } = await supabase

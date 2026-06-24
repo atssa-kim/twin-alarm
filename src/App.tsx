@@ -336,6 +336,7 @@ const App: React.FC = () => {
             responders={responders}
             tasks={tasks}
             currentUser={currentUser}
+            employees={employees}
             availableVoices={availableVoices}
             selectedVoiceName={selectedVoiceName}
             getCleanVoiceName={getCleanVoiceName}
