@@ -63,6 +63,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const [showParticipants, setShowParticipants] = useState(false);
   const [selectedEmps, setSelectedEmps] = useState<Set<string>>(new Set());
   const [expandedCell, setExpandedCell] = useState<{ team: string; type: 'day' | 'night' } | null>(null);
+  const [shiftExpanded, setShiftExpanded] = useState(false);
 
   const isFireDisaster = selectedDisasterKey === '화재';
 
@@ -368,13 +369,16 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                     {/* 빠른 선택 */}
                     <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                       {[
-                        { label: '전체', fn: () => setSelectedEmps(new Set(employees.map(e => e.emp_no))), color: '#818cf8' },
-                        { label: '☀️ 주간', fn: () => setSelectedEmps(new Set(employees.filter(e => !isShiftEmployee(e.role)).map(e => e.emp_no))), color: '#fbbf24' },
-                        { label: 'A조', fn: () => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role) && e.role.includes('A')).map(e => e.emp_no))), color: '#a5b4fc' },
-                        { label: 'B조', fn: () => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role) && e.role.includes('B')).map(e => e.emp_no))), color: '#86efac' },
-                        { label: 'C조', fn: () => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role) && e.role.includes('C')).map(e => e.emp_no))), color: '#fdba74' },
-                        { label: 'D조', fn: () => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role) && e.role.includes('D')).map(e => e.emp_no))), color: '#f9a8d4' },
-                        { label: '해제', fn: () => setSelectedEmps(new Set()), color: '#475569' },
+                        { label: '전체', color: '#818cf8', fn: () => { setSelectedEmps(new Set(employees.map(e => e.emp_no))); setShiftExpanded(false); } },
+                        { label: '☀️ 주간', color: '#fbbf24', fn: () => { setSelectedEmps(new Set(employees.filter(e => !isShiftEmployee(e.role)).map(e => e.emp_no))); setShiftExpanded(false); } },
+                        { label: '🌙 교대', color: shiftExpanded ? '#c084fc' : '#a5b4fc', fn: () => setShiftExpanded(v => !v) },
+                        ...(shiftExpanded ? [
+                          { label: 'A조', color: '#a5b4fc', fn: () => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role) && e.role.includes('A')).map(e => e.emp_no))) },
+                          { label: 'B조', color: '#86efac', fn: () => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role) && e.role.includes('B')).map(e => e.emp_no))) },
+                          { label: 'C조', color: '#fdba74', fn: () => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role) && e.role.includes('C')).map(e => e.emp_no))) },
+                          { label: 'D조', color: '#f9a8d4', fn: () => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role) && e.role.includes('D')).map(e => e.emp_no))) },
+                        ] : []),
+                        { label: '해제', color: '#475569', fn: () => { setSelectedEmps(new Set()); setShiftExpanded(false); } },
                       ].map(({ label, fn, color }) => (
                         <button key={label} type="button" onClick={fn} style={{
                           flex: 1, padding: '5px 0', borderRadius: '6px', cursor: 'pointer',

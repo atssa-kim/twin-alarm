@@ -50,9 +50,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
     const teamSet = new Set<string>();
     for (const e of employees) {
       if (e.role.includes('교대')) {
-        // 교대 직원은 role 기준으로 분리 (DB team 값과 무관)
-        if (e.role.includes('BMS') || e.role.includes('방재')) teamSet.add('상황실');
-        else teamSet.add('교대근무자');
+        if (e.role.includes('방재')) teamSet.add('상황실'); // 방재직원만 상황실 탭
+        teamSet.add('교대근무자'); // 모든 교대 직원은 교대근무자 탭에도 표시
       } else {
         teamSet.add(normalizeTeam(e.team));
       }
@@ -71,13 +70,15 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
     if (!selectedTeam) return [];
 
     if (selectedTeam === '상황실') {
+      // 방재직원만 — 로그인 시 지휘본부(발령 화면)로 이동
       return employees
-        .filter(e => e.role.includes('교대') && (e.role.includes('BMS') || e.role.includes('방재')))
+        .filter(e => e.role.includes('교대') && e.role.includes('방재'))
         .sort((a, b) => getShiftRank(a.role) - getShiftRank(b.role) || a.name.localeCompare(b.name, 'ko'));
     }
     if (selectedTeam === '교대근무자') {
+      // 모든 교대 직원 — 로그인 시 대원 뷰(야간 임무)로 이동
       return employees
-        .filter(e => e.role.includes('교대') && !e.role.includes('BMS') && !e.role.includes('방재'))
+        .filter(e => e.role.includes('교대'))
         .sort((a, b) => getShiftRank(a.role) - getShiftRank(b.role) || a.name.localeCompare(b.name, 'ko'));
     }
 
@@ -119,7 +120,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
       name: emp.name,
       team: emp.team,
       role: emp.role,
-      isCommander: emp.is_commander,
+      // 교대근무자 탭으로 로그인 시 방재직원도 대원 뷰(야간 임무)로 이동
+      isCommander: selectedTeam !== '교대근무자' && emp.is_commander,
     });
   };
 
