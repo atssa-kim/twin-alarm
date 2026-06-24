@@ -346,7 +346,7 @@ const App: React.FC = () => {
           }}
         >
           <Radio size={17} />
-          <span>상황판 (COP)</span>
+          <span>업무수행율</span>
         </button>
       </nav>
 
