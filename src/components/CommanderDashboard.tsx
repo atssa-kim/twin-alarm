@@ -7,6 +7,18 @@ import { Play, Square, ShieldAlert, Users, MapPin, Mic, UserCheck, TrendingUp } 
 // 화재 초기출동조 배지 (감지기동작 시 1차 소집)
 const FIRE_INITIAL_BADGES = new Set(['총괄', '상황실', '통제', '출동']);
 
+// 참여인원 모달: 파트장 → 파트로 그룹 통합
+const normalizeParticipantTeam = (team: string) =>
+  team.endsWith('파트장') ? team.replace('파트장', '파트') : team;
+
+// 교대 여부
+const isShiftEmployee = (role: string) => role.includes('교대');
+
+// 그룹 내 정렬: 파트장 → 주간 파트원 → 교대 파트원
+const empSortRank = (role: string) =>
+  role.startsWith('파트장') || role === '센터장' || role === '상황실' ? 0
+  : isShiftEmployee(role) ? 2 : 1;
+
 interface CommanderDashboardProps {
   activeIncident: Incident | null;
   responders: Responder[];
@@ -21,12 +33,8 @@ interface CommanderDashboardProps {
 
 const TEAM_ORDER = [
   '상황실', '센터장',
-  '기계파트장', '기계파트',
-  '전기파트장', '전기파트',
-  '소방파트장', '소방파트',
-  '운영파트장', '운영파트',
-  '건축파트장', '건축파트',
-  '품질/안전파트',
+  '기계파트', '전기파트', '소방파트',
+  '운영파트', '건축파트', '품질/안전파트',
   '보안1', '보안2', '보안3',
   '주차파트', '미화파트',
 ];
@@ -58,12 +66,16 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
 
   const isFireDisaster = selectedDisasterKey === '화재';
 
-  // 직원 목록 팀별 그룹화
+  // 직원 목록 팀별 그룹화 (파트장 → 파트에 통합, 주간→교대 순 정렬)
   const groupedEmployees = useMemo(() => {
     const map: Record<string, EmployeeDB[]> = {};
     for (const e of employees) {
-      if (!map[e.team]) map[e.team] = [];
-      map[e.team].push(e);
+      const grp = normalizeParticipantTeam(e.team);
+      if (!map[grp]) map[grp] = [];
+      map[grp].push(e);
+    }
+    for (const arr of Object.values(map)) {
+      arr.sort((a, b) => empSortRank(a.role) - empSortRank(b.role) || a.name.localeCompare(b.name, 'ko'));
     }
     const ordered: [string, EmployeeDB[]][] = [];
     for (const t of TEAM_ORDER) {
@@ -521,14 +533,22 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                 style={{ background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', color: 'var(--text-main)', cursor: 'pointer', fontSize: '16px' }}>✕</button>
             </div>
 
-            {/* 전체 선택/해제 */}
-            <div style={{ padding: '10px 20px', display: 'flex', gap: '8px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            {/* 전체/주간/야간 빠른 선택 */}
+            <div style={{ padding: '10px 20px', display: 'flex', gap: '6px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.05)', flexWrap: 'wrap' }}>
               <button onClick={() => setSelectedEmps(new Set(employees.map(e => e.emp_no)))}
-                style={{ flex: 1, padding: '8px', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: '10px', color: '#818cf8', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+                style={{ flex: 1, minWidth: '72px', padding: '8px 4px', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: '10px', color: '#818cf8', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
                 전체 선택
               </button>
+              <button onClick={() => setSelectedEmps(new Set(employees.filter(e => !isShiftEmployee(e.role)).map(e => e.emp_no)))}
+                style={{ flex: 1, minWidth: '72px', padding: '8px 4px', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: '10px', color: '#fbbf24', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                ☀️ 주간 선택
+              </button>
+              <button onClick={() => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role)).map(e => e.emp_no)))}
+                style={{ flex: 1, minWidth: '72px', padding: '8px 4px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '10px', color: '#94a3b8', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                🌙 야간/교대
+              </button>
               <button onClick={() => setSelectedEmps(new Set())}
-                style={{ flex: 1, padding: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: 'var(--text-muted)', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+                style={{ flex: 1, minWidth: '72px', padding: '8px 4px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
                 전체 해제
               </button>
             </div>
@@ -550,24 +570,34 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                         {emps.filter(e => selectedEmps.has(e.emp_no)).length}/{emps.length}명
                       </span>
                     </div>
-                    {emps.map(emp => {
+                    {emps.map((emp, idx) => {
                       const checked = selectedEmps.has(emp.emp_no);
                       const responded = responders.find(r => r.emp_no === emp.emp_no);
                       const isActive = responded && responded.status !== '미응답';
+                      const shift = isShiftEmployee(emp.role);
+                      const prevShift = idx > 0 ? isShiftEmployee(emps[idx - 1].role) : false;
+                      const showShiftDivider = shift && !prevShift;
                       return (
-                        <div key={emp.emp_no} onClick={() => !isActive && toggleEmp(emp.emp_no)}
-                          style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 12px 7px 36px', borderRadius: '8px', cursor: isActive ? 'default' : 'pointer', opacity: isActive ? 0.8 : 1 }}>
-                          <div style={{ width: '16px', height: '16px', borderRadius: '4px', flexShrink: 0, border: `2px solid ${checked ? '#818cf8' : 'rgba(255,255,255,0.2)'}`, background: checked ? '#818cf8' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {checked && <span style={{ color: 'white', fontSize: '11px', lineHeight: 1 }}>✓</span>}
-                          </div>
-                          <span style={{ fontSize: '14px', flex: 1 }}>{emp.name}</span>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{emp.role}</span>
-                          {responded && (
-                            <span style={{ fontSize: '11px', fontWeight: 700, color: isActive ? 'var(--color-green)' : '#94a3b8', background: isActive ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '6px' }}>
-                              {responded.status}
-                            </span>
+                        <React.Fragment key={emp.emp_no}>
+                          {showShiftDivider && (
+                            <div style={{ padding: '4px 36px 2px', fontSize: '10px', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px' }}>
+                              🌙 야간 / 교대
+                            </div>
                           )}
-                        </div>
+                          <div onClick={() => !isActive && toggleEmp(emp.emp_no)}
+                            style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 12px 7px 36px', borderRadius: '8px', cursor: isActive ? 'default' : 'pointer', opacity: isActive ? 0.8 : 1 }}>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', flexShrink: 0, border: `2px solid ${checked ? '#818cf8' : 'rgba(255,255,255,0.2)'}`, background: checked ? '#818cf8' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {checked && <span style={{ color: 'white', fontSize: '11px', lineHeight: 1 }}>✓</span>}
+                            </div>
+                            <span style={{ fontSize: '14px', flex: 1 }}>{emp.name}</span>
+                            <span style={{ fontSize: '11px', color: shift ? '#64748b' : 'var(--text-muted)' }}>{emp.role}</span>
+                            {responded && (
+                              <span style={{ fontSize: '11px', fontWeight: 700, color: isActive ? 'var(--color-green)' : '#94a3b8', background: isActive ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '6px' }}>
+                                {responded.status}
+                              </span>
+                            )}
+                          </div>
+                        </React.Fragment>
                       );
                     })}
                   </div>
