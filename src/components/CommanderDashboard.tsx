@@ -59,10 +59,9 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const [showVoicePicker, setShowVoicePicker] = useState(false);
   const voicePickerRef = useRef<HTMLDivElement>(null);
 
-  // 참여인원 모달
+  // 참여인원 인라인 패널
   const [showParticipants, setShowParticipants] = useState(false);
   const [selectedEmps, setSelectedEmps] = useState<Set<string>>(new Set());
-  const [savingParticipants, setSavingParticipants] = useState(false);
 
   const isFireDisaster = selectedDisasterKey === '화재';
 
@@ -207,55 +206,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
     }
   };
 
-  // ── 참여인원 모달 ───────────────────────────────────
-  const openParticipantModal = () => {
-    if (activeIncident) {
-      // 발령 중: 현재 대원 목록 기준
-      setSelectedEmps(new Set(responders.map(r => r.emp_no)));
-    } else {
-      // 발령 전: 아무도 선택 안 된 경우 전체 선택 기본값
-      if (selectedEmps.size === 0) {
-        setSelectedEmps(new Set(employees.map(e => e.emp_no)));
-      }
-    }
-    setShowParticipants(true);
-  };
-
-  const toggleEmp = (empNo: string) => {
-    setSelectedEmps(prev => {
-      const next = new Set(prev);
-      next.has(empNo) ? next.delete(empNo) : next.add(empNo);
-      return next;
-    });
-  };
-
-  const toggleTeam = (teamEmps: EmployeeDB[]) => {
-    const allSelected = teamEmps.every(e => selectedEmps.has(e.emp_no));
-    setSelectedEmps(prev => {
-      const next = new Set(prev);
-      if (allSelected) teamEmps.forEach(e => next.delete(e.emp_no));
-      else teamEmps.forEach(e => next.add(e.emp_no));
-      return next;
-    });
-  };
-
-  const saveParticipants = async () => {
-    if (!activeIncident) {
-      // 발령 전: 선택만 저장하고 닫기 (발령 시 자동 적용)
-      setShowParticipants(false);
-      return;
-    }
-    setSavingParticipants(true);
-    try {
-      const selected = employees.filter(e => selectedEmps.has(e.emp_no));
-      await db.setTrainingParticipants(activeIncident.id, selected, responders);
-      setShowParticipants(false);
-    } catch (err: any) {
-      alert('참여인원 저장 오류: ' + err.message);
-    } finally {
-      setSavingParticipants(false);
-    }
-  };
 
   // ── 통계 ────────────────────────────────────────────
   const checkableTasks = tasks.filter(t => !t.label.startsWith('◇') && !t.label.startsWith('◆'));
@@ -395,13 +345,101 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
               />
             </div>
 
-            {/* 훈련 시 참여인원 사전 설정 */}
+            {/* 훈련 시 참여인원 — 인라인 그리드 */}
             {selectedMode === '훈련' && (
-              <button type="button" onClick={openParticipantModal} className="btn"
-                style={{ borderColor: 'rgba(99,102,241,0.5)', color: '#818cf8', background: 'rgba(99,102,241,0.1)' }}>
-                <UserCheck size={18} />
-                훈련 참여인원 설정{selectedEmps.size > 0 ? ` (${selectedEmps.size}명 선택됨)` : ''}
-              </button>
+              <div>
+                <button type="button"
+                  onClick={() => setShowParticipants(v => !v)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '10px 14px', borderRadius: '10px', cursor: 'pointer',
+                    border: '1px solid rgba(99,102,241,0.4)',
+                    background: showParticipants ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.08)',
+                    color: '#818cf8', fontSize: '13px', fontWeight: 700,
+                  }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <UserCheck size={16} />
+                    훈련 참여인원 설정
+                  </span>
+                  <span style={{ fontSize: '12px', opacity: 0.8 }}>
+                    {selectedEmps.size > 0 ? `${selectedEmps.size}명 선택됨` : '미설정'} {showParticipants ? '▲' : '▼'}
+                  </span>
+                </button>
+
+                {showParticipants && (
+                  <div style={{ marginTop: '6px', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '10px', overflow: 'hidden', background: 'rgba(15,23,42,0.7)' }}>
+                    {/* 빠른 선택 */}
+                    <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                      {[
+                        { label: '전체', fn: () => setSelectedEmps(new Set(employees.map(e => e.emp_no))), color: '#818cf8' },
+                        { label: '☀️ 주간', fn: () => setSelectedEmps(new Set(employees.filter(e => !isShiftEmployee(e.role)).map(e => e.emp_no))), color: '#fbbf24' },
+                        { label: '🌙 야간', fn: () => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role)).map(e => e.emp_no))), color: '#a5b4fc' },
+                        { label: '해제', fn: () => setSelectedEmps(new Set()), color: '#475569' },
+                      ].map(({ label, fn, color }) => (
+                        <button key={label} type="button" onClick={fn} style={{
+                          flex: 1, padding: '5px 0', borderRadius: '6px', cursor: 'pointer',
+                          border: `1px solid ${color}44`, background: `${color}14`,
+                          color, fontSize: '11px', fontWeight: 700,
+                        }}>{label}</button>
+                      ))}
+                    </div>
+
+                    {/* 파트 × 주간/야간 그리드 */}
+                    <div style={{ padding: '0 8px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 72px 72px', padding: '5px 4px 3px', fontSize: '10px', color: '#475569', fontWeight: 700 }}>
+                        <span>파트</span>
+                        <span style={{ textAlign: 'center' }}>☀️ 주간</span>
+                        <span style={{ textAlign: 'center' }}>🌙 야간</span>
+                      </div>
+                      {groupedEmployees.map(([team, emps]) => {
+                        const dayEmps = emps.filter(e => !isShiftEmployee(e.role));
+                        const nightEmps = emps.filter(e => isShiftEmployee(e.role));
+                        const dayN = dayEmps.filter(e => selectedEmps.has(e.emp_no)).length;
+                        const nightN = nightEmps.filter(e => selectedEmps.has(e.emp_no)).length;
+
+                        const toggle = (grp: EmployeeDB[]) => {
+                          const all = grp.every(e => selectedEmps.has(e.emp_no));
+                          setSelectedEmps(prev => {
+                            const next = new Set(prev);
+                            if (all) grp.forEach(e => next.delete(e.emp_no));
+                            else grp.forEach(e => next.add(e.emp_no));
+                            return next;
+                          });
+                        };
+
+                        const cell = (n: number, total: number, grp: EmployeeDB[], isNight: boolean) => {
+                          if (!total) return <span />;
+                          const full = n === total;
+                          const partial = n > 0 && !full;
+                          const baseColor = isNight ? '#a5b4fc' : '#fbbf24';
+                          return (
+                            <button type="button" onClick={() => toggle(grp)} style={{
+                              margin: '2px', padding: '4px 0', borderRadius: '6px',
+                              fontSize: '11px', fontWeight: 700, textAlign: 'center', cursor: 'pointer',
+                              border: `1px solid ${n > 0 ? baseColor + '66' : 'rgba(255,255,255,0.08)'}`,
+                              background: full ? baseColor + '22' : partial ? baseColor + '0d' : 'rgba(255,255,255,0.03)',
+                              color: n > 0 ? baseColor : '#334155',
+                            }}>
+                              {n}/{total}명
+                            </button>
+                          );
+                        };
+
+                        return (
+                          <div key={team} style={{ display: 'grid', gridTemplateColumns: '1fr 72px 72px', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                            <span style={{ fontSize: '11px', color: '#64748b', padding: '0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{team}</span>
+                            {cell(dayN, dayEmps.length, dayEmps, false)}
+                            {cell(nightN, nightEmps.length, nightEmps, true)}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ padding: '5px 12px 7px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>
+                      총 <strong style={{ color: '#e2e8f0' }}>{selectedEmps.size}명</strong> 선택
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             <button type="submit" className="btn btn-danger" disabled={loading} style={{ marginTop: '4px' }}>
@@ -529,114 +567,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
         </>
       )}
 
-      {/* ── 참여인원 설정 모달 ──────────────────────────────── */}
-      {showParticipants && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 500,
-          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
-          display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-        }}>
-          <div style={{
-            background: 'var(--bg-app)', borderRadius: '24px 24px 0 0',
-            maxHeight: '85dvh', display: 'flex', flexDirection: 'column',
-            border: '1px solid rgba(255,255,255,0.1)', borderBottom: 'none',
-          }}>
-            {/* 헤더 */}
-            <div style={{ padding: '16px 20px 12px', display: 'flex', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-              <UserCheck size={20} color="#818cf8" style={{ marginRight: '10px' }} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 800, fontSize: '16px' }}>훈련 참여인원 설정</div>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{selectedEmps.size}명 선택됨</div>
-              </div>
-              <button onClick={() => setShowParticipants(false)}
-                style={{ background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', color: 'var(--text-main)', cursor: 'pointer', fontSize: '16px' }}>✕</button>
-            </div>
-
-            {/* 전체/주간/야간 빠른 선택 */}
-            <div style={{ padding: '10px 20px', display: 'flex', gap: '6px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.05)', flexWrap: 'wrap' }}>
-              <button onClick={() => setSelectedEmps(new Set(employees.map(e => e.emp_no)))}
-                style={{ flex: 1, minWidth: '72px', padding: '8px 4px', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: '10px', color: '#818cf8', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
-                전체 선택
-              </button>
-              <button onClick={() => setSelectedEmps(new Set(employees.filter(e => !isShiftEmployee(e.role)).map(e => e.emp_no)))}
-                style={{ flex: 1, minWidth: '72px', padding: '8px 4px', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: '10px', color: '#fbbf24', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
-                ☀️ 주간 선택
-              </button>
-              <button onClick={() => setSelectedEmps(new Set(employees.filter(e => isShiftEmployee(e.role)).map(e => e.emp_no)))}
-                style={{ flex: 1, minWidth: '72px', padding: '8px 4px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '10px', color: '#94a3b8', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
-                🌙 야간/교대
-              </button>
-              <button onClick={() => setSelectedEmps(new Set())}
-                style={{ flex: 1, minWidth: '72px', padding: '8px 4px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
-                전체 해제
-              </button>
-            </div>
-
-            {/* 직원 목록 */}
-            <div style={{ overflowY: 'auto', flex: 1, padding: '8px 16px 16px' }}>
-              {groupedEmployees.map(([team, emps]) => {
-                const allChecked = emps.every(e => selectedEmps.has(e.emp_no));
-                const someChecked = emps.some(e => selectedEmps.has(e.emp_no));
-                return (
-                  <div key={team} style={{ marginBottom: '8px' }}>
-                    <div onClick={() => toggleTeam(emps)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '10px', background: 'rgba(255,255,255,0.04)', cursor: 'pointer', marginBottom: '2px' }}>
-                      <div style={{ width: '18px', height: '18px', borderRadius: '5px', flexShrink: 0, border: `2px solid ${allChecked ? '#818cf8' : someChecked ? '#818cf8' : 'rgba(255,255,255,0.2)'}`, background: allChecked ? '#818cf8' : someChecked ? 'rgba(129,140,248,0.3)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {allChecked && <span style={{ color: 'white', fontSize: '12px', lineHeight: 1 }}>✓</span>}
-                        {!allChecked && someChecked && <span style={{ color: '#818cf8', fontSize: '12px', lineHeight: 1 }}>−</span>}
-                      </div>
-                      <span style={{ fontSize: '13px', fontWeight: 700, flex: 1 }}>{team}</span>
-                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {emps.filter(e => selectedEmps.has(e.emp_no)).length}/{emps.length}명
-                      </span>
-                    </div>
-                    {emps.map((emp, idx) => {
-                      const checked = selectedEmps.has(emp.emp_no);
-                      const responded = responders.find(r => r.emp_no === emp.emp_no);
-                      const isActive = responded && responded.status !== '미응답';
-                      const shift = isShiftEmployee(emp.role);
-                      const prevShift = idx > 0 ? isShiftEmployee(emps[idx - 1].role) : false;
-                      const showShiftDivider = shift && !prevShift;
-                      return (
-                        <React.Fragment key={emp.emp_no}>
-                          {showShiftDivider && (
-                            <div style={{ padding: '4px 36px 2px', fontSize: '10px', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px' }}>
-                              🌙 야간 / 교대
-                            </div>
-                          )}
-                          <div onClick={() => !isActive && toggleEmp(emp.emp_no)}
-                            style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 12px 7px 36px', borderRadius: '8px', cursor: isActive ? 'default' : 'pointer', opacity: isActive ? 0.8 : 1 }}>
-                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', flexShrink: 0, border: `2px solid ${checked ? '#818cf8' : 'rgba(255,255,255,0.2)'}`, background: checked ? '#818cf8' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              {checked && <span style={{ color: 'white', fontSize: '11px', lineHeight: 1 }}>✓</span>}
-                            </div>
-                            <span style={{ fontSize: '14px', flex: 1 }}>{emp.name}</span>
-                            <span style={{ fontSize: '11px', color: shift ? '#64748b' : 'var(--text-muted)' }}>{emp.role}</span>
-                            {responded && (
-                              <span style={{ fontSize: '11px', fontWeight: 700, color: isActive ? 'var(--color-green)' : '#94a3b8', background: isActive ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '6px' }}>
-                                {responded.status}
-                              </span>
-                            )}
-                          </div>
-                        </React.Fragment>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* 저장 버튼 */}
-            <div style={{ padding: '12px 16px 20px', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-              <button onClick={saveParticipants} disabled={savingParticipants} className="btn btn-primary">
-                {savingParticipants
-                  ? '저장 중...'
-                  : activeIncident
-                    ? `💾 ${selectedEmps.size}명 참여인원 확정`
-                    : `✅ ${selectedEmps.size}명 선택 완료 (발령 시 자동 적용)`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
