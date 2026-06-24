@@ -35,6 +35,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const handleDeclare = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!location.trim()) return alert('위치를 입력하세요.');
+    if (!window.confirm(`[${selectedMode}] ${selectedDisasterKey} 발령하시겠습니까?\n위치: ${location}`)) return;
     
     setLoading(true);
     try {

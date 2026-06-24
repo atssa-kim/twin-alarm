@@ -172,6 +172,10 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     }
   };
 
+  const displayTeam = currentUser.team
+    .replace('파트장', '파트')
+    .replace(/^보안[123]$/, '보안파트');
+
   return (
     <div className="content">
       {!activeIncident ? (
@@ -184,9 +188,19 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
           }}>
             <span style={{ fontSize: '24px' }}>🟢</span>
           </div>
-          <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '18px', marginBottom: '8px' }}>
+          <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '18px', marginBottom: '6px' }}>
             비상 대기 중
           </h3>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)',
+            borderRadius: '20px', padding: '4px 14px', marginBottom: '14px'
+          }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: '#60a5fa' }}>
+              {displayTeam} · {currentUser.name}
+            </span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>({currentUser.role})</span>
+          </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.5, marginBottom: '16px' }}>
             현재 발령된 비상 상황이 없습니다.<br />
             재난 수신기가 감지되거나 지휘자가 발령하면 여기에 알람이 표시됩니다.
