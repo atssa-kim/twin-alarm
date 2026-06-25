@@ -103,25 +103,22 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // PWA 설치 프롬프트 캡처 (Android Chrome)
+  // PWA 설치 프롬프트 캡처 (Android Chrome — 설치 버튼용)
   useEffect(() => {
     const handler = (e: any) => {
       e.preventDefault();
       setDeferredInstallPrompt(e);
-      if (!isPWAInstalled && !localStorage.getItem('tt_install_dismissed')) {
-        setShowInstallBanner(true);
-      }
     };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, [isPWAInstalled]);
+  }, []);
 
-  // iOS: 로그인 후 설치 배너 표시
+  // 설치 배너: 로그인 후, 미설치 + 미닫음이면 항상 표시 (이벤트 기다리지 않음)
   useEffect(() => {
-    if (currentUser && isIOS && !isPWAInstalled && !localStorage.getItem('tt_install_dismissed')) {
+    if (currentUser && !isPWAInstalled && !localStorage.getItem('tt_install_dismissed')) {
       setShowInstallBanner(true);
     }
-  }, [currentUser, isIOS, isPWAInstalled]);
+  }, [currentUser, isPWAInstalled]);
 
   // 알림 허용 배너: 로그인 후 미허용이면 표시 (세션 단위 — 로그인마다 다시 표시)
   useEffect(() => {
@@ -519,13 +516,15 @@ const App: React.FC = () => {
                     : '설치하면 화면 꺼진 상태에서도 알람이 울립니다'}
                 </div>
               </div>
-              {!isIOS && deferredInstallPrompt && (
-                <button type="button" onClick={handleInstall} style={{
-                  padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', flexShrink: 0,
-                  fontSize: '11px', fontWeight: 700,
-                  background: 'rgba(245,158,11,0.2)', border: '1px solid rgba(245,158,11,0.5)',
-                  color: '#fbbf24',
-                }}>설치</button>
+              {!isIOS && (
+                deferredInstallPrompt
+                  ? <button type="button" onClick={handleInstall} style={{
+                      padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', flexShrink: 0,
+                      fontSize: '11px', fontWeight: 700,
+                      background: 'rgba(245,158,11,0.2)', border: '1px solid rgba(245,158,11,0.5)',
+                      color: '#fbbf24',
+                    }}>설치</button>
+                  : <span style={{ fontSize: '10px', color: '#f59e0b', flexShrink: 0 }}>Chrome ⋮ → 앱 설치</span>
               )}
               <button type="button" onClick={() => { setShowInstallBanner(false); localStorage.setItem('tt_install_dismissed', '1'); }} style={{
                 background: 'transparent', border: 'none', color: '#475569',
