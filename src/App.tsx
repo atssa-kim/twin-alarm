@@ -407,7 +407,7 @@ const App: React.FC = () => {
         <button
           onClick={() => setCurrentView('cmd')}
           style={{
-            flex: 1, background: 'transparent', border: 'none',
+            flex: '1 1 0', minWidth: 0, background: 'transparent', border: 'none',
             color: currentView === 'cmd' ? '#3b82f6' : 'var(--text-muted)',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
@@ -425,7 +425,7 @@ const App: React.FC = () => {
             }
           }}
           style={{
-            flex: 1, background: 'transparent', border: 'none',
+            flex: '1 1 0', minWidth: 0, background: 'transparent', border: 'none',
             color: currentView === 'responder' ? '#3b82f6' : 'var(--text-muted)',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
@@ -437,7 +437,7 @@ const App: React.FC = () => {
         <button
           onClick={() => setCurrentView('cop')}
           style={{
-            flex: 1, background: 'transparent', border: 'none',
+            flex: '1 1 0', minWidth: 0, background: 'transparent', border: 'none',
             color: currentView === 'cop' ? '#3b82f6' : 'var(--text-muted)',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
