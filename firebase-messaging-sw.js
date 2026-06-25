@@ -29,19 +29,22 @@ messaging.onBackgroundMessage(function(payload) {
   });
 });
 
-// 알림 클릭 시 앱 열기
+// 알림 클릭 시 앱 열기 — ?alert=1 파라미터로 TTS 강제 재생
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.link)
-    || 'https://atssa-kim.github.io/twin-alarm/';
+  const base = 'https://atssa-kim.github.io/twin-alarm/';
+  const alertUrl = base + '?alert=1';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
       for (const client of clientList) {
         if (client.url.includes('twin-alarm') && 'focus' in client) {
-          return client.focus();
+          // 이미 열린 탭이 있으면 포커스 + URL 변경으로 alert 트리거
+          client.focus();
+          client.navigate(alertUrl);
+          return;
         }
       }
-      return clients.openWindow(url);
+      return clients.openWindow(alertUrl);
     })
   );
 });
