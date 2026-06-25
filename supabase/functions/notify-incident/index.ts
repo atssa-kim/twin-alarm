@@ -5,6 +5,12 @@ const FCM_URL = `https://fcm.googleapis.com/v1/projects/${PROJECT_ID}/messages:s
 const APP_URL = 'https://atssa-kim.github.io/twin-alarm/';
 const APP_ICON = 'https://atssa-kim.github.io/twin-alarm/favicon.png';
 
+// 브라우저에서 supabase.functions.invoke 로 직접 호출할 때 필요한 CORS 헤더
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 function pemToArrayBuffer(pem: string): ArrayBuffer {
   const b64 = pem
     .replace(/-----BEGIN PRIVATE KEY-----/g, '')
@@ -64,6 +70,8 @@ async function sendFcmPush(
   body: string,
   data: Record<string, string>
 ): Promise<void> {
+  // 알림 탭 시 ?alert=1 파라미터로 앱을 열어 TTS 강제 재생
+  const alertUrl = APP_URL + '?alert=1';
   const resp = await fetch(FCM_URL, {
     method: 'POST',
     headers: {
@@ -86,7 +94,7 @@ async function sendFcmPush(
             tag: 'twin-alarm-incident',
             renotify: true,
           },
-          fcm_options: { link: APP_URL },
+          fcm_options: { link: alertUrl },
         },
       },
     }),
@@ -98,6 +106,11 @@ async function sendFcmPush(
 }
 
 Deno.serve(async (req) => {
+  // CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: CORS });
+  }
+
   try {
     const saJson = Deno.env.get('FIREBASE_SERVICE_ACCOUNT');
     if (!saJson) throw new Error('FIREBASE_SERVICE_ACCOUNT secret not set');
@@ -107,25 +120,43 @@ Deno.serve(async (req) => {
     const { type, record, old_record } = body;
 
     if (type !== 'INSERT' && type !== 'UPDATE') {
-      return new Response('ignored', { status: 200 });
+      return new Response('ignored', { status: 200, headers: CORS });
     }
     if (type === 'UPDATE' && record?.mode === old_record?.mode) {
-      return new Response('mode unchanged', { status: 200 });
+      return new Response('mode unchanged', { status: 200, headers: CORS });
     }
     if (record?.status !== 'active') {
-      return new Response('not active', { status: 200 });
+      return new Response('not active', { status: 200, headers: CORS });
     }
 
-    const isTraining = String(record.mode).startsWith('훈련');
+    const mode: string = record.mode || '';
+    const disaster: string = record.disaster || '';
+    const location: string = record.location || '';
+    const isTraining = mode.startsWith('훈련');
     const isEscalation = type === 'UPDATE';
-    const title = isEscalation
-      ? `${isTraining ? '🏋️' : '🔥'} ${record.disaster} 승격 발령`
-      : `${isTraining ? '🎓' : '🚨'} ${record.disaster} 비상 발령`;
-    const bodyText = isEscalation
-      ? `[${record.mode}] ${record.location} — 나머지 대원 소집`
-      : `[${record.mode}] 위치: ${record.location} — 임무를 확인하세요.`;
 
-    // drill_emp_nos: body 직접 전달(앱 호출) 또는 DB record 컬럼(트리거 호출)
+    // audio.ts triggerEmergencyAlert 와 동일한 본문 계산
+    let ttsText: string;
+    if (mode === '훈련/감지기') {
+      ttsText = `훈련상황! 훈련상황 ${location}에서 화재감지기 동작! 초기대응대는 신속히 출동하시기 바랍니다.`;
+    } else if (mode === '훈련/전체') {
+      ttsText = `훈련상황! 화재발생! 훈련상황! 화재발생! ${location}으로 신속히 출동하시기 바랍니다.`;
+    } else if (mode === '실제/감지기') {
+      ttsText = `화재감지기동작!, 화재감지기동작! ${location}에서 화재감지기 동작! 초기대응대는 신속히 출동하시기 바랍니다.`;
+    } else if (mode === '실제/화재') {
+      ttsText = `화재발생!, 화재발생! ${location}에서 화재발생 신속히 출동하시기 바랍니다.`;
+    } else if (isTraining) {
+      ttsText = `훈련 ${disaster}발생!, 훈련 ${disaster}발생! ${location}에서 훈련 ${disaster}발생 신속히 출동하시기 바랍니다.`;
+    } else {
+      ttsText = `${disaster}발생!, ${disaster}발생! ${location}에서 ${disaster}발생 신속히 출동하시기 바랍니다.`;
+    }
+
+    const title = isEscalation
+      ? `${isTraining ? '🏋️' : '🔥'} ${disaster} 승격 발령`
+      : `${isTraining ? '🎓' : '🚨'} ${disaster} 비상 발령`;
+    const bodyText = ttsText;
+
+    // drill_emp_nos: 앱 직접 호출(body) 또는 DB 트리거(record 컬럼)
     const drillEmpNos: string | null = body.drill_emp_nos || record?.drill_emp_nos || null;
 
     const supabase = createClient(
@@ -140,7 +171,7 @@ Deno.serve(async (req) => {
     const { data: subs, error } = await subsQuery;
     if (error) throw new Error('DB error: ' + error.message);
     if (!subs || subs.length === 0) {
-      return new Response(JSON.stringify({ sent: 0 }), { status: 200 });
+      return new Response(JSON.stringify({ sent: 0 }), { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } });
     }
 
     const accessToken = await getGoogleAccessToken(sa);
@@ -156,14 +187,14 @@ Deno.serve(async (req) => {
     );
 
     return new Response(JSON.stringify({ sent: subs.length }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('notify-incident error:', message);
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 });

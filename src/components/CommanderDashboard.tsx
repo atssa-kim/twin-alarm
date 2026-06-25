@@ -74,12 +74,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
 
   const isFireDisaster = selectedDisasterKey === '화재';
 
-  // 나머지 대원 = responders에 없는 직원 (승격 시 추가 소집 후보)
-  const remainingEmps = useMemo(() => {
-    if (!activeIncident) return [];
-    const respondedNos = new Set(responders.map(r => r.emp_no));
-    return employees.filter(e => !respondedNos.has(e.emp_no));
-  }, [employees, responders, activeIncident]);
 
   // 직원 목록 팀별 그룹화 (파트장 → 파트에 통합, 주간→교대 순 정렬)
   const groupedEmployees = useMemo(() => {
@@ -156,12 +150,10 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
       if (selectedMode === '훈련' && selectedEmps.size > 0) {
         const selected = employees.filter(e => selectedEmps.has(e.emp_no));
         await db.setTrainingParticipants(incident.id, selected, []);
-        // escalateEmps 초기화 (나머지 = 전체에서 선택된 초기출동조 제외)
-        const selectedNos = new Set(selected.map(e => e.emp_no));
-        setEscalateEmps(new Set(employees.filter(e => !selectedNos.has(e.emp_no)).map(e => e.emp_no)));
+        // 승격 패널 선택을 직전 훈련 참여인원과 동일하게 이어받음
+        setEscalateEmps(new Set(selectedEmps));
       } else {
-        // 참여인원 미설정 시 모든 직원을 나머지 후보로
-        setEscalateEmps(new Set(employees.map(e => e.emp_no)));
+        setEscalateEmps(new Set());
       }
 
       // FCM 직접 호출 (pg_net 트리거 백업)
@@ -243,7 +235,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   // ── 상황 종료 ──────────────────────────────────────
   const handleClose = async () => {
     if (!activeIncident) return;
-    if (!window.confirm('정말 종료할까요?')) return;
+    if (!window.confirm('상황을 종료하고 리셋하시겠습니까?\n✔ 대원 출동 현황 초기화\n✔ 임무 체크리스트 전체 해제')) return;
     stopAllAlerts();
     setLoading(true);
     try {
@@ -702,7 +694,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                           나머지 대원 소집 대상 선택
                         </span>
                         <span style={{ fontSize: '12px', opacity: 0.8 }}>
-                          {escalateEmps.size}명 / {remainingEmps.length}명 {showEscalatePanel ? '▲' : '▼'}
+                          {escalateEmps.size}명 / {employees.length}명 {showEscalatePanel ? '▲' : '▼'}
                         </span>
                       </button>
 
@@ -711,7 +703,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                           {/* 빠른 선택 */}
                           <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                             <button type="button"
-                              onClick={() => setEscalateEmps(new Set(remainingEmps.map(e => e.emp_no)))}
+                              onClick={() => setEscalateEmps(new Set(employees.map(e => e.emp_no)))}
                               style={{ flex: 1, padding: '5px 0', borderRadius: '6px', cursor: 'pointer', border: '1px solid #a5b4fc44', background: '#a5b4fc14', color: '#a5b4fc', fontSize: '11px', fontWeight: 700 }}>
                               전체 선택
                             </button>
@@ -722,10 +714,9 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                             </button>
                           </div>
 
-                          {/* 팀별 직원 목록 */}
+                          {/* 팀별 직원 목록 — groupedEmployees 재사용 (직전 훈련참여 선택 연동) */}
                           <div style={{ maxHeight: '220px', overflowY: 'auto', padding: '4px 8px 4px' }}>
-                            {Array.from(new Set(remainingEmps.map(e => normalizeParticipantTeam(e.team, e.role)))).map(team => {
-                              const teamEmps = remainingEmps.filter(e => normalizeParticipantTeam(e.team, e.role) === team);
+                            {groupedEmployees.map(([team, teamEmps]) => {
                               const allSel = teamEmps.length > 0 && teamEmps.every(e => escalateEmps.has(e.emp_no));
                               const someSel = !allSel && teamEmps.some(e => escalateEmps.has(e.emp_no));
                               const toggleTeam = () => setEscalateEmps(prev => {
@@ -736,7 +727,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                               });
                               return (
                                 <div key={team} style={{ marginBottom: '2px' }}>
-                                  {/* 팀 행 */}
                                   <div onClick={toggleTeam} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer' }}>
                                     <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${allSel || someSel ? '#a5b4fc' : 'rgba(255,255,255,0.18)'}`, background: allSel ? '#a5b4fc' : someSel ? '#a5b4fc44' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                       {allSel && <span style={{ color: 'white', fontSize: '9px', fontWeight: 900 }}>✓</span>}
@@ -745,7 +735,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', flex: 1 }}>{team}</span>
                                     <span style={{ fontSize: '10px', color: '#475569' }}>{teamEmps.filter(e => escalateEmps.has(e.emp_no)).length}/{teamEmps.length}</span>
                                   </div>
-                                  {/* 개별 직원 */}
                                   {teamEmps.map(emp => {
                                     const checked = escalateEmps.has(emp.emp_no);
                                     return (
@@ -763,9 +752,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                                 </div>
                               );
                             })}
-                            {remainingEmps.length === 0 && (
-                              <div style={{ padding: '12px', textAlign: 'center', fontSize: '12px', color: '#475569' }}>나머지 대원이 없습니다.</div>
-                            )}
                           </div>
                           <div style={{ padding: '5px 12px 7px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>
                             <strong style={{ color: '#e2e8f0' }}>{escalateEmps.size}명</strong> 선택 (선택 대원에게만 알람 발송)

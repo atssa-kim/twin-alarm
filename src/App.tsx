@@ -96,6 +96,17 @@ const App: React.FC = () => {
     db.getEmployees().then(setEmployees).catch(console.error);
   }, []);
 
+  // 0-a. 알림 탭으로 앱 진입 시(?alert=1) 중복방지 Set 초기화 → TTS 강제 재생
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('alert')) {
+      alertedIncidentIds.current.clear();
+      alertedModeKeys.current.clear();
+      // URL 정리
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   // 1. Session persistence for login
   useEffect(() => {
     const savedUser = localStorage.getItem('tt_user_session');
@@ -146,6 +157,26 @@ const App: React.FC = () => {
       }
     });
     return unsub;
+  }, [currentUser, soundEnabled]);
+
+  // SW 백그라운드 메시지 → 탭이 열려 있을 때 즉시 TTS/사이렌
+  // (앱이 포커스 없이 백그라운드 상태여도 소리 발령)
+  useEffect(() => {
+    if (!currentUser || !('serviceWorker' in navigator)) return;
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type !== 'BACKGROUND_ALERT') return;
+      if (!soundEnabled) return;
+      // 중복 방지 Set 초기화 후 TTS 재생 (SW 발령은 항상 울려야 함)
+      alertedIncidentIds.current.clear();
+      alertedModeKeys.current.clear();
+      triggerEmergencyAlert(
+        event.data.disaster || '재난',
+        event.data.location || '',
+        event.data.mode || '실제'
+      );
+    };
+    navigator.serviceWorker.addEventListener('message', handler);
+    return () => navigator.serviceWorker.removeEventListener('message', handler);
   }, [currentUser, soundEnabled]);
 
   // 2. 신규 발령 경보 — 동일 incident ID는 한 번만 발령

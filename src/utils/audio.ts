@@ -123,75 +123,68 @@ export function announceTTS(text: string) {
       return;
     }
 
-    // 음성안내 시작 시 사이렌 중지
-    stopSiren();
     speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.volume = 1.0;
+    const u = new SpeechSynthesisUtterance(text);
+    u.volume = 1.0;
 
-    const applyVoiceAndSpeak = () => {
+    const applyVoice = () => {
       const voices = speechSynthesis.getVoices();
 
+      // 1순위: 사용자가 직접 선택한 음성
       const userSelectedName = (window as any).__tt_selected_voice || localStorage.getItem('tt_selected_voice') || '';
-      let selectedVoice = userSelectedName ? voices.find(v => v.name === userSelectedName) : null;
+      let voice = userSelectedName ? voices.find(v => v.name === userSelectedName) ?? null : null;
 
-      if (!selectedVoice) {
-        selectedVoice = voices.find(v => v.lang.startsWith('ko') && (v.name.includes('인준') || v.name.includes('Injun') || v.name.includes('injun')));
+      // 2순위: twintower-ops 기준 — Google KO → Heami → 첫 번째 한국어 → 전체 첫 번째
+      if (!voice) {
+        const ko = voices.filter(v => v.lang.startsWith('ko'));
+        voice = ko.find(v => v.name.includes('Google'))
+          ?? ko.find(v => v.name.includes('Heami'))
+          ?? ko[0]
+          ?? voices[0]
+          ?? null;
       }
 
-      if (!selectedVoice) {
-        selectedVoice = voices.find(v => v.lang.startsWith('ko') && (v.name.includes('Google') || v.name.includes('Heami'))) ||
-                        voices.find(v => v.lang.startsWith('ko')) ||
-                        voices[0];
-      }
+      if (voice) { u.voice = voice; u.lang = voice.lang; }
+      else { u.lang = 'ko-KR'; }
 
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-        utterance.lang = selectedVoice.lang;
-      } else {
-        utterance.lang = 'ko-KR';
-      }
-      utterance.pitch = 1.0;
-      utterance.rate = 0.95;
-      speechSynthesis.speak(utterance);
+      u.pitch = 1.0;
+      u.rate = 1.0;
+      speechSynthesis.speak(u);
     };
 
     if (speechSynthesis.getVoices().length) {
-      applyVoiceAndSpeak();
+      applyVoice();
     } else {
-      speechSynthesis.addEventListener('voiceschanged', applyVoiceAndSpeak, { once: true });
+      speechSynthesis.addEventListener('voiceschanged', applyVoice, { once: true });
     }
 
     if (navigator.vibrate) {
       navigator.vibrate([400, 200, 400, 200, 400]);
     }
   } catch (e) {
-    console.warn('TTS failed, falling back to siren:', e);
+    console.warn('TTS 실패, 사이렌으로 전환:', e);
     playSynthesizedSiren();
   }
 }
 
 // mode: '훈련/감지기' | '훈련/전체' | '실제/감지기' | '실제/화재' | '훈련' | '실제'
 export function triggerEmergencyAlert(disasterName: string, location: string, mode: string) {
-  let eventName: string;
+  let announcementText: string;
 
   if (mode === '훈련/감지기') {
-    eventName = '훈련 감지기동작';
+    announcementText = `훈련상황! 훈련상황 ${location}에서 화재감지기 동작! 초기대응대는 신속히 출동하시기 바랍니다.`;
   } else if (mode === '훈련/전체') {
-    eventName = '훈련 화재';
+    announcementText = `훈련상황! 화재발생! 훈련상황! 화재발생! ${location}으로 신속히 출동하시기 바랍니다.`;
   } else if (mode === '실제/감지기') {
-    eventName = '감지기동작';
+    announcementText = `화재감지기동작!, 화재감지기동작! ${location}에서 화재감지기 동작! 초기대응대는 신속히 출동하시기 바랍니다.`;
   } else if (mode === '실제/화재') {
-    eventName = '화재';
+    announcementText = `화재발생!, 화재발생! ${location}에서 화재발생 신속히 출동하시기 바랍니다.`;
   } else if (mode.startsWith('훈련')) {
-    eventName = `훈련 ${disasterName}`;
+    announcementText = `훈련 ${disasterName}발생!, 훈련 ${disasterName}발생! ${location}에서 훈련 ${disasterName}발생 신속히 출동하시기 바랍니다.`;
   } else {
-    eventName = disasterName;
+    announcementText = `${disasterName}발생!, ${disasterName}발생! ${location}에서 ${disasterName}발생 신속히 출동하시기 바랍니다.`;
   }
-
-  const announcementText =
-    `${eventName}발생!, ${eventName}발생! ${location}에서 ${eventName}발생 신속히 출동하시기 바랍니다.`;
 
   announceTTS(announcementText);
 }
