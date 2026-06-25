@@ -39,6 +39,22 @@ function groupTasks(tasks: MemberTask[]): TaskGroup[] {
 
 const stripPrefix = (label: string) => label.replace(/^[◇◆┖└]\s*/, '');
 
+// disa_app 과 동일한 번호 계산 (task_idx 순서 기준)
+function computeTaskNumMap(tasks: MemberTask[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  let main = 0, sub = 0;
+  tasks.forEach(t => {
+    const l = t.label;
+    if (l.startsWith('┖') || l.startsWith('└')) {
+      if (main > 0) { sub++; map[t.id] = `${main}-${sub}`; }
+    } else {
+      main++; sub = 0;
+      map[t.id] = String(main).padStart(2, '0');
+    }
+  });
+  return map;
+}
+
 export const ResponderView: React.FC<ResponderViewProps> = ({
   activeIncident,
   responders,
@@ -92,6 +108,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   }, [tasks]);
 
   const taskGroups = useMemo(() => groupTasks(myTasks), [myTasks]);
+  const taskNumMap = useMemo(() => computeTaskNumMap(myTasks), [myTasks]);
 
   // 재난 발령/변경 시 전체 그룹 펼침
   useEffect(() => {
@@ -144,7 +161,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   const handleTaskToggle = async (task: MemberTask) => {
     if (task.done) {
       const checker = task.done_by ?? '다른 대원';
-      const ok = window.confirm(`${checker}이(가) 이미 완료했어요.\n해제할까요?`);
+      const ok = window.confirm(`${checker}님이 이미 완료했어요.\n해제할까요?`);
       if (!ok) return;
       setOptimisticDone(prev => ({ ...prev, [task.id]: false }));
       try {
@@ -350,6 +367,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   {taskGroups.map((group, gi) => {
                     if (group.type === 'standalone') {
                       const task = group.task;
+                      const num = taskNumMap[task.id] ?? String(gi + 1).padStart(2, '0');
                       return (
                         <div
                           key={task.id}
@@ -359,7 +377,10 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                           <div className="checkbox-visual">
                             <Check size={14} strokeWidth={3} />
                           </div>
-                          <div className="task-label">{task.label}</div>
+                          <div className="task-label">
+                            <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {num}</span>
+                            {stripPrefix(task.label)}
+                          </div>
                         </div>
                       );
                     }
@@ -368,6 +389,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                     const isOpen = openGroups.has(group.header.id);
                     const doneCount = group.children.filter(c => c.done).length;
                     const total = group.children.length;
+                    const headerNum = taskNumMap[group.header.id] ?? String(gi + 1).padStart(2, '0');
 
                     return (
                       <div key={group.header.id}>
@@ -395,6 +417,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                               fontSize: '13px', fontWeight: 700, color: '#93c5fd',
                               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                             }}>
+                              <span style={{ color: '#60a5fa', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {headerNum}</span>
                               {stripPrefix(group.header.label)}
                             </span>
                           </div>
@@ -415,24 +438,30 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                             overflow: 'hidden',
                             marginBottom: gi < taskGroups.length - 1 ? '2px' : '0',
                           }}>
-                            {group.children.map((child, ci) => (
-                              <div
-                                key={child.id}
-                                className={`task-item ${child.done ? 'done' : ''}`}
-                                onClick={() => handleTaskToggle(child)}
-                                style={{
-                                  borderRadius: 0,
-                                  borderBottom: ci < group.children.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
-                                  paddingLeft: '20px',
-                                  marginBottom: 0,
-                                }}
-                              >
-                                <div className="checkbox-visual">
-                                  <Check size={14} strokeWidth={3} />
+                            {group.children.map((child, ci) => {
+                              const childNum = taskNumMap[child.id] ?? `${gi + 1}-${ci + 1}`;
+                              return (
+                                <div
+                                  key={child.id}
+                                  className={`task-item ${child.done ? 'done' : ''}`}
+                                  onClick={() => handleTaskToggle(child)}
+                                  style={{
+                                    borderRadius: 0,
+                                    borderBottom: ci < group.children.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                                    paddingLeft: '20px',
+                                    marginBottom: 0,
+                                  }}
+                                >
+                                  <div className="checkbox-visual">
+                                    <Check size={14} strokeWidth={3} />
+                                  </div>
+                                  <div className="task-label">
+                                    <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {childNum}</span>
+                                    {stripPrefix(child.label)}
+                                  </div>
                                 </div>
-                                <div className="task-label">{stripPrefix(child.label)}</div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>

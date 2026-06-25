@@ -174,21 +174,24 @@ export function announceTTS(text: string) {
 
 // mode: '훈련/감지기' | '훈련/전체' | '실제/감지기' | '실제/화재' | '훈련' | '실제'
 export function triggerEmergencyAlert(disasterName: string, location: string, mode: string) {
-  let announcementText: string;
+  let eventName: string;
 
   if (mode === '훈련/감지기') {
-    announcementText = `훈련상황! 훈련상황! ${location}에서 감지기동작!`;
+    eventName = '훈련 감지기동작';
   } else if (mode === '훈련/전체') {
-    announcementText = `훈련화재상황! 훈련화재상황! ${location}에서 화재상황!`;
+    eventName = '훈련 화재';
   } else if (mode === '실제/감지기') {
-    announcementText = `비상상황! 비상상황! ${location}에서 감지기동작!`;
+    eventName = '감지기동작';
   } else if (mode === '실제/화재') {
-    announcementText = `화재상황! 화재상황! ${location}에서 화재발생! 전 소집 대원은 신속히 출동해 주시기 바랍니다.`;
+    eventName = '화재';
   } else if (mode.startsWith('훈련')) {
-    announcementText = `훈련상황! 훈련상황! ${location}에서 ${disasterName} 발생!`;
+    eventName = `훈련 ${disasterName}`;
   } else {
-    announcementText = `실제 비상상황! 실제 비상상황! ${location}에서 ${disasterName} 발생! 전 소집 대원은 신속히 출동해 주시기 바랍니다.`;
+    eventName = disasterName;
   }
+
+  const announcementText =
+    `${eventName}발생!, ${eventName}발생! ${location}에서 ${eventName}발생 신속히 출동하시기 바랍니다.`;
 
   announceTTS(announcementText);
 }

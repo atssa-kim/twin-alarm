@@ -5,7 +5,6 @@ const FCM_URL = `https://fcm.googleapis.com/v1/projects/${PROJECT_ID}/messages:s
 const APP_URL = 'https://atssa-kim.github.io/twin-alarm/';
 const APP_ICON = 'https://atssa-kim.github.io/twin-alarm/favicon.png';
 
-// PEM private key → ArrayBuffer
 function pemToArrayBuffer(pem: string): ArrayBuffer {
   const b64 = pem
     .replace(/-----BEGIN PRIVATE KEY-----/g, '')
@@ -17,7 +16,6 @@ function pemToArrayBuffer(pem: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-// base64url encode
 function b64url(input: string | Uint8Array): string {
   const binary = typeof input === 'string'
     ? input
@@ -25,7 +23,6 @@ function b64url(input: string | Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
-// Google OAuth2 access token via service account JWT
 async function getGoogleAccessToken(sa: { client_email: string; private_key: string }): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
@@ -60,7 +57,6 @@ async function getGoogleAccessToken(sa: { client_email: string; private_key: str
   return json.access_token;
 }
 
-// FCM v1 단일 토큰 발송
 async function sendFcmPush(
   accessToken: string,
   token: string,
@@ -110,7 +106,6 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { type, record, old_record } = body;
 
-    // INSERT = 신규 발령 / UPDATE = 승격(mode 변경시만)
     if (type !== 'INSERT' && type !== 'UPDATE') {
       return new Response('ignored', { status: 200 });
     }
@@ -130,13 +125,19 @@ Deno.serve(async (req) => {
       ? `[${record.mode}] ${record.location} — 나머지 대원 소집`
       : `[${record.mode}] 위치: ${record.location} — 임무를 확인하세요.`;
 
+    // drill_emp_nos: body 직접 전달(앱 호출) 또는 DB record 컬럼(트리거 호출)
+    const drillEmpNos: string | null = body.drill_emp_nos || record?.drill_emp_nos || null;
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
-    const { data: subs, error } = await supabase
-      .from('push_subscriptions')
-      .select('fcm_token');
+    let subsQuery = supabase.from('push_subscriptions').select('fcm_token');
+    if (drillEmpNos) {
+      const empNoList = String(drillEmpNos).split(',').map((s: string) => s.trim()).filter(Boolean);
+      if (empNoList.length > 0) subsQuery = (subsQuery as any).in('emp_no', empNoList);
+    }
+    const { data: subs, error } = await subsQuery;
     if (error) throw new Error('DB error: ' + error.message);
     if (!subs || subs.length === 0) {
       return new Response(JSON.stringify({ sent: 0 }), { status: 200 });

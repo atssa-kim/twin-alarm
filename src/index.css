@@ -75,6 +75,7 @@ img, svg, video, canvas, audio, iframe, embed, object {
   width: 100%;
   max-width: 480px;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg-app);
   display: flex;
   flex-direction: column;
@@ -84,6 +85,7 @@ img, svg, video, canvas, audio, iframe, embed, object {
   border-right: 1px solid rgba(255, 255, 255, 0.05);
   overflow-x: hidden;
   overflow-y: auto;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 @media (min-width: 481px) {
@@ -101,7 +103,8 @@ img, svg, video, canvas, audio, iframe, embed, object {
   background: rgba(15, 23, 42, 0.8);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  padding: 18px 20px;
+  padding: 14px 20px 14px;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
   display: flex;
   align-items: center;
   justify-content: space-between;

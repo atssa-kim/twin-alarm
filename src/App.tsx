@@ -19,9 +19,9 @@ const App: React.FC = () => {
   const [selectedVoiceName, setSelectedVoiceName] = useState<string>(() => {
     return localStorage.getItem('tt_selected_voice') || '';
   });
-  const lastAlertIdRef = useRef<string | null>(null);
-  const lastModeRef = useRef<string | null>(null);
-  const lastModeIncidentIdRef = useRef<string | null>(null);
+  // 경보 중복 방지 — Set 기반 (탭 전환 후 복귀해도 재발령 없음)
+  const alertedIncidentIds = useRef<Set<string>>(new Set());
+  const alertedModeKeys = useRef<Set<string>>(new Set());
 
   // Load available voices
   useEffect(() => {
@@ -148,36 +148,28 @@ const App: React.FC = () => {
     return unsub;
   }, [currentUser, soundEnabled]);
 
-  // 2. Play emergency sound alert when a new active incident is triggered
-  useEffect(() => {
-    if (activeIncident && activeIncident.id !== lastAlertIdRef.current) {
-      lastAlertIdRef.current = activeIncident.id;
-      lastModeRef.current = activeIncident.mode;
-      lastModeIncidentIdRef.current = activeIncident.id;
-      if (soundEnabled) {
-        triggerEmergencyAlert(
-          activeIncident.disaster,
-          activeIncident.location,
-          activeIncident.mode
-        );
-      }
-    } else if (!activeIncident) {
-      lastAlertIdRef.current = null;
-      lastModeRef.current = null;
-      lastModeIncidentIdRef.current = null;
-    }
-  }, [activeIncident, soundEnabled]);
-
-  // 3. Detect escalation (mode change within same incident) and re-announce TTS
+  // 2. 신규 발령 경보 — 동일 incident ID는 한 번만 발령
   useEffect(() => {
     if (!activeIncident) return;
-    const prevMode = lastModeRef.current;
-    const prevId = lastModeIncidentIdRef.current;
-    lastModeRef.current = activeIncident.mode;
-    lastModeIncidentIdRef.current = activeIncident.id;
+    if (alertedIncidentIds.current.has(activeIncident.id)) return;
 
-    // Same incident, mode changed → escalation
-    if (prevId === activeIncident.id && prevMode !== null && prevMode !== activeIncident.mode && soundEnabled) {
+    alertedIncidentIds.current.add(activeIncident.id);
+    // 초기 mode도 Set에 등록해 effect 3의 중복 방지
+    alertedModeKeys.current.add(`${activeIncident.id}__${activeIncident.mode}`);
+
+    if (soundEnabled) {
+      triggerEmergencyAlert(activeIncident.disaster, activeIncident.location, activeIncident.mode);
+    }
+  }, [activeIncident?.id]);
+
+  // 3. 승격 경보 — mode가 바뀔 때만 (동일 mode 재진입은 무시)
+  useEffect(() => {
+    if (!activeIncident) return;
+    const key = `${activeIncident.id}__${activeIncident.mode}`;
+    if (alertedModeKeys.current.has(key)) return;
+
+    alertedModeKeys.current.add(key);
+    if (soundEnabled) {
       triggerEmergencyAlert(activeIncident.disaster, activeIncident.location, activeIncident.mode);
     }
   }, [activeIncident?.mode]);
@@ -301,7 +293,7 @@ const App: React.FC = () => {
         padding: '0 8px',
         margin: '8px 12px 0',
         position: 'sticky',
-        top: '57px',
+        top: 'calc(env(safe-area-inset-top, 0px) + 52px)',
         zIndex: 90,
       }}>
         <button

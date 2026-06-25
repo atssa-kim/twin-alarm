@@ -68,7 +68,18 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const [expandedCell, setExpandedCell] = useState<{ team: string; type: 'day' | 'A' | 'B' | 'C' | 'D' } | null>(null);
   const [shiftExpanded, setShiftExpanded] = useState(false);
 
+  // 전체훈련 승격 시 나머지 대원 선택
+  const [escalateEmps, setEscalateEmps] = useState<Set<string>>(new Set());
+  const [showEscalatePanel, setShowEscalatePanel] = useState(false);
+
   const isFireDisaster = selectedDisasterKey === '화재';
+
+  // 나머지 대원 = responders에 없는 직원 (승격 시 추가 소집 후보)
+  const remainingEmps = useMemo(() => {
+    if (!activeIncident) return [];
+    const respondedNos = new Set(responders.map(r => r.emp_no));
+    return employees.filter(e => !respondedNos.has(e.emp_no));
+  }, [employees, responders, activeIncident]);
 
   // 직원 목록 팀별 그룹화 (파트장 → 파트에 통합, 주간→교대 순 정렬)
   const groupedEmployees = useMemo(() => {
@@ -145,7 +156,16 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
       if (selectedMode === '훈련' && selectedEmps.size > 0) {
         const selected = employees.filter(e => selectedEmps.has(e.emp_no));
         await db.setTrainingParticipants(incident.id, selected, []);
+        // escalateEmps 초기화 (나머지 = 전체에서 선택된 초기출동조 제외)
+        const selectedNos = new Set(selected.map(e => e.emp_no));
+        setEscalateEmps(new Set(employees.filter(e => !selectedNos.has(e.emp_no)).map(e => e.emp_no)));
+      } else {
+        // 참여인원 미설정 시 모든 직원을 나머지 후보로
+        setEscalateEmps(new Set(employees.map(e => e.emp_no)));
       }
+
+      // FCM 직접 호출 (pg_net 트리거 백업)
+      await db.sendIncidentPush(incident, 'INSERT');
     } catch (err: any) {
       alert('상황 발령 중 오류가 발생했습니다: ' + err.message);
     } finally {
@@ -160,12 +180,27 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
     const newMode = isTraining ? '훈련/전체' : '실제/화재';
     const newScope = isTraining ? 'drill' : 'all';
     const label = isTraining ? '전체훈련' : '화재상황';
-    if (!window.confirm(`[${label}]으로 승격하시겠습니까?\n나머지 대원이 추가 소집됩니다.`)) return;
+
+    // 훈련이고 선택 대원이 있으면 drill_emp_nos 설정
+    const drillEmpNos = isTraining && escalateEmps.size > 0
+      ? [...escalateEmps].join(',')
+      : null;
+
+    const participantDesc = isTraining
+      ? (escalateEmps.size > 0 ? `선택 대원 ${escalateEmps.size}명` : '나머지 전원')
+      : '나머지 대원 전원';
+
+    if (!window.confirm(`[${label}]으로 승격하시겠습니까?\n소집: ${participantDesc}`)) return;
 
     setLoading(true);
     try {
-      // mode + scope 업데이트 (Realtime으로 다른 기기에 TTS 재발령)
-      await db.escalateIncident(activeIncident.id, newMode, newScope);
+      await db.escalateIncident(activeIncident.id, newMode, newScope, drillEmpNos);
+
+      // 선택 대원을 responders에 추가 (훈련 + 선택 대원 있을 때)
+      if (isTraining && escalateEmps.size > 0) {
+        const selectedEmployees = employees.filter(e => escalateEmps.has(e.emp_no));
+        await db.setTrainingParticipants(activeIncident.id, selectedEmployees, responders);
+      }
 
       // 아직 생성되지 않은 역할의 임무만 추가
       const allRoles = await db.getDisasterRolesWithTasks(activeIncident.disaster);
@@ -190,6 +225,14 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
       });
 
       if (bulkTasks.length > 0) await db.initializeMemberTasks(bulkTasks);
+
+      // FCM 직접 호출 (pg_net 트리거 백업 + drill_emp_nos 필터)
+      await db.sendIncidentPush(
+        { ...activeIncident, mode: newMode, scope: newScope, drill_emp_nos: drillEmpNos },
+        'UPDATE',
+        activeIncident,
+        drillEmpNos
+      );
     } catch (err: any) {
       alert('승격 중 오류가 발생했습니다: ' + err.message);
     } finally {
@@ -639,20 +682,114 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
           {/* 지휘관 전용 액션 버튼 */}
           {isCommander && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {/* 화재 감지기동작 → 전체 승격 버튼 */}
+              {/* 화재 감지기동작 → 전체 승격 + 나머지 대원 선택 */}
               {activeIsFire && activeIsInitial && (
-                <button onClick={handleFireEscalate} className="btn" disabled={loading}
-                  style={{
-                    background: !activeIsTraining
-                      ? 'linear-gradient(135deg, rgba(239,68,68,0.2), rgba(220,38,38,0.35))'
-                      : 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(79,70,229,0.35))',
-                    border: `1px solid ${!activeIsTraining ? 'rgba(239,68,68,0.5)' : 'rgba(99,102,241,0.5)'}`,
-                    color: !activeIsTraining ? '#fca5a5' : '#a5b4fc',
-                  }}
-                >
-                  <Users size={18} />
-                  {!activeIsTraining ? '🔥 화재상황으로 승격 (나머지 대원 소집)' : '🏋️ 전체훈련으로 승격 (나머지 대원 소집)'}
-                </button>
+                <>
+                  {/* 훈련 시: 나머지 대원 선택 패널 */}
+                  {activeIsTraining && (
+                    <div>
+                      <button type="button"
+                        onClick={() => setShowEscalatePanel(v => !v)}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '10px 14px', borderRadius: '10px', cursor: 'pointer',
+                          border: '1px solid rgba(165,180,252,0.4)',
+                          background: showEscalatePanel ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.08)',
+                          color: '#a5b4fc', fontSize: '13px', fontWeight: 700,
+                        }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <UserCheck size={16} />
+                          나머지 대원 소집 대상 선택
+                        </span>
+                        <span style={{ fontSize: '12px', opacity: 0.8 }}>
+                          {escalateEmps.size}명 / {remainingEmps.length}명 {showEscalatePanel ? '▲' : '▼'}
+                        </span>
+                      </button>
+
+                      {showEscalatePanel && (
+                        <div style={{ marginTop: '6px', border: '1px solid rgba(165,180,252,0.2)', borderRadius: '10px', overflow: 'hidden', background: 'rgba(15,23,42,0.7)' }}>
+                          {/* 빠른 선택 */}
+                          <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <button type="button"
+                              onClick={() => setEscalateEmps(new Set(remainingEmps.map(e => e.emp_no)))}
+                              style={{ flex: 1, padding: '5px 0', borderRadius: '6px', cursor: 'pointer', border: '1px solid #a5b4fc44', background: '#a5b4fc14', color: '#a5b4fc', fontSize: '11px', fontWeight: 700 }}>
+                              전체 선택
+                            </button>
+                            <button type="button"
+                              onClick={() => setEscalateEmps(new Set())}
+                              style={{ flex: 1, padding: '5px 0', borderRadius: '6px', cursor: 'pointer', border: '1px solid #94a3b844', background: '#94a3b814', color: '#94a3b8', fontSize: '11px', fontWeight: 700 }}>
+                              전체 해제
+                            </button>
+                          </div>
+
+                          {/* 팀별 직원 목록 */}
+                          <div style={{ maxHeight: '220px', overflowY: 'auto', padding: '4px 8px 4px' }}>
+                            {Array.from(new Set(remainingEmps.map(e => normalizeParticipantTeam(e.team, e.role)))).map(team => {
+                              const teamEmps = remainingEmps.filter(e => normalizeParticipantTeam(e.team, e.role) === team);
+                              const allSel = teamEmps.length > 0 && teamEmps.every(e => escalateEmps.has(e.emp_no));
+                              const someSel = !allSel && teamEmps.some(e => escalateEmps.has(e.emp_no));
+                              const toggleTeam = () => setEscalateEmps(prev => {
+                                const next = new Set(prev);
+                                if (allSel) teamEmps.forEach(e => next.delete(e.emp_no));
+                                else teamEmps.forEach(e => next.add(e.emp_no));
+                                return next;
+                              });
+                              return (
+                                <div key={team} style={{ marginBottom: '2px' }}>
+                                  {/* 팀 행 */}
+                                  <div onClick={toggleTeam} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer' }}>
+                                    <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${allSel || someSel ? '#a5b4fc' : 'rgba(255,255,255,0.18)'}`, background: allSel ? '#a5b4fc' : someSel ? '#a5b4fc44' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      {allSel && <span style={{ color: 'white', fontSize: '9px', fontWeight: 900 }}>✓</span>}
+                                      {someSel && <span style={{ color: '#a5b4fc', fontSize: '10px', fontWeight: 900 }}>−</span>}
+                                    </div>
+                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', flex: 1 }}>{team}</span>
+                                    <span style={{ fontSize: '10px', color: '#475569' }}>{teamEmps.filter(e => escalateEmps.has(e.emp_no)).length}/{teamEmps.length}</span>
+                                  </div>
+                                  {/* 개별 직원 */}
+                                  {teamEmps.map(emp => {
+                                    const checked = escalateEmps.has(emp.emp_no);
+                                    return (
+                                      <div key={emp.emp_no}
+                                        onClick={() => setEscalateEmps(prev => { const next = new Set(prev); next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no); return next; })}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '4px 4px 4px 24px', cursor: 'pointer' }}>
+                                        <div style={{ width: '13px', height: '13px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? '#a5b4fc' : 'rgba(255,255,255,0.18)'}`, background: checked ? '#a5b4fc33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                          {checked && <span style={{ color: '#a5b4fc', fontSize: '9px', fontWeight: 900 }}>✓</span>}
+                                        </div>
+                                        <span style={{ fontSize: '12px', flex: 1, color: checked ? '#e2e8f0' : '#64748b' }}>{emp.name}</span>
+                                        <span style={{ fontSize: '10px', color: '#475569' }}>{emp.role}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })}
+                            {remainingEmps.length === 0 && (
+                              <div style={{ padding: '12px', textAlign: 'center', fontSize: '12px', color: '#475569' }}>나머지 대원이 없습니다.</div>
+                            )}
+                          </div>
+                          <div style={{ padding: '5px 12px 7px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>
+                            <strong style={{ color: '#e2e8f0' }}>{escalateEmps.size}명</strong> 선택 (선택 대원에게만 알람 발송)
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <button onClick={handleFireEscalate} className="btn" disabled={loading}
+                    style={{
+                      background: !activeIsTraining
+                        ? 'linear-gradient(135deg, rgba(239,68,68,0.2), rgba(220,38,38,0.35))'
+                        : 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(79,70,229,0.35))',
+                      border: `1px solid ${!activeIsTraining ? 'rgba(239,68,68,0.5)' : 'rgba(99,102,241,0.5)'}`,
+                      color: !activeIsTraining ? '#fca5a5' : '#a5b4fc',
+                    }}
+                  >
+                    <Users size={18} />
+                    {!activeIsTraining
+                      ? '🔥 화재상황으로 승격 (나머지 대원 소집)'
+                      : `🏋️ 전체훈련으로 승격 (${escalateEmps.size > 0 ? escalateEmps.size + '명 소집)' : '나머지 전원 소집)'}`}
+                  </button>
+                </>
               )}
 
               <button onClick={handleClose} className="btn btn-danger" disabled={loading}>

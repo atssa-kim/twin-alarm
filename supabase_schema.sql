@@ -112,3 +112,35 @@ CREATE TABLE IF NOT EXISTS public.push_subscriptions (
 );
 
 ALTER TABLE public.push_subscriptions DISABLE ROW LEVEL SECURITY;
+
+-- 9. 훈련 선택 대원 필터링용 컬럼 (전체훈련 승격 시 특정 emp_no 에만 FCM)
+-- Supabase SQL Editor 에서 한 번 실행하세요.
+ALTER TABLE public.incidents ADD COLUMN IF NOT EXISTS drill_emp_nos TEXT DEFAULT NULL;
+
+-- 10. FCM 알람 트리거 (pg_net 확장 필요 — Dashboard → Database → Extensions → pg_net 활성화)
+--     [PROJECT_REF] 와 [ANON_KEY] 를 실제 값으로 교체 후 실행
+-- CREATE OR REPLACE FUNCTION notify_incident_fcm()
+-- RETURNS TRIGGER LANGUAGE plpgsql AS $$
+-- BEGIN
+--   BEGIN
+--     PERFORM pg_net.http_post(
+--       url     := 'https://[PROJECT_REF].supabase.co/functions/v1/notify-incident',
+--       headers := jsonb_build_object(
+--         'Content-Type', 'application/json',
+--         'Authorization', 'Bearer [ANON_KEY]'
+--       ),
+--       body    := (jsonb_build_object(
+--         'type',       TG_OP,
+--         'record',     row_to_json(NEW)::jsonb,
+--         'old_record', row_to_json(OLD)::jsonb
+--       ))::text
+--     );
+--   EXCEPTION WHEN OTHERS THEN NULL;
+--   END;
+--   RETURN NEW;
+-- END;
+-- $$;
+-- DROP TRIGGER IF EXISTS on_incident_fcm ON public.incidents;
+-- CREATE TRIGGER on_incident_fcm
+--   AFTER INSERT OR UPDATE ON public.incidents
+--   FOR EACH ROW EXECUTE FUNCTION notify_incident_fcm();

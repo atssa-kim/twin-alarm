@@ -16,6 +16,7 @@ export interface Incident {
   declared_by: string;
   mode: string; // '훈련' | '감지기' | '실제'
   scope: string; // 'drill' | 'confirm' | 'all'
+  drill_emp_nos?: string | null; // 훈련 승격 시 선택 대원 emp_no (콤마 구분)
 }
 
 export interface Responder {
@@ -99,10 +100,12 @@ export const db = {
   },
 
   // 2. Escalate incident mode
-  async escalateIncident(incidentId: string, toMode: string, toScope: string) {
+  async escalateIncident(incidentId: string, toMode: string, toScope: string, drillEmpNos?: string | null) {
+    const update: Record<string, any> = { mode: toMode, scope: toScope };
+    if (drillEmpNos !== undefined) update.drill_emp_nos = drillEmpNos;
     const { error } = await supabase
       .from('incidents')
-      .update({ mode: toMode, scope: toScope })
+      .update(update)
       .eq('id', incidentId);
 
     if (error) throw error;
@@ -236,6 +239,23 @@ export const db = {
         .delete()
         .eq('incident_id', incidentId)
         .eq('emp_no', r.emp_no);
+    }
+  },
+
+  // 12. FCM 푸시 직접 호출 (pg_net 트리거 백업 — 앱에서 직접 Edge Function 호출)
+  async sendIncidentPush(
+    record: Incident,
+    type: 'INSERT' | 'UPDATE',
+    oldRecord: Incident | null = null,
+    drillEmpNos: string | null = null
+  ): Promise<void> {
+    try {
+      const body: any = { type, record, old_record: oldRecord };
+      if (drillEmpNos !== null) body.drill_emp_nos = drillEmpNos;
+      const { error } = await supabase.functions.invoke('notify-incident', { body });
+      if (error) console.warn('[FCM Push] Edge Function 호출 오류:', error);
+    } catch (e) {
+      console.warn('[FCM Push] 호출 실패:', e);
     }
   },
 
