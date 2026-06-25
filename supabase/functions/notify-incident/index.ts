@@ -1,95 +1,168 @@
-// Supabase Edge Function: notify-incident
-// Supabase Database Webhook → incidents INSERT/UPDATE → FCM 전송
-//
-// 환경변수 (Supabase Dashboard > Edge Functions > Secrets):
-//   FCM_SERVER_KEY  : Firebase 콘솔 > 프로젝트 설정 > Cloud Messaging > 서버 키
-//   SUPABASE_URL    : 자동 주입
-//   SUPABASE_SERVICE_ROLE_KEY : 자동 주입
-
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const FCM_SERVER_KEY = Deno.env.get('FCM_SERVER_KEY') ?? '';
-const SUPABASE_URL   = Deno.env.get('SUPABASE_URL') ?? '';
-const SUPABASE_SKEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-const APP_URL        = 'https://atssa-kim.github.io/twin-alarm/';
+const PROJECT_ID = 'disaster-response-system-f669b';
+const FCM_URL = `https://fcm.googleapis.com/v1/projects/${PROJECT_ID}/messages:send`;
+const APP_URL = 'https://atssa-kim.github.io/twin-alarm/';
+const APP_ICON = 'https://atssa-kim.github.io/twin-alarm/favicon.png';
 
-serve(async (req) => {
+// PEM private key → ArrayBuffer
+function pemToArrayBuffer(pem: string): ArrayBuffer {
+  const b64 = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+    .replace(/-----END PRIVATE KEY-----/g, '')
+    .replace(/\s+/g, '');
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+// base64url encode
+function b64url(input: string | Uint8Array): string {
+  const binary = typeof input === 'string'
+    ? input
+    : Array.from(input, (b) => String.fromCharCode(b)).join('');
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+// Google OAuth2 access token via service account JWT
+async function getGoogleAccessToken(sa: { client_email: string; private_key: string }): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const payload = b64url(JSON.stringify({
+    iss: sa.client_email,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
+  }));
+
+  const signingInput = `${header}.${payload}`;
+  const key = await crypto.subtle.importKey(
+    'pkcs8',
+    pemToArrayBuffer(sa.private_key),
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sigBytes = new Uint8Array(
+    await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(signingInput))
+  );
+  const jwt = `${signingInput}.${b64url(sigBytes)}`;
+
+  const resp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  });
+  const json = await resp.json();
+  if (!json.access_token) throw new Error('Google OAuth2 failed: ' + JSON.stringify(json));
+  return json.access_token;
+}
+
+// FCM v1 단일 토큰 발송
+async function sendFcmPush(
+  accessToken: string,
+  token: string,
+  title: string,
+  body: string,
+  data: Record<string, string>
+): Promise<void> {
+  const resp = await fetch(FCM_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      message: {
+        token,
+        notification: { title, body },
+        data,
+        webpush: {
+          notification: {
+            title,
+            body,
+            icon: APP_ICON,
+            badge: APP_ICON,
+            requireInteraction: true,
+            vibrate: [400, 150, 400, 150, 600],
+            tag: 'twin-alarm-incident',
+            renotify: true,
+          },
+          fcm_options: { link: APP_URL },
+        },
+      },
+    }),
+  });
+
+  if (!resp.ok) {
+    console.warn(`FCM send failed [${token.slice(0, 20)}...]: ${await resp.text()}`);
+  }
+}
+
+Deno.serve(async (req) => {
   try {
-    const body = await req.json();
-    const record = body.record ?? body.new ?? null;
+    const saJson = Deno.env.get('FIREBASE_SERVICE_ACCOUNT');
+    if (!saJson) throw new Error('FIREBASE_SERVICE_ACCOUNT secret not set');
+    const sa = JSON.parse(saJson);
 
-    if (!record || record.status !== 'active') {
-      return new Response('skip', { status: 200 });
+    const body = await req.json();
+    const { type, record, old_record } = body;
+
+    // INSERT = 신규 발령 / UPDATE = 승격(mode 변경시만)
+    if (type !== 'INSERT' && type !== 'UPDATE') {
+      return new Response('ignored', { status: 200 });
+    }
+    if (type === 'UPDATE' && record?.mode === old_record?.mode) {
+      return new Response('mode unchanged', { status: 200 });
+    }
+    if (record?.status !== 'active') {
+      return new Response('not active', { status: 200 });
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SKEY);
+    const isTraining = String(record.mode).startsWith('훈련');
+    const isEscalation = type === 'UPDATE';
+    const title = isEscalation
+      ? `${isTraining ? '🏋️' : '🔥'} ${record.disaster} 승격 발령`
+      : `${isTraining ? '🎓' : '🚨'} ${record.disaster} 비상 발령`;
+    const bodyText = isEscalation
+      ? `[${record.mode}] ${record.location} — 나머지 대원 소집`
+      : `[${record.mode}] 위치: ${record.location} — 임무를 확인하세요.`;
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
     const { data: subs, error } = await supabase
       .from('push_subscriptions')
       .select('fcm_token');
-
-    if (error) throw error;
-
-    const tokens: string[] = (subs ?? [])
-      .map((s: any) => s.fcm_token)
-      .filter(Boolean);
-
-    if (!tokens.length) {
-      console.log('FCM: 등록된 토큰 없음');
-      return new Response('no tokens', { status: 200 });
+    if (error) throw new Error('DB error: ' + error.message);
+    if (!subs || subs.length === 0) {
+      return new Response(JSON.stringify({ sent: 0 }), { status: 200 });
     }
 
-    const modeLabel =
-      record.mode === '실제'  ? '🔴 실제 발령' :
-      record.mode === '훈련'  ? '🔵 훈련 상황' : '⚠️ 발령';
+    const accessToken = await getGoogleAccessToken(sa);
 
-    const fcmBody = {
-      registration_ids: tokens,
-      priority: 'high',
-      notification: {
-        title: `${modeLabel} — ${record.disaster}`,
-        body:  `위치: ${record.location} | 앱을 열어 임무를 확인하세요.`,
-        icon:  '/twin-alarm/favicon.png',
-        sound: 'default',
-      },
-      data: {
-        incidentId: record.id,
-        disaster:   record.disaster,
-        location:   record.location,
-        mode:       record.mode,
-      },
-      webpush: {
-        notification: {
-          requireInteraction: true,
-          renotify: true,
-          tag: `twin-alarm-${record.id}`,
-          vibrate: [400, 150, 400, 150, 600],
-        },
-        fcm_options: { link: APP_URL },
-      },
-      apns: {
-        payload: { aps: { sound: 'default', badge: 1 } },
-      },
-    };
+    await Promise.allSettled(
+      subs.map((s: { fcm_token: string }) =>
+        sendFcmPush(accessToken, s.fcm_token, title, bodyText, {
+          disaster: record.disaster ?? '',
+          location: record.location ?? '',
+          mode: record.mode ?? '',
+        })
+      )
+    );
 
-    const res = await fetch('https://fcm.googleapis.com/fcm/send', {
-      method: 'POST',
-      headers: {
-        Authorization: `key=${FCM_SERVER_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(fcmBody),
-    });
-
-    const result = await res.json();
-    console.log(`FCM 전송: ${result.success}/${tokens.length} 성공`);
-
-    return new Response(JSON.stringify(result), {
-      status: 200,
+    return new Response(JSON.stringify({ sent: subs.length }), {
       headers: { 'Content-Type': 'application/json' },
     });
-  } catch (err) {
-    console.error('notify-incident 오류:', err);
-    return new Response(String(err), { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('notify-incident error:', message);
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 });

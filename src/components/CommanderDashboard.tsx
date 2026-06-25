@@ -2,7 +2,7 @@ import React, { useRef, useState, useMemo } from 'react';
 import { type Incident, type Responder, type MemberTask, type EmployeeDB, db } from '../services/supabase';
 import { DISASTERS } from '../data/disasters';
 import { stopAllAlerts } from '../utils/audio';
-import { Play, Square, ShieldAlert, Users, MapPin, Mic, UserCheck, TrendingUp } from 'lucide-react';
+import { Play, Square, ShieldAlert, Users, MapPin, Mic, UserCheck } from 'lucide-react';
 
 // 화재 초기출동조 배지 (감지기동작 시 1차 소집)
 const FIRE_INITIAL_BADGES = new Set(['총괄', '상황실', '통제', '출동']);
@@ -26,6 +26,7 @@ interface CommanderDashboardProps {
   tasks: MemberTask[];
   currentUser: { empNo: string; name: string };
   employees: EmployeeDB[];
+  isCommander: boolean;
   availableVoices: SpeechSynthesisVoice[];
   selectedVoiceName: string;
   getCleanVoiceName: (name: string) => string;
@@ -46,6 +47,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   tasks,
   currentUser,
   employees,
+  isCommander,
   availableVoices,
   selectedVoiceName,
   getCleanVoiceName,
@@ -224,10 +226,20 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const activeIsInitial = activeIncident?.scope === 'fire_initial';
   const activeIsFire = activeIncident?.disaster === '화재';
 
+  // 로그인 대원 자신의 출동 현황
+  const myResponder = responders.find(r => r.emp_no === currentUser.empNo);
+
   return (
     <div className="content">
       {!activeIncident ? (
-        // ── 발령 화면 ───────────────────────────────
+        // ── 발령 화면 (지휘관만) / 대기 화면 (일반 대원) ──
+        !isCommander ? (
+          <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+            <ShieldAlert size={36} color="#334155" style={{ marginBottom: '12px' }} />
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#475569' }}>현재 발령된 상황이 없습니다</div>
+            <div style={{ fontSize: '13px', marginTop: '6px' }}>발령이 시작되면 여기에 대원 현황이 표시됩니다.</div>
+          </div>
+        ) : (
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
             <ShieldAlert color="var(--color-fire)" size={24} style={{ flexShrink: 0 }} />
@@ -508,6 +520,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
             </button>
           </form>
         </div>
+        )
       ) : (
         // ── 발령 중 모니터링 ────────────────────────
         <>
@@ -536,6 +549,29 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
               </div>
             )}
           </div>
+
+          {/* 내 정보 */}
+          {myResponder && (
+            <div className="card" style={{ padding: '12px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <strong style={{ fontSize: '14px' }}>{myResponder.name}</strong>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '6px' }}>
+                    {myResponder.team} / {myResponder.role}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="status-dot" style={{
+                    backgroundColor: myResponder.status === '출동중' ? 'var(--color-power)'
+                      : myResponder.status === '현장' ? 'var(--color-water)'
+                      : myResponder.status === '복귀' ? 'var(--color-green)'
+                      : '#94a3b8'
+                  }}></span>
+                  <span style={{ fontSize: '13px', fontWeight: 700 }}>{myResponder.status}</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 임무 수행률 */}
           <div className="card">
@@ -600,30 +636,31 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
             </div>
           </div>
 
-          {/* 지휘관 액션 버튼 */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {/* 화재 감지기동작 → 전체 승격 버튼 */}
-            {activeIsFire && activeIsInitial && (
-              <button onClick={handleFireEscalate} className="btn" disabled={loading}
-                style={{
-                  background: !activeIsTraining
-                    ? 'linear-gradient(135deg, rgba(239,68,68,0.2), rgba(220,38,38,0.35))'
-                    : 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(79,70,229,0.35))',
-                  border: `1px solid ${!activeIsTraining ? 'rgba(239,68,68,0.5)' : 'rgba(99,102,241,0.5)'}`,
-                  color: !activeIsTraining ? '#fca5a5' : '#a5b4fc',
-                }}
-              >
-                <TrendingUp size={18} />
-                {!activeIsTraining ? '🔥 화재상황으로 승격 (나머지 대원 소집)' : '🏋️ 전체훈련으로 승격 (나머지 대원 소집)'}
+          {/* 지휘관 전용 액션 버튼 */}
+          {isCommander && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {/* 화재 감지기동작 → 전체 승격 버튼 */}
+              {activeIsFire && activeIsInitial && (
+                <button onClick={handleFireEscalate} className="btn" disabled={loading}
+                  style={{
+                    background: !activeIsTraining
+                      ? 'linear-gradient(135deg, rgba(239,68,68,0.2), rgba(220,38,38,0.35))'
+                      : 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(79,70,229,0.35))',
+                    border: `1px solid ${!activeIsTraining ? 'rgba(239,68,68,0.5)' : 'rgba(99,102,241,0.5)'}`,
+                    color: !activeIsTraining ? '#fca5a5' : '#a5b4fc',
+                  }}
+                >
+                  <Users size={18} />
+                  {!activeIsTraining ? '🔥 화재상황으로 승격 (나머지 대원 소집)' : '🏋️ 전체훈련으로 승격 (나머지 대원 소집)'}
+                </button>
+              )}
+
+              <button onClick={handleClose} className="btn btn-danger" disabled={loading}>
+                <Square size={16} fill="white" />
+                상황 종료 및 리셋
               </button>
-            )}
-
-
-            <button onClick={handleClose} className="btn btn-danger" disabled={loading}>
-              <Square size={16} fill="white" />
-              상황 종료 및 리셋
-            </button>
-          </div>
+            </div>
+          )}
         </>
       )}
 

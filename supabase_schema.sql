@@ -101,3 +101,14 @@ CREATE TABLE IF NOT EXISTS public.employee_disaster_badges (
 
 ALTER TABLE public.employees DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.employee_disaster_badges DISABLE ROW LEVEL SECURITY;
+
+-- 8. push_subscriptions (FCM 푸시 토큰 저장 — 로그아웃 후에도 알람 수신)
+CREATE TABLE IF NOT EXISTS public.push_subscriptions (
+    emp_no    TEXT NOT NULL,
+    fcm_token TEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    PRIMARY KEY (emp_no, fcm_token),
+    UNIQUE (fcm_token)
+);
+
+ALTER TABLE public.push_subscriptions DISABLE ROW LEVEL SECURITY;

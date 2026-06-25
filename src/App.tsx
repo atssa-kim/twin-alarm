@@ -304,20 +304,18 @@ const App: React.FC = () => {
         top: '57px',
         zIndex: 90,
       }}>
-        {currentUser.isCommander && (
-          <button
-            onClick={() => setCurrentView('cmd')}
-            style={{
-              flex: 1, background: 'transparent', border: 'none',
-              color: currentView === 'cmd' ? '#3b82f6' : 'var(--text-muted)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center',
-              gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
-            }}
-          >
-            <LayoutDashboard size={17} />
-            <span>지휘본부</span>
-          </button>
-        )}
+        <button
+          onClick={() => setCurrentView('cmd')}
+          style={{
+            flex: 1, background: 'transparent', border: 'none',
+            color: currentView === 'cmd' ? '#3b82f6' : 'var(--text-muted)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+          }}
+        >
+          <LayoutDashboard size={17} />
+          <span>지휘본부</span>
+        </button>
         <button
           onClick={() => {
             if (!activeIncident) {
@@ -352,13 +350,14 @@ const App: React.FC = () => {
 
       {/* Main Content Area */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-        {currentView === 'cmd' && currentUser.isCommander && (
+        {currentView === 'cmd' && (
           <CommanderDashboard
             activeIncident={activeIncident}
             responders={responders}
             tasks={tasks}
             currentUser={currentUser}
             employees={employees}
+            isCommander={currentUser.isCommander}
             availableVoices={availableVoices}
             selectedVoiceName={selectedVoiceName}
             getCleanVoiceName={getCleanVoiceName}
