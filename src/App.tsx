@@ -28,6 +28,13 @@ const App: React.FC = () => {
   // SW postMessage 중복 방지 — disaster|location|mode 조합으로 중복 차단 (dedup Set 클리어 안 함)
   const swAlertedKeys = useRef<Set<string>>(new Set());
 
+  // PWA 설치 / 알림 배너
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [showNotifBanner, setShowNotifBanner] = useState(false);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  const isPWAInstalled = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+
   // Load available voices
   useEffect(() => {
     const loadVoices = () => {
@@ -95,6 +102,32 @@ const App: React.FC = () => {
       speechSynthesis.speak(u);
     }
   }, []);
+
+  // PWA 설치 프롬프트 캡처 (Android Chrome)
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredInstallPrompt(e);
+      if (!isPWAInstalled && !localStorage.getItem('tt_install_dismissed')) {
+        setShowInstallBanner(true);
+      }
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, [isPWAInstalled]);
+
+  // iOS: 로그인 후 설치 배너 표시
+  useEffect(() => {
+    if (currentUser && isIOS && !isPWAInstalled && !localStorage.getItem('tt_install_dismissed')) {
+      setShowInstallBanner(true);
+    }
+  }, [currentUser, isIOS, isPWAInstalled]);
+
+  // 알림 허용 배너: 로그인 후 미허용이면 표시 (세션 단위 — 로그인마다 다시 표시)
+  useEffect(() => {
+    if (!currentUser) { setShowNotifBanner(false); return; }
+    setShowNotifBanner(notifPerm !== 'granted');
+  }, [currentUser, notifPerm]);
 
   // 0. Fetch employee roster from DB
   useEffect(() => {
@@ -196,6 +229,20 @@ const App: React.FC = () => {
     }
   };
 
+  const handleInstall = async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setShowInstallBanner(false);
+      setDeferredInstallPrompt(null);
+    }
+  };
+
+  const vibrateAlert = () => {
+    if ('vibrate' in navigator) navigator.vibrate([400, 150, 400, 150, 600]);
+  };
+
   // FCM 포그라운드 메시지 수신 (앱이 열려있을 때 FCM 도착)
   useEffect(() => {
     if (!currentUser) return;
@@ -208,6 +255,7 @@ const App: React.FC = () => {
           data.location || '',
           data.mode || '실제'
         );
+        vibrateAlert();
       }
     });
     return unsub;
@@ -230,6 +278,7 @@ const App: React.FC = () => {
         alertedModeKeys.current.add(`${activeIncident.id}__${activeIncident.mode}`);
       }
       triggerEmergencyAlert(disaster || '재난', location || '', mode || '실제');
+      vibrateAlert();
     };
     navigator.serviceWorker.addEventListener('message', handler);
     return () => navigator.serviceWorker.removeEventListener('message', handler);
@@ -246,6 +295,7 @@ const App: React.FC = () => {
 
     if (soundEnabled) {
       triggerEmergencyAlert(activeIncident.disaster, activeIncident.location, activeIncident.mode);
+      vibrateAlert();
     }
   }, [activeIncident?.id]);
 
@@ -258,6 +308,7 @@ const App: React.FC = () => {
     alertedModeKeys.current.add(key);
     if (soundEnabled) {
       triggerEmergencyAlert(activeIncident.disaster, activeIncident.location, activeIncident.mode);
+      vibrateAlert();
     }
   }, [activeIncident?.mode]);
 
@@ -447,6 +498,71 @@ const App: React.FC = () => {
           <span>업무수행율</span>
         </button>
       </nav>
+
+      {/* ── PWA 설치 / 알림 허용 배너 ── */}
+      {(showInstallBanner || showNotifBanner) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '6px 12px 0' }}>
+          {/* PWA 설치 배너 */}
+          {showInstallBanner && !isPWAInstalled && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              padding: '10px 12px', borderRadius: '10px',
+              background: 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(217,119,6,0.06))',
+              border: '1px solid rgba(245,158,11,0.3)',
+            }}>
+              <span style={{ fontSize: '20px', flexShrink: 0 }}>📱</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#fbbf24' }}>홈 화면에 앱 추가</div>
+                <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
+                  {isIOS
+                    ? '하단 공유버튼 □↑ → 홈 화면에 추가 → 추가'
+                    : '설치하면 화면 꺼진 상태에서도 알람이 울립니다'}
+                </div>
+              </div>
+              {!isIOS && deferredInstallPrompt && (
+                <button type="button" onClick={handleInstall} style={{
+                  padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', flexShrink: 0,
+                  fontSize: '11px', fontWeight: 700,
+                  background: 'rgba(245,158,11,0.2)', border: '1px solid rgba(245,158,11,0.5)',
+                  color: '#fbbf24',
+                }}>설치</button>
+              )}
+              <button type="button" onClick={() => { setShowInstallBanner(false); localStorage.setItem('tt_install_dismissed', '1'); }} style={{
+                background: 'transparent', border: 'none', color: '#475569',
+                cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: '2px', flexShrink: 0,
+              }}>✕</button>
+            </div>
+          )}
+
+          {/* 알림 허용 배너 */}
+          {showNotifBanner && notifPerm !== 'granted' && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              padding: '10px 12px', borderRadius: '10px',
+              background: 'linear-gradient(135deg, rgba(239,68,68,0.1), rgba(220,38,38,0.06))',
+              border: '1px solid rgba(239,68,68,0.3)',
+            }}>
+              <BellOff size={18} color="#ef4444" style={{ flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#ef4444' }}>알림 허용 필요</div>
+                <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
+                  허용해야 화면 꺼진 상태에서 발령 알람 수신
+                </div>
+              </div>
+              <button type="button" onClick={handleEnableNotif} style={{
+                padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', flexShrink: 0,
+                fontSize: '11px', fontWeight: 700,
+                background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)',
+                color: '#ef4444',
+              }}>허용</button>
+              <button type="button" onClick={() => setShowNotifBanner(false)} style={{
+                background: 'transparent', border: 'none', color: '#475569',
+                cursor: 'pointer', fontSize: '11px', padding: '2px 4px', flexShrink: 0,
+              }}>나중에</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Main Content Area */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
