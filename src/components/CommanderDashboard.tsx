@@ -469,7 +469,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                             background: allSel ? color + '22' : partSel ? color + '0d' : 'transparent',
                             color: allSel ? color : partSel ? color + 'bb' : '#64748b',
                           }}>
-                            {label}{selCount > 0 && <span style={{ fontSize: '10px', marginLeft: '3px', opacity: 0.8 }}>{selCount}</span>}
+                            {label}
                           </button>
                         );
                       })}
@@ -481,7 +481,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                       if (grpEmps.length === 0) return null;
                       const selCount = grpEmps.filter(e => selectedEmps.has(e.emp_no)).length;
                       const allSel = selCount === grpEmps.length;
-                      const partSel = selCount > 0 && !allSel;
                       const isOpen = openAccordions.has(grpKey);
 
                       const tmap: Record<string, EmployeeDB[]> = {};
@@ -517,15 +516,12 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                       };
 
                       return (
-                        <div key={grpKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px' }}>
-                            <div onClick={toggleGrpSel} style={{ width: '15px', height: '15px', borderRadius: '4px', flexShrink: 0, border: `2px solid ${allSel || partSel ? color : 'rgba(255,255,255,0.18)'}`, background: allSel ? color + '33' : partSel ? color + '18' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                              {allSel && <span style={{ color, fontSize: '9px', fontWeight: 900 }}>✓</span>}
-                              {partSel && <span style={{ color, fontSize: '10px', fontWeight: 900, lineHeight: 1 }}>−</span>}
-                            </div>
-                            <span onClick={toggleGrpSel} style={{ flex: 1, fontSize: '13px', color: selCount > 0 ? color : '#94a3b8', fontWeight: 700, cursor: 'pointer' }}>{grpKey}</span>
-                            <span style={{ fontSize: '11px', color: selCount > 0 ? color : '#475569', fontWeight: 600, marginRight: '6px' }}>{selCount}/{grpEmps.length}명</span>
-                            <span onClick={() => setOpenAccordions(prev => { const next = new Set(prev); next.has(grpKey) ? next.delete(grpKey) : next.add(grpKey); return next; })} style={{ fontSize: '11px', color: '#475569', cursor: 'pointer', padding: '2px 4px' }}>{isOpen ? '▲' : '▼'}</span>
+                        <div key={grpKey} style={{ borderBottom: `1px solid ${color}33` }}>
+                          <div onClick={() => setOpenAccordions(prev => { const next = new Set(prev); next.has(grpKey) ? next.delete(grpKey) : next.add(grpKey); return next; })} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', cursor: 'pointer', borderLeft: `3px solid ${selCount > 0 ? color : 'rgba(255,255,255,0.08)'}`, background: selCount > 0 ? color + '08' : 'transparent' }}>
+                            <span style={{ flex: 1, fontSize: '13px', fontWeight: 700, color: selCount > 0 ? color : '#94a3b8' }}>{grpKey}</span>
+                            <span style={{ fontSize: '11px', color: selCount > 0 ? color : '#475569', fontWeight: 600 }}>{selCount}/{grpEmps.length}명</span>
+                            <button type="button" onClick={e => { e.stopPropagation(); toggleGrpSel(); }} style={{ padding: '3px 9px', borderRadius: '5px', fontSize: '10px', fontWeight: 700, border: `1px solid ${allSel ? color : color + '55'}`, background: allSel ? color + '22' : 'transparent', color: allSel ? color : color + 'aa', cursor: 'pointer', flexShrink: 0, marginLeft: '6px' }}>{allSel ? '해제' : '선택'}</button>
+                            <span style={{ fontSize: '11px', color: '#475569', marginLeft: '4px' }}>{isOpen ? '▲' : '▼'}</span>
                           </div>
                           {isOpen && (
                             <div style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 12px 8px' }}>
@@ -742,7 +738,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                                   background: allSel ? color + '22' : partSel ? color + '0d' : 'transparent',
                                   color: allSel ? color : partSel ? color + 'bb' : '#64748b',
                                 }}>
-                                  {label}{selCount > 0 && <span style={{ fontSize: '10px', marginLeft: '3px', opacity: 0.8 }}>{selCount}</span>}
+                                  {label}
                                 </button>
                               );
                             })}
@@ -754,7 +750,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                             if (grpEmps.length === 0) return null;
                             const selCount = grpEmps.filter(e => escalateEmps.has(e.emp_no)).length;
                             const allSel = selCount === grpEmps.length;
-                            const partSel = selCount > 0 && !allSel;
                             const isOpen = openEscalateAccordions.has(grpKey);
 
                             const tmap: Record<string, EmployeeDB[]> = {};
@@ -790,15 +785,12 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                             };
 
                             return (
-                              <div key={grpKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px' }}>
-                                  <div onClick={toggleGrpSel} style={{ width: '15px', height: '15px', borderRadius: '4px', flexShrink: 0, border: `2px solid ${allSel || partSel ? color : 'rgba(255,255,255,0.18)'}`, background: allSel ? color + '33' : partSel ? color + '18' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                                    {allSel && <span style={{ color, fontSize: '9px', fontWeight: 900 }}>✓</span>}
-                                    {partSel && <span style={{ color, fontSize: '10px', fontWeight: 900, lineHeight: 1 }}>−</span>}
-                                  </div>
-                                  <span onClick={toggleGrpSel} style={{ flex: 1, fontSize: '13px', color: selCount > 0 ? color : '#94a3b8', fontWeight: 700, cursor: 'pointer' }}>{grpKey}</span>
-                                  <span style={{ fontSize: '11px', color: selCount > 0 ? color : '#475569', fontWeight: 600, marginRight: '6px' }}>{selCount}/{grpEmps.length}명</span>
-                                  <span onClick={() => setOpenEscalateAccordions(prev => { const next = new Set(prev); next.has(grpKey) ? next.delete(grpKey) : next.add(grpKey); return next; })} style={{ fontSize: '11px', color: '#475569', cursor: 'pointer', padding: '2px 4px' }}>{isOpen ? '▲' : '▼'}</span>
+                              <div key={grpKey} style={{ borderBottom: `1px solid ${color}33` }}>
+                                <div onClick={() => setOpenEscalateAccordions(prev => { const next = new Set(prev); next.has(grpKey) ? next.delete(grpKey) : next.add(grpKey); return next; })} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', cursor: 'pointer', borderLeft: `3px solid ${selCount > 0 ? color : 'rgba(255,255,255,0.08)'}`, background: selCount > 0 ? color + '08' : 'transparent' }}>
+                                  <span style={{ flex: 1, fontSize: '13px', fontWeight: 700, color: selCount > 0 ? color : '#94a3b8' }}>{grpKey}</span>
+                                  <span style={{ fontSize: '11px', color: selCount > 0 ? color : '#475569', fontWeight: 600 }}>{selCount}/{grpEmps.length}명</span>
+                                  <button type="button" onClick={e => { e.stopPropagation(); toggleGrpSel(); }} style={{ padding: '3px 9px', borderRadius: '5px', fontSize: '10px', fontWeight: 700, border: `1px solid ${allSel ? color : color + '55'}`, background: allSel ? color + '22' : 'transparent', color: allSel ? color : color + 'aa', cursor: 'pointer', flexShrink: 0, marginLeft: '6px' }}>{allSel ? '해제' : '선택'}</button>
+                                  <span style={{ fontSize: '11px', color: '#475569', marginLeft: '4px' }}>{isOpen ? '▲' : '▼'}</span>
                                 </div>
                                 {isOpen && (
                                   <div style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 12px 8px' }}>
