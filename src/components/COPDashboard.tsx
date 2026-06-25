@@ -33,6 +33,7 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
 
   const disasterManual = DISASTERS.find(d => d.key === activeIncident.disaster);
   const [showRoles, setShowRoles] = useState(true);
+  const [showActivityLog, setShowActivityLog] = useState(false);
 
   // Overall calculations
   const totalTasks = tasks.length;
@@ -106,8 +107,8 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
             borderBottom: showRoles ? '1px solid rgba(255,255,255,0.06)' : 'none',
           }}
         >
-          <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 800, color: 'var(--text-muted)' }}>
-            조직도별 실시간 임무 수행율
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 900, color: 'var(--text-main)', flex: 1, textAlign: 'center' }}>
+            조직별 실시간 임무수행율
           </h3>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             {showRoles ? '▲' : '▼'}
@@ -214,12 +215,16 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
       </div>
       
       {/* 4. Live Activity Section */}
-      <div className="card" style={{ marginTop: '10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+      <div className="card" style={{ marginTop: '10px', padding: 0, overflow: 'hidden' }}>
+        <div
+          onClick={() => setShowActivityLog(v => !v)}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', cursor: 'pointer', borderBottom: showActivityLog ? '1px solid rgba(255,255,255,0.06)' : 'none' }}
+        >
           <Activity size={18} color="var(--color-green)" />
-          <h3 style={{ margin: 0, fontSize: '14px' }}>최근 대응 활동</h3>
+          <h3 style={{ margin: 0, fontSize: '14px', flex: 1 }}>활동로그</h3>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{showActivityLog ? '▲' : '▼'}</span>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto' }}>
+        {showActivityLog && <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto', padding: '10px 16px 14px' }}>
           {tasks.filter(t => t.done).length === 0 && responders.length === 0 ? (
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '10px' }}>
               아직 발생한 대응 활동 내역이 없습니다.
@@ -267,7 +272,7 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
               ));
             })()
           )}
-        </div>
+        </div>}
       </div>
     </div>
   );
