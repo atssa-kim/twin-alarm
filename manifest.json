@@ -9,7 +9,7 @@
   "theme_color": "#090d16",
   "orientation": "portrait-primary",
   "icons": [
-    { "src": "/twin-alarm/favicon.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/twin-alarm/favicon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/twin-alarm/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/twin-alarm/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
