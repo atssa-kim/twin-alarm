@@ -4,16 +4,17 @@ import { type Employee, Login } from './components/Login';
 import { CommanderDashboard } from './components/CommanderDashboard';
 import { ResponderView } from './components/ResponderView';
 import { COPDashboard } from './components/COPDashboard';
+import { LogView } from './components/LogView';
 import { triggerEmergencyAlert, stopAllAlerts, unlockAudio } from './utils/audio';
 import { db, type EmployeeDB } from './services/supabase';
 import { requestNotificationPermission, onForegroundMessage } from './services/notifications';
-import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Bell, BellOff, Megaphone } from 'lucide-react';
+import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Bell, BellOff, Megaphone, ScrollText } from 'lucide-react';
 
 const App: React.FC = () => {
   const { activeIncident, responders, tasks, loading, disasterRoles } = useRealtime();
   const [currentUser, setCurrentUser] = useState<Employee | null>(null);
   const [employees, setEmployees] = useState<EmployeeDB[]>([]);
-  const [currentView, setCurrentView] = useState<'cmd' | 'responder' | 'cop'>('responder');
+  const [currentView, setCurrentView] = useState<'cmd' | 'responder' | 'cop' | 'log'>('responder');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>(
     'Notification' in window ? Notification.permission : 'denied'
@@ -441,6 +442,27 @@ const App: React.FC = () => {
           <Radio size={17} />
           <span>업무수행율</span>
         </button>
+        <button
+          onClick={() => setCurrentView('log')}
+          style={{
+            flex: 1, background: 'transparent', border: 'none',
+            color: currentView === 'log' ? '#3b82f6' : 'var(--text-muted)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+            position: 'relative',
+          }}
+        >
+          <ScrollText size={17} />
+          <span>활동로그</span>
+          {/* 새 활동 있을 때 점 표시 */}
+          {(tasks.filter(t => t.done).length > 0 || responders.filter(r => r.status !== '미응답').length > 0) && currentView !== 'log' && (
+            <span style={{
+              position: 'absolute', top: '2px', right: 'calc(50% - 16px)',
+              width: '6px', height: '6px', borderRadius: '50%',
+              background: 'var(--color-green)',
+            }} />
+          )}
+        </button>
       </nav>
 
       {/* Main Content Area */}
@@ -472,6 +494,14 @@ const App: React.FC = () => {
 
         {currentView === 'cop' && (
           <COPDashboard
+            activeIncident={activeIncident}
+            responders={responders}
+            tasks={tasks}
+          />
+        )}
+
+        {currentView === 'log' && (
+          <LogView
             activeIncident={activeIncident}
             responders={responders}
             tasks={tasks}

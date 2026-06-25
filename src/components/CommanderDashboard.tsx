@@ -728,10 +728,10 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                 return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
               };
               const entries = [
-                ...validResponders.map(r => ({
+                ...validResponders.filter(r => r.status !== '미응답').map(r => ({
                   time: r.updated_at,
                   text: `${r.name} → ${r.status}`,
-                  color: r.status === '현장' ? '#60a5fa' : r.status === '출동중' ? 'var(--color-power)' : r.status === '복귀' ? 'var(--color-green)' : 'var(--text-muted)',
+                  color: r.status === '현장' ? '#60a5fa' : r.status === '출동중' ? 'var(--color-power)' : 'var(--color-green)',
                   tag: '대원',
                 })),
                 ...tasks.filter(t => t.done).map(t => ({

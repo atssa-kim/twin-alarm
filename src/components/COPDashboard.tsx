@@ -231,10 +231,10 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
                 return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
               };
               const entries = [
-                ...responders.filter(r => r.emp_no && r.name).map(r => ({
+                ...responders.filter(r => r.emp_no && r.name && r.status !== '미응답').map(r => ({
                   time: r.updated_at,
                   tag: '대원',
-                  color: r.status === '현장' ? '#60a5fa' : r.status === '출동중' ? 'var(--color-power)' : r.status === '복귀' ? 'var(--color-green)' : 'var(--text-muted)',
+                  color: r.status === '현장' ? '#60a5fa' : r.status === '출동중' ? 'var(--color-power)' : 'var(--color-green)',
                   text: `${r.name} → ${r.status}`,
                 })),
                 ...tasks.filter(t => t.done).map(t => ({
