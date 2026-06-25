@@ -17,8 +17,21 @@ messaging.onBackgroundMessage(function(payload) {
   const n = payload.notification || {};
   const data = payload.data || {};
 
+  // TTS 멘트와 동일한 본문 계산
+  var mode = data.mode || '';
+  var disaster = data.disaster || '';
+  var location = data.location || '';
+  var eventName;
+  if (mode === '훈련/감지기') eventName = '훈련 감지기동작';
+  else if (mode === '훈련/전체') eventName = '훈련 화재';
+  else if (mode === '실제/감지기') eventName = '감지기동작';
+  else if (mode === '실제/화재') eventName = '화재';
+  else if (mode.indexOf('훈련') === 0) eventName = '훈련 ' + disaster;
+  else eventName = disaster || '재난';
+  var ttsBody = eventName + '발생! ' + location + '에서 ' + eventName + '발생 신속히 출동하시기 바랍니다.';
+
   self.registration.showNotification(n.title || '🚨 재난 발령', {
-    body: n.body || '앱을 열어 임무를 확인하세요.',
+    body: ttsBody || n.body || '앱을 열어 임무를 확인하세요.',
     icon: '/twin-alarm/favicon.png',
     badge: '/twin-alarm/favicon.png',
     tag: 'twin-alarm-incident',
