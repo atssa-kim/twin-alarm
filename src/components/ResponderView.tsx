@@ -91,7 +91,14 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     ? (disasterRoles.find(r => r.badge === myBadge) ?? null)
     : null;
 
-  const rawTasks = myRole ? tasks.filter(t => t.role === myRole.role) : [];
+  // 상황실은 감지기·화재 두 역할 임무를 모두 표시
+  const situationRoleNames = (myBadge === '상황실' || myBadge === '상황실/화재')
+    ? new Set(disasterRoles.filter(r => r.badge === '상황실' || r.badge === '상황실/화재').map(r => r.role))
+    : null;
+
+  const rawTasks = myRole
+    ? tasks.filter(t => situationRoleNames ? situationRoleNames.has(t.role) : t.role === myRole.role)
+    : [];
 
   // Optimistic 상태 병합 (Realtime 응답 전 즉시 UI 반영)
   const myTasks = rawTasks.map(t =>
@@ -188,7 +195,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     .replace('파트장', '파트')
     .replace(/^보안[123]$/, '보안파트');
 
-  const isSituationRoom = myBadge === '상황실';
+  const isSituationRoom = myBadge === '상황실' || myBadge === '상황실/화재';
   const roleColor = isSituationRoom ? '#facc15' : (myRole?.bc ?? undefined);
 
   // 화재 감지기동작 시 초기출동조 여부 판단

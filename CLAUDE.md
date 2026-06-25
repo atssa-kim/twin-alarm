@@ -14,7 +14,8 @@
 ## 환경 변수 (.env — git 제외)
 ```
 VITE_SUPABASE_URL=...
-VITE_SUPABASE_ANON_KEY=...
+VITE_SUPABASE_ANON_KEY=...          # 앱용 공개키 (RLS 적용)
+SUPABASE_SERVICE_ROLE_KEY=...       # seed 스크립트 전용 — 절대 공개 금지
 ```
 
 ## 로컬 실행

@@ -25,11 +25,14 @@ for (const line of envRaw.split('\n')) {
 }
 
 const supabaseUrl = env.VITE_SUPABASE_URL;
-const supabaseKey = env.VITE_SUPABASE_ANON_KEY;
+const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ .env 파일에 VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY 가 없습니다.');
   process.exit(1);
+}
+if (!env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.warn('⚠️  SUPABASE_SERVICE_ROLE_KEY 미설정 — anon key 사용 (RLS 활성화 시 쓰기 실패 가능)');
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
