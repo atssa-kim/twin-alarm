@@ -20,6 +20,25 @@ const empSortRank = (role: string) =>
   role.startsWith('파트장') || role === '센터장' || role === '상황실' ? 0
   : isShiftEmployee(role) ? 2 : 1;
 
+const DEPT_GROUPS = [
+  { key: '소방', label: '소방', color: '#ef4444' },
+  { key: '전기', label: '전기', color: '#fbbf24' },
+  { key: '기계', label: '기계', color: '#60a5fa' },
+  { key: '운영', label: '운영', color: '#34d399' },
+  { key: '기타', label: '기타', color: '#94a3b8' },
+  { key: '교대', label: '교대', color: '#c084fc' },
+] as const;
+
+const getEmpGroup = (e: EmployeeDB): string => {
+  if (isShiftEmployee(e.role)) return '교대';
+  const t = e.team.replace('파트장', '파트');
+  if (t.includes('소방')) return '소방';
+  if (t.includes('전기')) return '전기';
+  if (t.includes('기계')) return '기계';
+  if (t.includes('운영') || t.includes('건축') || t.includes('품질')) return '운영';
+  return '기타';
+};
+
 interface CommanderDashboardProps {
   activeIncident: Incident | null;
   responders: Responder[];
@@ -65,8 +84,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   // 참여인원 인라인 패널
   const [showParticipants, setShowParticipants] = useState(false);
   const [selectedEmps, setSelectedEmps] = useState<Set<string>>(new Set());
-  const [expandedCell, setExpandedCell] = useState<{ team: string; type: 'day' | 'A' | 'B' | 'C' | 'D' } | null>(null);
-  const [shiftExpanded, setShiftExpanded] = useState(false);
+  const [openAccordions, setOpenAccordions] = useState<Set<string>>(new Set());
 
   // 전체훈련 승격 시 나머지 대원 선택
   const [escalateEmps, setEscalateEmps] = useState<Set<string>>(new Set());
@@ -419,152 +437,130 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
 
                 {showParticipants && (
                   <div style={{ marginTop: '6px', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '10px', overflow: 'hidden', background: 'rgba(15,23,42,0.7)' }}>
-                    {/* 빠른 선택 */}
-                    <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    {/* ── 메뉴바 ── */}
+                    <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)', overflowX: 'auto' }}>
                       {(() => {
-                        const togSel = (ids: string[]) => {
-                          const allSel = ids.length > 0 && ids.every(id => selectedEmps.has(id));
-                          setSelectedEmps(allSel ? new Set() : new Set(ids));
-                          setShiftExpanded(false);
-                        };
-                        const shiftIds = (cho: string) => employees.filter(e => isShiftEmployee(e.role) && e.role.includes(cho + '조')).map(e => e.emp_no);
-                        const togGroupSel = (ids: string[]) => {
-                          const allSel = ids.length > 0 && ids.every(id => selectedEmps.has(id));
-                          setSelectedEmps(prev => {
-                            const next = new Set(prev);
-                            if (allSel) ids.forEach(id => next.delete(id));
-                            else ids.forEach(id => next.add(id));
-                            return next;
-                          });
-                        };
-                        const allShiftIds = employees.filter(e => isShiftEmployee(e.role)).map(e => e.emp_no);
-                        const toggleShift = () => {
-                          if (shiftExpanded) {
-                            setShiftExpanded(false);
-                            setSelectedEmps(prev => { const next = new Set(prev); allShiftIds.forEach(id => next.delete(id)); return next; });
-                          } else {
-                            setShiftExpanded(true);
-                            setSelectedEmps(prev => { const next = new Set(prev); allShiftIds.forEach(id => next.add(id)); return next; });
-                          }
-                        };
-                        return [
-                          { label: '전체', color: '#818cf8', fn: () => togSel(employees.map(e => e.emp_no)) },
-                          { label: '☀️ 주간', color: '#fbbf24', fn: () => togSel(employees.filter(e => !isShiftEmployee(e.role)).map(e => e.emp_no)) },
-                          { label: '🌙 교대', color: shiftExpanded ? '#c084fc' : '#a5b4fc', fn: toggleShift },
-                          ...(shiftExpanded ? [
-                            { label: 'A조', color: '#a5b4fc', fn: () => togGroupSel(shiftIds('A')) },
-                            { label: 'B조', color: '#86efac', fn: () => togGroupSel(shiftIds('B')) },
-                            { label: 'C조', color: '#fdba74', fn: () => togGroupSel(shiftIds('C')) },
-                            { label: 'D조', color: '#f9a8d4', fn: () => togGroupSel(shiftIds('D')) },
-                          ] : []),
-                        ].map(({ label, fn, color }) => (
-                          <button key={label} type="button" onClick={fn} style={{
-                            flex: 1, padding: '5px 0', borderRadius: '6px', cursor: 'pointer',
-                            border: `1px solid ${color}44`, background: `${color}14`,
-                            color, fontSize: '11px', fontWeight: 700,
-                          }}>{label}</button>
-                        ));
-                      })()}
-                    </div>
-
-                    {/* 파트 × 주간/A~D조 그리드 */}
-                    <div style={{ padding: '0 8px' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr 54px 38px 38px 38px 38px', padding: '5px 4px 3px', fontSize: '10px', color: '#475569', fontWeight: 700 }}>
-                        <span />
-                        <span>파트</span>
-                        <span style={{ textAlign: 'center' }}>☀️ 주간</span>
-                        <span style={{ textAlign: 'center', color: '#a5b4fc' }}>A</span>
-                        <span style={{ textAlign: 'center', color: '#86efac' }}>B</span>
-                        <span style={{ textAlign: 'center', color: '#fdba74' }}>C</span>
-                        <span style={{ textAlign: 'center', color: '#f9a8d4' }}>D</span>
-                      </div>
-                      {groupedEmployees.map(([team, emps]) => {
-                        const dayEmps = emps.filter(e => !isShiftEmployee(e.role));
-                        const shiftOf = (cho: string) => emps.filter(e => isShiftEmployee(e.role) && e.role.includes(cho + '조'));
-                        const aEmps = shiftOf('A'), bEmps = shiftOf('B'), cEmps = shiftOf('C'), dEmps = shiftOf('D');
-                        const cnt = (g: EmployeeDB[]) => g.filter(e => selectedEmps.has(e.emp_no)).length;
-
-                        const toggleGroup = (grp: EmployeeDB[]) => {
-                          const all = grp.every(e => selectedEmps.has(e.emp_no));
-                          setSelectedEmps(prev => {
-                            const next = new Set(prev);
-                            if (all) grp.forEach(e => next.delete(e.emp_no));
-                            else grp.forEach(e => next.add(e.emp_no));
-                            return next;
-                          });
-                        };
-                        const toggleOne = (empNo: string) => {
-                          setSelectedEmps(prev => {
-                            const next = new Set(prev);
-                            next.has(empNo) ? next.delete(empNo) : next.add(empNo);
-                            return next;
-                          });
-                        };
-                        const isExp = (t: string) => expandedCell?.team === team && expandedCell.type === t;
-
-                        const cell = (n: number, total: number, type: 'day'|'A'|'B'|'C'|'D', color: string) => {
-                          if (!total) return <span />;
-                          const exp = isExp(type);
-                          return (
-                            <button type="button" onClick={() => setExpandedCell(exp ? null : { team, type })} style={{
-                              margin: '2px', padding: '3px 0', borderRadius: '6px',
-                              fontSize: '10px', fontWeight: 700, textAlign: 'center', cursor: 'pointer',
-                              border: exp ? `2px solid ${color}` : `1px solid ${n > 0 ? color + '66' : 'rgba(255,255,255,0.08)'}`,
-                              background: exp ? color + '33' : n === total ? color + '22' : n > 0 ? color + '0d' : 'rgba(255,255,255,0.03)',
-                              color: n > 0 ? color : '#334155',
-                            }}>{n}/{total}</button>
-                          );
-                        };
-                        const subList = (grp: EmployeeDB[], label: string, color: string) => {
-                          const allSel = grp.every(e => selectedEmps.has(e.emp_no));
-                          return (
-                            <div style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '6px 10px 8px' }}>
-                              <div onClick={() => toggleGroup(grp)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 2px 7px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '5px' }}>
-                                <span style={{ fontSize: '11px', color, fontWeight: 700 }}>{team} · {label}</span>
-                                <span style={{ fontSize: '10px', color: allSel ? color : '#475569', fontWeight: 600 }}>{allSel ? '전체 해제' : '전체 선택'}</span>
-                              </div>
-                              {grp.map(emp => {
-                                const checked = selectedEmps.has(emp.emp_no);
-                                return (
-                                  <div key={emp.emp_no} onClick={() => toggleOne(emp.emp_no)} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '5px 2px', cursor: 'pointer' }}>
-                                    <div style={{ width: '15px', height: '15px', borderRadius: '4px', flexShrink: 0, border: `2px solid ${checked ? color : 'rgba(255,255,255,0.18)'}`, background: checked ? color + '33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                      {checked && <span style={{ color, fontSize: '10px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
-                                    </div>
-                                    <span style={{ fontSize: '12px', flex: 1, color: checked ? '#e2e8f0' : '#94a3b8' }}>{emp.name}</span>
-                                    <span style={{ fontSize: '10px', color: '#475569' }}>{emp.role}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        };
-
-                        const allInTeam = [...dayEmps, ...aEmps, ...bEmps, ...cEmps, ...dEmps];
-                        const allTeamSel = allInTeam.length > 0 && allInTeam.every(e => selectedEmps.has(e.emp_no));
-                        const someTeamSel = !allTeamSel && allInTeam.some(e => selectedEmps.has(e.emp_no));
+                        const allIds = employees.map(e => e.emp_no);
+                        const allSel = allIds.length > 0 && allIds.every(id => selectedEmps.has(id));
+                        const partSel = !allSel && allIds.some(id => selectedEmps.has(id));
                         return (
-                          <React.Fragment key={team}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr 54px 38px 38px 38px 38px', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                              <div onClick={() => toggleGroup(allInTeam)} style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${allTeamSel || someTeamSel ? '#818cf8' : 'rgba(255,255,255,0.18)'}`, background: allTeamSel ? '#818cf8' : someTeamSel ? '#818cf844' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', margin: '0 auto' }}>
-                                {allTeamSel && <span style={{ color: 'white', fontSize: '9px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
-                                {someTeamSel && <span style={{ color: '#818cf8', fontSize: '10px', lineHeight: 1, fontWeight: 900 }}>−</span>}
-                              </div>
-                              <span style={{ fontSize: '11px', color: '#64748b', padding: '0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{team}</span>
-                              {cell(cnt(dayEmps), dayEmps.length, 'day', '#fbbf24')}
-                              {cell(cnt(aEmps), aEmps.length, 'A', '#a5b4fc')}
-                              {cell(cnt(bEmps), bEmps.length, 'B', '#86efac')}
-                              {cell(cnt(cEmps), cEmps.length, 'C', '#fdba74')}
-                              {cell(cnt(dEmps), dEmps.length, 'D', '#f9a8d4')}
-                            </div>
-                            {isExp('day') && dayEmps.length > 0 && subList(dayEmps, '☀️ 주간', '#fbbf24')}
-                            {isExp('A') && aEmps.length > 0 && subList(aEmps, '🌙 A조', '#a5b4fc')}
-                            {isExp('B') && bEmps.length > 0 && subList(bEmps, '🌙 B조', '#86efac')}
-                            {isExp('C') && cEmps.length > 0 && subList(cEmps, '🌙 C조', '#fdba74')}
-                            {isExp('D') && dEmps.length > 0 && subList(dEmps, '🌙 D조', '#f9a8d4')}
-                          </React.Fragment>
+                          <button type="button" onClick={() => setSelectedEmps(allSel ? new Set() : new Set(allIds))} style={{
+                            padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 800, flexShrink: 0,
+                            border: `1px solid ${allSel ? '#818cf8' : partSel ? '#818cf866' : '#818cf844'}`,
+                            background: allSel ? '#818cf822' : partSel ? '#818cf80d' : 'transparent',
+                            color: allSel ? '#818cf8' : partSel ? '#818cf8aa' : '#64748b',
+                          }}>전체</button>
+                        );
+                      })()}
+                      {DEPT_GROUPS.map(({ key, label, color }) => {
+                        const grpIds = employees.filter(e => getEmpGroup(e) === key).map(e => e.emp_no);
+                        if (grpIds.length === 0) return null;
+                        const selCount = grpIds.filter(id => selectedEmps.has(id)).length;
+                        const allSel = selCount === grpIds.length;
+                        const partSel = selCount > 0 && !allSel;
+                        return (
+                          <button key={key} type="button" onClick={() => setSelectedEmps(prev => {
+                            const next = new Set(prev);
+                            if (allSel) grpIds.forEach(id => next.delete(id));
+                            else grpIds.forEach(id => next.add(id));
+                            return next;
+                          })} style={{
+                            padding: '5px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 700, flexShrink: 0,
+                            border: `1px solid ${allSel ? color : partSel ? color + '66' : color + '44'}`,
+                            background: allSel ? color + '22' : partSel ? color + '0d' : 'transparent',
+                            color: allSel ? color : partSel ? color + 'bb' : '#64748b',
+                          }}>
+                            {label}{selCount > 0 && <span style={{ fontSize: '10px', marginLeft: '3px', opacity: 0.8 }}>{selCount}</span>}
+                          </button>
                         );
                       })}
                     </div>
+
+                    {/* ── 아코디언 목록 ── */}
+                    {DEPT_GROUPS.map(({ key, label, color }) => {
+                      const grpEmps = employees.filter(e => getEmpGroup(e) === key);
+                      if (grpEmps.length === 0) return null;
+                      const selCount = grpEmps.filter(e => selectedEmps.has(e.emp_no)).length;
+                      const allSel = selCount === grpEmps.length;
+                      const partSel = selCount > 0 && !allSel;
+                      const isOpen = openAccordions.has(key);
+
+                      const toggleGroup = () => setSelectedEmps(prev => {
+                        const next = new Set(prev);
+                        if (allSel) grpEmps.forEach(e => next.delete(e.emp_no));
+                        else grpEmps.forEach(e => next.add(e.emp_no));
+                        return next;
+                      });
+
+                      const toggleOpen = () => setOpenAccordions(prev => {
+                        const next = new Set(prev);
+                        next.has(key) ? next.delete(key) : next.add(key);
+                        return next;
+                      });
+
+                      const empRow = (emp: EmployeeDB, c: string) => {
+                        const checked = selectedEmps.has(emp.emp_no);
+                        return (
+                          <div key={emp.emp_no} onClick={() => setSelectedEmps(prev => {
+                            const next = new Set(prev);
+                            next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no);
+                            return next;
+                          })} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '5px 4px', cursor: 'pointer' }}>
+                            <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? c : 'rgba(255,255,255,0.15)'}`, background: checked ? c + '33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {checked && <span style={{ color: c, fontSize: '9px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
+                            </div>
+                            <span style={{ fontSize: '12px', flex: 1, color: checked ? '#e2e8f0' : '#94a3b8' }}>{emp.name}</span>
+                            <span style={{ fontSize: '10px', color: '#475569' }}>{emp.role}</span>
+                          </div>
+                        );
+                      };
+
+                      return (
+                        <div key={key} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px' }}>
+                            <div onClick={toggleGroup} style={{ width: '15px', height: '15px', borderRadius: '4px', flexShrink: 0, border: `2px solid ${allSel || partSel ? color : 'rgba(255,255,255,0.18)'}`, background: allSel ? color + '33' : partSel ? color + '18' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                              {allSel && <span style={{ color, fontSize: '9px', fontWeight: 900 }}>✓</span>}
+                              {partSel && <span style={{ color, fontSize: '10px', fontWeight: 900, lineHeight: 1 }}>−</span>}
+                            </div>
+                            <span onClick={toggleGroup} style={{ flex: 1, fontSize: '13px', color: selCount > 0 ? color : '#94a3b8', fontWeight: 700, cursor: 'pointer' }}>{label}</span>
+                            <span style={{ fontSize: '11px', color: selCount > 0 ? color : '#475569', fontWeight: 600, marginRight: '6px' }}>{selCount}/{grpEmps.length}명</span>
+                            <span onClick={toggleOpen} style={{ fontSize: '11px', color: '#475569', cursor: 'pointer', padding: '2px 4px' }}>{isOpen ? '▲' : '▼'}</span>
+                          </div>
+                          {isOpen && (
+                            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 12px 8px' }}>
+                              {key === '교대' ? (
+                                (['A', 'B', 'C', 'D'] as const).map(cho => {
+                                  const choEmps = grpEmps.filter(e => e.role.includes(cho + '조'));
+                                  if (choEmps.length === 0) return null;
+                                  const choColors: Record<string, string> = { A: '#a5b4fc', B: '#86efac', C: '#fdba74', D: '#f9a8d4' };
+                                  const cc = choColors[cho];
+                                  const choSel = choEmps.filter(e => selectedEmps.has(e.emp_no)).length;
+                                  const allChoSel = choSel === choEmps.length;
+                                  return (
+                                    <div key={cho}>
+                                      <div onClick={() => setSelectedEmps(prev => {
+                                        const next = new Set(prev);
+                                        if (allChoSel) choEmps.forEach(e => next.delete(e.emp_no));
+                                        else choEmps.forEach(e => next.add(e.emp_no));
+                                        return next;
+                                      })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 4px 3px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', marginBottom: '2px' }}>
+                                        <span style={{ fontSize: '11px', color: cc, fontWeight: 700 }}>{cho}조</span>
+                                        <span style={{ fontSize: '10px', color: '#475569' }}>{choSel}/{choEmps.length}</span>
+                                        <span style={{ marginLeft: 'auto', fontSize: '10px', color: allChoSel ? cc : '#475569' }}>{allChoSel ? '전체해제' : '전체선택'}</span>
+                                      </div>
+                                      {choEmps.map(emp => empRow(emp, cc))}
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                grpEmps.map(emp => empRow(emp, color))
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
                     <div style={{ padding: '5px 12px 7px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>
                       총 <strong style={{ color: '#e2e8f0' }}>{selectedEmps.size}명</strong> 선택
                     </div>
