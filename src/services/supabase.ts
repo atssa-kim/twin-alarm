@@ -211,8 +211,8 @@ export const db = {
     const currentEmpNos = new Set(currentResponders.map(r => r.emp_no));
     const selectedEmpNos = new Set(selectedEmps.map(e => e.emp_no));
 
-    // Insert new (not already in responders)
-    const toAdd = selectedEmps.filter(e => !currentEmpNos.has(e.emp_no));
+    // Insert new (not already in responders) — emp_no/name 비어있는 ghost 항목 제외
+    const toAdd = selectedEmps.filter(e => e.emp_no && e.name && !currentEmpNos.has(e.emp_no));
     if (toAdd.length > 0) {
       const { error } = await supabase.from('responders').upsert(
         toAdd.map(e => ({

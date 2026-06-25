@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { type Incident, type Responder, type MemberTask } from '../services/supabase';
 import { DISASTERS } from '../data/disasters';
 import { Activity, Clock } from 'lucide-react';
@@ -32,6 +32,7 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
   }
 
   const disasterManual = DISASTERS.find(d => d.key === activeIncident.disaster);
+  const [showRoles, setShowRoles] = useState(true);
 
   // Overall calculations
   const totalTasks = tasks.length;
@@ -94,88 +95,122 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
         </div>
       </div>
 
-      {/* 3. Team-wise Status Cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <h3 style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 800, paddingLeft: '2px' }}>
-          조직도별 실시간 임무 수행율
-        </h3>
+      {/* 3. Role Matrix — Compact Accordion */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div
+          className="accordion-header"
+          onClick={() => setShowRoles(v => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 16px',
+            borderBottom: showRoles ? '1px solid rgba(255,255,255,0.06)' : 'none',
+          }}
+        >
+          <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 800, color: 'var(--text-muted)' }}>
+            조직도별 실시간 임무 수행율
+          </h3>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+            {showRoles ? '▲' : '▼'}
+          </span>
+        </div>
 
-        {disasterManual?.members.map((member) => {
-          const roleTasks = tasks.filter(t => t.role === member.role);
-          const roleCompleted = roleTasks.filter(t => t.done).length;
-          const roleTotal = roleTasks.length;
-          const rolePct = roleTotal > 0 ? Math.round((roleCompleted / roleTotal) * 100) : 0;
-
-          // Find responders checks-in for this role
-          const roleResponders = responders.filter(
-            r => r.role === member.role || r.role.includes(member.badge)
-          );
+        {showRoles && (() => {
+          const members = disasterManual?.members ?? [];
+          const grouped = members.reduce((acc, m) => {
+            (acc[m.group] ??= []).push(m);
+            return acc;
+          }, {} as Record<string, typeof members>);
 
           return (
-            <div key={member.role} className="card" style={{ padding: '14px 16px', marginBottom: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <div>
-                  <strong style={{ fontSize: '14px', color: member.bc || 'var(--text-main)' }}>
-                    {member.role}
-                  </strong>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    소속반: {member.group} | 배지: {member.badge}
+            <div style={{ padding: '8px 16px 12px' }}>
+              {Object.entries(grouped).map(([group, groupMembers]) => (
+                <div key={group} style={{ marginBottom: '10px' }}>
+                  <div style={{
+                    fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)',
+                    textTransform: 'uppercase', letterSpacing: '0.5px',
+                    paddingBottom: '4px',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                    marginBottom: '4px',
+                  }}>
+                    {group}
                   </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: '14px', fontWeight: 800, color: rolePct === 100 ? 'var(--color-green)' : 'var(--text-main)' }}>
-                    {rolePct}%
-                  </span>
-                  <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                    {roleCompleted}/{roleTotal} 건
-                  </div>
-                </div>
-              </div>
-
-              {/* Progress bar */}
-              <div className="progress-track" style={{ height: '6px', marginBottom: '8px' }}>
-                <div
-                  className="progress-fill"
-                  style={{
-                    width: `${rolePct}%`,
-                    backgroundColor: rolePct === 100 ? 'var(--color-green)' : member.bc || 'var(--color-fire)'
-                  }}
-                ></div>
-              </div>
-
-              {/* Responder status names for this card */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
-                {roleResponders.length === 0 ? (
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                    대기중 (배치 인원 없음)
-                  </span>
-                ) : (
-                  roleResponders.map(r => {
-                    let badgeColor = 'rgba(255, 255, 255, 0.05)';
-                    let textColor = 'var(--text-muted)';
-                    if (r.status === '출동중') { badgeColor = 'rgba(245, 158, 11, 0.15)'; textColor = 'var(--color-power)'; }
-                    if (r.status === '현장') { badgeColor = 'rgba(59, 130, 246, 0.15)'; textColor = '#60a5fa'; }
-                    if (r.status === '복귀') { badgeColor = 'rgba(16, 185, 129, 0.15)'; textColor = 'var(--color-green)'; }
+                  {groupMembers.map(member => {
+                    const roleTasks = tasks.filter(t => t.role === member.role);
+                    const roleCompleted = roleTasks.filter(t => t.done).length;
+                    const roleTotal = roleTasks.length;
+                    const rolePct = roleTotal > 0 ? Math.round((roleCompleted / roleTotal) * 100) : 0;
+                    const roleResponders = responders.filter(
+                      r => r.role === member.role || r.role.includes(member.badge)
+                    );
+                    const bc = member.bc || '#6b7280';
 
                     return (
-                      <span key={r.emp_no} style={{
-                        fontSize: '11px',
-                        padding: '2px 8px',
-                        borderRadius: '6px',
-                        backgroundColor: badgeColor,
-                        color: textColor,
-                        fontWeight: 700,
-                        border: '1px solid rgba(255, 255, 255, 0.05)'
+                      <div key={member.role} style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '5px 0',
+                        borderBottom: '1px solid rgba(255,255,255,0.03)',
                       }}>
-                        {r.name} ({r.status})
-                      </span>
+                        {/* Badge pill */}
+                        <span style={{
+                          fontSize: '9px', fontWeight: 800,
+                          padding: '1px 5px', borderRadius: '4px',
+                          background: bc + '33', color: bc,
+                          border: `1px solid ${bc}55`,
+                          whiteSpace: 'nowrap', flexShrink: 0,
+                          minWidth: '30px', textAlign: 'center',
+                        }}>
+                          {member.badge}
+                        </span>
+
+                        {/* Role name + thin progress bar */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            fontSize: '11px', fontWeight: 600, color: 'var(--text-main)',
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                            marginBottom: '3px',
+                          }}>
+                            {member.role}
+                          </div>
+                          <div className="progress-track" style={{ height: '3px' }}>
+                            <div className="progress-fill" style={{
+                              width: `${rolePct}%`,
+                              backgroundColor: rolePct === 100 ? 'var(--color-green)' : bc,
+                            }} />
+                          </div>
+                        </div>
+
+                        {/* Percentage + count */}
+                        <div style={{ textAlign: 'right', flexShrink: 0, minWidth: '38px' }}>
+                          <div style={{
+                            fontSize: '12px', fontWeight: 800,
+                            color: rolePct === 100 ? 'var(--color-green)' : 'var(--text-main)',
+                          }}>
+                            {rolePct === 100 ? '✓' : `${rolePct}%`}
+                          </div>
+                          {roleTotal > 0 && (
+                            <div style={{ fontSize: '9px', color: 'var(--text-muted)' }}>
+                              {roleCompleted}/{roleTotal}건
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Responder count */}
+                        {roleResponders.length > 0 && (
+                          <span style={{
+                            fontSize: '10px', color: 'var(--color-water)',
+                            flexShrink: 0, fontWeight: 700,
+                          }}>
+                            👤{roleResponders.length}
+                          </span>
+                        )}
+                      </div>
                     );
-                  })
-                )}
-              </div>
+                  })}
+                </div>
+              ))}
             </div>
           );
-        })}
+        })()}
       </div>
       
       {/* 4. Live Activity Section */}

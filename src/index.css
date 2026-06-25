@@ -461,6 +461,22 @@ input:focus, select:focus {
   animation: pulse 2s infinite;
 }
 
+/* Accordion header — interactive click hints */
+.accordion-header {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.15s ease;
+}
+
+.accordion-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.accordion-header:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;

@@ -67,6 +67,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [optimisticDone, setOptimisticDone] = useState<Record<string, boolean>>({});
   const [optimisticStatus, setOptimisticStatus] = useState<Responder['status'] | null>(null);
+  const [showChecklist, setShowChecklist] = useState(true);
   const incidentIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -357,16 +358,35 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                 </div>
               </div>
 
-              {/* Task Checklist – Accordion */}
-              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+              {/* Task Checklist – 전체 아코디언 */}
+              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+                {/* 헤더 — 탭으로 접기/펼치기 */}
+                <div
+                  className="accordion-header"
+                  onClick={() => setShowChecklist(v => !v)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    padding: '14px 16px',
+                    borderBottom: showChecklist ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                  }}
+                >
                   <CheckSquare size={18} color="var(--color-green)" />
-                  <h3 style={{ margin: 0, fontSize: '14px' }}>
-                    행동 매뉴얼 체크리스트 ({completedTasksCount} / {totalTasksCount})
+                  <h3 style={{ margin: 0, fontSize: '14px', flex: 1 }}>
+                    행동 매뉴얼 체크리스트
                   </h3>
+                  <span style={{
+                    fontSize: '12px', fontWeight: 700,
+                    color: completedTasksCount === totalTasksCount && totalTasksCount > 0 ? '#34d399' : 'var(--text-muted)',
+                  }}>
+                    {completedTasksCount} / {totalTasksCount}
+                  </span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '4px' }}>
+                    {showChecklist ? '▲' : '▼'}
+                  </span>
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {showChecklist && (
+                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px 16px' }}>
                   {taskGroups.map((group, gi) => {
                     if (group.type === 'standalone') {
                       const task = group.task;
@@ -471,6 +491,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                     );
                   })}
                 </div>
+                )}
               </div>
             </>
           ) : (

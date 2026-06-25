@@ -7,7 +7,7 @@ import { COPDashboard } from './components/COPDashboard';
 import { triggerEmergencyAlert, stopAllAlerts, unlockAudio } from './utils/audio';
 import { db, type EmployeeDB } from './services/supabase';
 import { requestNotificationPermission, onForegroundMessage } from './services/notifications';
-import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck } from 'lucide-react';
+import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Bell, BellOff, Megaphone } from 'lucide-react';
 
 const App: React.FC = () => {
   const { activeIncident, responders, tasks, loading, disasterRoles } = useRealtime();
@@ -15,6 +15,9 @@ const App: React.FC = () => {
   const [employees, setEmployees] = useState<EmployeeDB[]>([]);
   const [currentView, setCurrentView] = useState<'cmd' | 'responder' | 'cop'>('responder');
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [notifPerm, setNotifPerm] = useState<NotificationPermission>(
+    'Notification' in window ? Notification.permission : 'denied'
+  );
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceName, setSelectedVoiceName] = useState<string>(() => {
     return localStorage.getItem('tt_selected_voice') || '';
@@ -129,9 +132,53 @@ const App: React.FC = () => {
     // FCM 토큰 발급 및 저장 (백그라운드 알람 등록)
     try {
       const token = await requestNotificationPermission();
-      if (token) await db.saveFcmToken(user.empNo, token);
+      if (token) {
+        await db.saveFcmToken(user.empNo, token);
+        setNotifPerm('granted');
+      } else {
+        setNotifPerm('Notification' in window ? Notification.permission : 'denied');
+      }
     } catch (e) {
       console.warn('[FCM] 등록 실패:', e);
+    }
+  };
+
+  const handleEnableNotif = async () => {
+    if (!currentUser) return;
+
+    if (!('Notification' in window)) {
+      alert('이 브라우저는 알림을 지원하지 않습니다.\nChrome 또는 Edge를 사용해 주세요.');
+      return;
+    }
+
+    if (Notification.permission === 'denied') {
+      alert(
+        '알림이 차단되어 있습니다.\n\n' +
+        '📱 Chrome(Android):\n' +
+        '  주소창 왼쪽 🔒 → 사이트 설정 → 알림 → 허용\n\n' +
+        '🖥️ Chrome/Edge(PC):\n' +
+        '  주소창 왼쪽 🔒 → 알림 → 허용\n\n' +
+        '변경 후 이 버튼을 다시 탭하세요.'
+      );
+      return;
+    }
+
+    try {
+      const token = await requestNotificationPermission();
+      const perm = Notification.permission as NotificationPermission;
+      setNotifPerm(perm);
+
+      if (token) {
+        await db.saveFcmToken(currentUser.empNo, token);
+        alert('✅ 알림 등록 완료!\n이제 발령 시 이 기기(Chrome)로 알림이 옵니다.');
+      } else if (perm === 'granted') {
+        alert('⚠️ 알림 권한은 허용됐으나 FCM 토큰 발급 실패.\nVPNㆍ방화벽 환경이면 모바일 데이터로 시도해 보세요.');
+      } else {
+        alert('알림 허용이 필요합니다.\n팝업에서 "허용"을 선택해 주세요.');
+      }
+    } catch (e: any) {
+      console.warn('[FCM] 등록 실패:', e);
+      alert('알림 등록 실패: ' + (e?.message ?? e));
     }
   };
 
@@ -271,6 +318,29 @@ const App: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* 알림(FCM) 허용 버튼 */}
+          <button
+            onClick={handleEnableNotif}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              color: notifPerm === 'granted' ? '#22c55e' : notifPerm === 'denied' ? '#ef4444' : '#f59e0b',
+            }}
+            title={
+              notifPerm === 'granted' ? '알림 활성화됨' :
+              notifPerm === 'denied'  ? '알림 차단됨 — 탭하여 해제 방법 확인' :
+                                        '탭하여 알림 허용'
+            }
+          >
+            {notifPerm === 'granted'
+              ? <Bell size={20} />
+              : <BellOff size={20} />}
+          </button>
+
           {/* Sound toggle button */}
           <button
             onClick={() => {
@@ -282,14 +352,16 @@ const App: React.FC = () => {
             style={{
               background: 'transparent',
               border: 'none',
-              color: 'var(--text-muted)',
-              fontSize: '18px',
               cursor: 'pointer',
-              padding: '4px'
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              color: soundEnabled ? '#ef4444' : 'var(--text-muted)',
+              opacity: soundEnabled ? 1 : 0.4,
             }}
-            title={soundEnabled ? "음성 안내 켜짐" : "음성 안내 꺼짐"}
+            title={soundEnabled ? '육성 안내 켜짐' : '육성 안내 꺼짐'}
           >
-            {soundEnabled ? '🔊' : '🔇'}
+            <Megaphone size={20} />
           </button>
 
           <span className="badge badge-live">LIVE</span>

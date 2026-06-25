@@ -72,6 +72,9 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const [escalateEmps, setEscalateEmps] = useState<Set<string>>(new Set());
   const [showEscalatePanel, setShowEscalatePanel] = useState(false);
 
+  // 대원 출동현황 아코디언
+  const [showResponders, setShowResponders] = useState(true);
+
   const isFireDisaster = selectedDisasterKey === '화재';
 
 
@@ -150,10 +153,12 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
       if (selectedMode === '훈련' && selectedEmps.size > 0) {
         const selected = employees.filter(e => selectedEmps.has(e.emp_no));
         await db.setTrainingParticipants(incident.id, selected, []);
-        // 승격 패널 선택을 직전 훈련 참여인원과 동일하게 이어받음
+        // 승격 패널 선택을 직전 훈련 참여인원과 동일하게 이어받음 + 패널 자동 오픈
         setEscalateEmps(new Set(selectedEmps));
+        setShowEscalatePanel(true);
       } else {
         setEscalateEmps(new Set());
+        setShowEscalatePanel(false);
       }
 
       // FCM 직접 호출 (pg_net 트리거 백업)
@@ -254,7 +259,9 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const overallProgressPct = checkableTasks.length > 0
     ? Math.round((completedTasksCount / checkableTasks.length) * 100) : 0;
 
-  const respondersByStatus = (status: Responder['status']) => responders.filter(r => r.status === status);
+  // name/emp_no 비어있는 ghost 항목 제외
+  const validResponders = responders.filter(r => r.emp_no && r.name);
+  const respondersByStatus = (status: Responder['status']) => validResponders.filter(r => r.status === status);
 
   // 활성 발령 정보 파생
   const activeIsTraining = activeIncident?.mode.startsWith('훈련') ?? false;
@@ -262,7 +269,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const activeIsFire = activeIncident?.disaster === '화재';
 
   // 로그인 대원 자신의 출동 현황
-  const myResponder = responders.find(r => r.emp_no === currentUser.empNo);
+  const myResponder = validResponders.find(r => r.emp_no === currentUser.empNo);
 
   return (
     <div className="content">
@@ -623,52 +630,72 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
             </div>
           </div>
 
-          {/* 대원 현황 */}
-          <div className="card">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-              <Users size={20} color="var(--color-water)" />
-              <h3 style={{ margin: 0, fontSize: '15px' }}>
-                대원 출동 현황 ({responders.length}명{activeIsInitial ? ' · 초기출동조' : ''})
-              </h3>
-            </div>
-            <div className="cop-grid" style={{ marginBottom: '16px' }}>
-              <div className="cop-stat-card">
-                <div className="cop-stat-val" style={{ color: 'var(--color-power)' }}>{respondersByStatus('출동중').length}</div>
-                <div className="cop-stat-label">출동 중</div>
+          {/* 대원 현황 — 아코디언 */}
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            {/* 헤더 (항상 표시) */}
+            <div
+              className="accordion-header"
+              onClick={() => setShowResponders(v => !v)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '14px 16px',
+                borderBottom: showResponders ? '1px solid rgba(255,255,255,0.06)' : 'none',
+              }}
+            >
+              <Users size={18} color="var(--color-water)" />
+              <span style={{ flex: 1, fontSize: '14px', fontWeight: 700 }}>
+                대원 출동 현황
+                {activeIsInitial && <span style={{ fontSize: '11px', color: '#fbbf24', marginLeft: '6px' }}>초기출동조</span>}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--color-power)', fontWeight: 700 }}>
+                  출동 {respondersByStatus('출동중').length}
+                </span>
+                <span style={{ fontSize: '12px', color: 'var(--color-water)', fontWeight: 700 }}>
+                  현장 {respondersByStatus('현장').length}
+                </span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  총 {validResponders.length}명
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  {showResponders ? '▲' : '▼'}
+                </span>
               </div>
-              <div className="cop-stat-card">
-                <div className="cop-stat-val" style={{ color: 'var(--color-water)' }}>{respondersByStatus('현장').length}</div>
-                <div className="cop-stat-label">현장 도착</div>
-              </div>
             </div>
-            <div className="roster-grid">
-              {responders.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                  소집된 대응 대원이 아직 없습니다.
-                </div>
-              ) : (
-                responders.map((resp) => {
-                  let dotColor = '#94a3b8';
-                  if (resp.status === '출동중') dotColor = 'var(--color-power)';
-                  if (resp.status === '현장') dotColor = 'var(--color-water)';
-                  if (resp.status === '복귀') dotColor = 'var(--color-green)';
-                  return (
-                    <div key={resp.emp_no} className="roster-row">
-                      <div>
-                        <strong style={{ fontSize: '14px' }}>{resp.name}</strong>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '6px' }}>
-                          {resp.team} / {resp.role}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span className="status-dot" style={{ backgroundColor: dotColor }}></span>
-                        <span style={{ fontSize: '13px', fontWeight: 700 }}>{resp.status}</span>
-                      </div>
+
+            {/* 펼쳐진 내용 */}
+            {showResponders && (
+              <div style={{ padding: '12px 16px' }}>
+                <div className="roster-grid">
+                  {validResponders.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                      소집된 대응 대원이 아직 없습니다.
                     </div>
-                  );
-                })
-              )}
-            </div>
+                  ) : (
+                    validResponders.map((resp) => {
+                      let dotColor = '#94a3b8';
+                      if (resp.status === '출동중') dotColor = 'var(--color-power)';
+                      if (resp.status === '현장') dotColor = 'var(--color-water)';
+                      if (resp.status === '복귀') dotColor = 'var(--color-green)';
+                      return (
+                        <div key={resp.emp_no} className="roster-row">
+                          <div>
+                            <strong style={{ fontSize: '14px' }}>{resp.name}</strong>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '6px' }}>
+                              {resp.team} / {resp.role}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span className="status-dot" style={{ backgroundColor: dotColor }}></span>
+                            <span style={{ fontSize: '13px', fontWeight: 700 }}>{resp.status}</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 지휘관 전용 액션 버튼 */}
@@ -689,10 +716,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                           background: showEscalatePanel ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.08)',
                           color: '#a5b4fc', fontSize: '13px', fontWeight: 700,
                         }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <UserCheck size={16} />
-                          나머지 대원 소집 대상 선택
-                        </span>
+                        <span>나머지 대원 소집 대상 선택</span>
                         <span style={{ fontSize: '12px', opacity: 0.8 }}>
                           {escalateEmps.size}명 / {employees.length}명 {showEscalatePanel ? '▲' : '▼'}
                         </span>

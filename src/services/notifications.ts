@@ -33,9 +33,10 @@ export async function requestNotificationPermission(): Promise<string | null> {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') return null;
 
+    const base = import.meta.env.BASE_URL; // dev: '/'  prod: '/twin-alarm/'
     const swReg = await navigator.serviceWorker.register(
-      '/twin-alarm/firebase-messaging-sw.js',
-      { scope: '/twin-alarm/' }
+      `${base}firebase-messaging-sw.js`,
+      { scope: base }
     );
 
     const token = await getToken(msg, { vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
