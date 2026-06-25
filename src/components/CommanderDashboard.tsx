@@ -2,7 +2,7 @@ import React, { useRef, useState, useMemo } from 'react';
 import { type Incident, type Responder, type MemberTask, type EmployeeDB, db } from '../services/supabase';
 import { DISASTERS } from '../data/disasters';
 import { stopAllAlerts } from '../utils/audio';
-import { Play, Square, ShieldAlert, Users, MapPin, Mic, UserCheck, BarChart2, Monitor } from 'lucide-react';
+import { Play, Square, ShieldAlert, Users, Mic, UserCheck, BarChart2, Monitor } from 'lucide-react';
 
 // 화재 초기출동조 배지 (감지기동작 시 1차 소집)
 const FIRE_INITIAL_BADGES = new Set(['총괄', '상황실', '통제', '출동']);
@@ -583,33 +583,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
       ) : (
         // ── 발령 중 모니터링 ────────────────────────
         <>
-          {/* 배너 */}
-          <div className="banner alarm-active" style={{
-            background: !activeIsTraining
-              ? 'linear-gradient(135deg, rgba(239,68,68,0.25) 0%, rgba(220,38,38,0.4) 100%)'
-              : 'linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(37,99,235,0.3) 100%)',
-            borderColor: !activeIsTraining ? 'var(--color-fire)' : 'var(--color-water)',
-          }}>
-            <div className="banner-title" style={{ color: !activeIsTraining ? 'var(--color-fire)' : '#60a5fa' }}>
-              <ShieldAlert size={22} />
-              {!activeIsTraining ? '🚨 실제 비상 발령 중' : '🎓 비상 대응 훈련 중'}
-              {activeIsInitial && <span style={{ fontSize: '12px', background: 'rgba(245,158,11,0.2)', color: '#fbbf24', padding: '2px 8px', borderRadius: '6px', marginLeft: '8px' }}>감지기동작</span>}
-            </div>
-            <div style={{ fontSize: '20px', fontWeight: 900, marginTop: '8px', fontFamily: 'var(--font-display)' }}>
-              {activeIsTraining ? `${activeIncident.disaster}훈련상황` : `${activeIncident.disaster} 발생`}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: 'var(--text-muted)', marginTop: '8px' }}>
-              <MapPin size={16} />
-              <span>위치: <strong>{activeIncident.location}</strong></span>
-            </div>
-            {activeIsInitial && (
-              <div style={{ marginTop: '8px', fontSize: '12px', color: '#fbbf24' }}>
-                ⚡ 초기출동조 소집 중 — 승격 버튼으로 나머지 대원 소집
-              </div>
-            )}
-          </div>
-
-
           {/* 임무 수행률 */}
           <div className="card">
             <div className="progress-header">
