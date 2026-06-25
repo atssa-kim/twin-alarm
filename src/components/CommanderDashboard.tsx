@@ -2,7 +2,7 @@ import React, { useRef, useState, useMemo } from 'react';
 import { type Incident, type Responder, type MemberTask, type EmployeeDB, db } from '../services/supabase';
 import { DISASTERS } from '../data/disasters';
 import { stopAllAlerts } from '../utils/audio';
-import { Play, Square, ShieldAlert, Users, MapPin, Mic, UserCheck, Activity } from 'lucide-react';
+import { Play, Square, ShieldAlert, Users, MapPin, Mic, UserCheck, Activity, BarChart2, Monitor } from 'lucide-react';
 
 // 화재 초기출동조 배지 (감지기동작 시 1차 소집)
 const FIRE_INITIAL_BADGES = new Set(['총괄', '상황실', '통제', '출동']);
@@ -281,8 +281,8 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
         // ── 발령 화면 (지휘관만) / 대기 화면 (일반 대원) ──
         !isCommander ? (
           <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-            <ShieldAlert size={36} color="#334155" style={{ marginBottom: '12px' }} />
-            <div style={{ fontSize: '15px', fontWeight: 700, color: '#475569' }}>현재 발령된 상황이 없습니다</div>
+            <Monitor size={36} color="#334155" style={{ marginBottom: '12px' }} />
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#475569' }}>공동 상황판 대기중</div>
             <div style={{ fontSize: '13px', marginTop: '6px' }}>발령이 시작되면 여기에 대원 현황이 표시됩니다.</div>
           </div>
         ) : (
@@ -387,7 +387,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                   <button type="button" className={`segmented-btn ${fireSubMode === 'full' ? 'active' : ''}`}
                     onClick={() => setFireSubMode('full')}
                     style={{ color: fireSubMode === 'full' ? (selectedMode === '실제' ? 'var(--color-fire)' : '#a78bfa') : '' }}>
-                    {selectedMode === '훈련' ? '🏋️ 전체훈련' : '🔥 화재상황'}
+                    {selectedMode === '훈련' ? '🎯 전체훈련' : '🔥 화재상황'}
                   </button>
                 </div>
               </div>
@@ -428,21 +428,40 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                     {/* 빠른 선택 */}
                     <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                       {(() => {
-                        const togSel = (ids: string[], collapse = true) => {
+                        const togSel = (ids: string[]) => {
                           const allSel = ids.length > 0 && ids.every(id => selectedEmps.has(id));
                           setSelectedEmps(allSel ? new Set() : new Set(ids));
-                          if (collapse) setShiftExpanded(false);
+                          setShiftExpanded(false);
                         };
                         const shiftIds = (cho: string) => employees.filter(e => isShiftEmployee(e.role) && e.role.includes(cho + '조')).map(e => e.emp_no);
+                        const togGroupSel = (ids: string[]) => {
+                          const allSel = ids.length > 0 && ids.every(id => selectedEmps.has(id));
+                          setSelectedEmps(prev => {
+                            const next = new Set(prev);
+                            if (allSel) ids.forEach(id => next.delete(id));
+                            else ids.forEach(id => next.add(id));
+                            return next;
+                          });
+                        };
+                        const allShiftIds = employees.filter(e => isShiftEmployee(e.role)).map(e => e.emp_no);
+                        const toggleShift = () => {
+                          if (shiftExpanded) {
+                            setShiftExpanded(false);
+                            setSelectedEmps(prev => { const next = new Set(prev); allShiftIds.forEach(id => next.delete(id)); return next; });
+                          } else {
+                            setShiftExpanded(true);
+                            setSelectedEmps(prev => { const next = new Set(prev); allShiftIds.forEach(id => next.add(id)); return next; });
+                          }
+                        };
                         return [
                           { label: '전체', color: '#818cf8', fn: () => togSel(employees.map(e => e.emp_no)) },
                           { label: '☀️ 주간', color: '#fbbf24', fn: () => togSel(employees.filter(e => !isShiftEmployee(e.role)).map(e => e.emp_no)) },
-                          { label: '🌙 교대', color: shiftExpanded ? '#c084fc' : '#a5b4fc', fn: () => setShiftExpanded(v => !v) },
+                          { label: '🌙 교대', color: shiftExpanded ? '#c084fc' : '#a5b4fc', fn: toggleShift },
                           ...(shiftExpanded ? [
-                            { label: 'A조', color: '#a5b4fc', fn: () => togSel(shiftIds('A'), false) },
-                            { label: 'B조', color: '#86efac', fn: () => togSel(shiftIds('B'), false) },
-                            { label: 'C조', color: '#fdba74', fn: () => togSel(shiftIds('C'), false) },
-                            { label: 'D조', color: '#f9a8d4', fn: () => togSel(shiftIds('D'), false) },
+                            { label: 'A조', color: '#a5b4fc', fn: () => togGroupSel(shiftIds('A')) },
+                            { label: 'B조', color: '#86efac', fn: () => togGroupSel(shiftIds('B')) },
+                            { label: 'C조', color: '#fdba74', fn: () => togGroupSel(shiftIds('C')) },
+                            { label: 'D조', color: '#f9a8d4', fn: () => togGroupSel(shiftIds('D')) },
                           ] : []),
                         ].map(({ label, fn, color }) => (
                           <button key={label} type="button" onClick={fn} style={{
@@ -622,7 +641,10 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
           {/* 임무 수행률 */}
           <div className="card">
             <div className="progress-header">
-              <span>전체 공동 임무 수행률</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <BarChart2 size={15} color="var(--color-green)" />
+                업무 수행율
+              </span>
               <strong style={{ fontSize: '18px', color: 'var(--color-green)' }}>{overallProgressPct}%</strong>
             </div>
             <div className="progress-track" style={{ height: '12px' }}>
