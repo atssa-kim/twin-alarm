@@ -771,8 +771,12 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                 </>
               )}
 
-              <button onClick={handleClose} className="btn btn-danger" disabled={loading}>
-                <Square size={16} fill="white" />
+              <button onClick={handleClose} className="btn" disabled={loading} style={{
+                background: 'transparent',
+                border: '2px solid var(--color-fire)',
+                color: 'var(--color-fire)',
+              }}>
+                <Square size={16} fill="var(--color-fire)" />
                 상황 종료 및 리셋
               </button>
             </div>
