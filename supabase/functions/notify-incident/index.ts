@@ -1,5 +1,79 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// ─── Kakao 알림톡 (SOLAPI) ───────────────────────────────────────────────────
+// 필요 Supabase Secrets:
+//   SOLAPI_API_KEY      - SOLAPI 계정 API Key
+//   SOLAPI_API_SECRET   - SOLAPI 계정 API Secret
+//   KAKAO_PF_ID         - 카카오 채널(발신프로필) ID  ex) KA01PF...
+//   KAKAO_TEMPLATE_ID   - 승인된 알림톡 템플릿 ID    ex) KA01TP...
+//   SENDER_PHONE        - 발신 번호 (등록된 번호)     ex) 0212345678
+// 템플릿 변수 예시: #{재난} #{장소} #{내용}
+
+async function hmacSha256(message: string, secret: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function sendKakaoAlimtalk(
+  phones: string[],
+  disaster: string,
+  location: string,
+  content: string,
+): Promise<void> {
+  const apiKey = Deno.env.get('SOLAPI_API_KEY');
+  const apiSecret = Deno.env.get('SOLAPI_API_SECRET');
+  const pfId = Deno.env.get('KAKAO_PF_ID');
+  const templateId = Deno.env.get('KAKAO_TEMPLATE_ID');
+  const senderPhone = Deno.env.get('SENDER_PHONE');
+
+  if (!apiKey || !apiSecret || !pfId || !templateId || !senderPhone) return; // 미설정 시 스킵
+
+  const validPhones = phones
+    .map(p => p.replace(/[-\s]/g, ''))
+    .filter(p => /^0\d{9,10}$/.test(p));
+  if (validPhones.length === 0) return;
+
+  const date = new Date().toISOString();
+  const salt = crypto.randomUUID().replace(/-/g, '');
+  const signature = await hmacSha256(`${date}${salt}`, apiSecret);
+
+  const messages = validPhones.map(to => ({
+    to,
+    from: senderPhone.replace(/[-\s]/g, ''),
+    type: 'ATA',
+    kakaoOptions: {
+      pfId,
+      templateId,
+      variables: {
+        '#{재난}': disaster,
+        '#{장소}': location,
+        '#{내용}': content.slice(0, 90), // 알림톡 변수 90자 제한
+      },
+    },
+  }));
+
+  try {
+    const resp = await fetch('https://api.solapi.com/messages/v4/send-many', {
+      method: 'POST',
+      headers: {
+        'Authorization': `HMAC-SHA256 apiKey=${apiKey}, date=${date}, salt=${salt}, signature=${signature}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messages }),
+    });
+    const result = await resp.json();
+    console.log(`[Kakao] sent=${result?.groupInfo?.count?.total ?? validPhones.length}, status=${resp.status}`);
+  } catch (e) {
+    console.warn('[Kakao] 발송 실패:', e);
+  }
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 const PROJECT_ID = 'disaster-response-system-f669b';
 const FCM_URL = `https://fcm.googleapis.com/v1/projects/${PROJECT_ID}/messages:send`;
 const APP_URL = 'https://atssa-kim.github.io/twin-alarm/';
@@ -186,7 +260,18 @@ Deno.serve(async (req) => {
       )
     );
 
-    return new Response(JSON.stringify({ sent: subs.length }), {
+    // ── Kakao 알림톡 발송 (SOLAPI Secrets 설정 시 자동 실행) ──────────────
+    const empNoList: string[] = drillEmpNos
+      ? String(drillEmpNos).split(',').map((s: string) => s.trim()).filter(Boolean)
+      : [];
+    let phoneQuery = supabase.from('employees').select('phone').not('phone', 'is', null);
+    if (empNoList.length > 0) phoneQuery = (phoneQuery as any).in('emp_no', empNoList);
+    const { data: empPhones } = await phoneQuery;
+    const phones = (empPhones ?? []).map((e: { phone: string }) => e.phone).filter(Boolean);
+    await sendKakaoAlimtalk(phones, disaster, location, bodyText);
+    // ────────────────────────────────────────────────────────────────────────
+
+    return new Response(JSON.stringify({ sent: subs.length, kakao: phones.length }), {
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   } catch (err: unknown) {

@@ -26,6 +26,8 @@ const App: React.FC = () => {
   // 경보 중복 방지 — Set 기반 (탭 전환 후 복귀해도 재발령 없음)
   const alertedIncidentIds = useRef<Set<string>>(new Set());
   const alertedModeKeys = useRef<Set<string>>(new Set());
+  // SW postMessage 중복 방지 — disaster|location|mode 조합으로 중복 차단 (dedup Set 클리어 안 함)
+  const swAlertedKeys = useRef<Set<string>>(new Set());
 
   // Load available voices
   useEffect(() => {
@@ -106,10 +108,15 @@ const App: React.FC = () => {
     if (params.has('alert')) {
       alertedIncidentIds.current.clear();
       alertedModeKeys.current.clear();
-      // URL 정리
+      swAlertedKeys.current.clear();
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
+
+  // 새 재난 발령 시 swAlertedKeys 초기화 (이전 재난 키는 새 사이클과 무관)
+  useEffect(() => {
+    swAlertedKeys.current.clear();
+  }, [activeIncident?.id]);
 
   // 1. Session persistence for login
   useEffect(() => {
@@ -208,24 +215,26 @@ const App: React.FC = () => {
   }, [currentUser, soundEnabled]);
 
   // SW 백그라운드 메시지 → 탭이 열려 있을 때 즉시 TTS/사이렌
-  // (앱이 포커스 없이 백그라운드 상태여도 소리 발령)
+  // (dedup Set을 clear하지 않고, 콘텐츠 기반 키로 중복 차단 → 탭 복귀 시 재발화 방지)
   useEffect(() => {
     if (!currentUser || !('serviceWorker' in navigator)) return;
     const handler = (event: MessageEvent) => {
       if (event.data?.type !== 'BACKGROUND_ALERT') return;
       if (!soundEnabled) return;
-      // 중복 방지 Set 초기화 후 TTS 재생 (SW 발령은 항상 울려야 함)
-      alertedIncidentIds.current.clear();
-      alertedModeKeys.current.clear();
-      triggerEmergencyAlert(
-        event.data.disaster || '재난',
-        event.data.location || '',
-        event.data.mode || '실제'
-      );
+      const { disaster, location, mode } = event.data;
+      const key = `${disaster}|${location}|${mode}`;
+      if (swAlertedKeys.current.has(key)) return; // 이미 처리한 알림
+      swAlertedKeys.current.add(key);
+      // 메인 dedup에도 추가 (기존 항목 유지 — clear 금지)
+      if (activeIncident) {
+        alertedIncidentIds.current.add(activeIncident.id);
+        alertedModeKeys.current.add(`${activeIncident.id}__${activeIncident.mode}`);
+      }
+      triggerEmergencyAlert(disaster || '재난', location || '', mode || '실제');
     };
     navigator.serviceWorker.addEventListener('message', handler);
     return () => navigator.serviceWorker.removeEventListener('message', handler);
-  }, [currentUser, soundEnabled]);
+  }, [currentUser, soundEnabled, activeIncident?.id, activeIncident?.mode]);
 
   // 2. 신규 발령 경보 — 동일 incident ID는 한 번만 발령
   useEffect(() => {

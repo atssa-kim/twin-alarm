@@ -34,14 +34,17 @@ export function useRealtime() {
         { event: '*', schema: 'public', table: 'incidents' },
         (payload) => {
           const newDoc = payload.new as Incident;
-          if (newDoc && newDoc.status === 'active') {
+          if (newDoc?.id && newDoc.status === 'active') {
+            // 정상 발령 이벤트
             setActiveIncident(newDoc);
-          } else {
+          } else if (payload.eventType === 'DELETE' || (newDoc?.id && newDoc.status !== 'active')) {
+            // 명시적 종료(DELETE 또는 status=closed) 이벤트만 초기화
             setActiveIncident(null);
             setResponders([]);
             setTasks([]);
             setDisasterRoles([]);
           }
+          // else: id 없는 시스템/재연결 이벤트 → 무시 (재연결 시 잘못된 null 방지)
         }
       )
       .subscribe();
