@@ -853,11 +853,9 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
 
                   <button onClick={handleFireEscalate} className="btn" disabled={loading}
                     style={{
-                      background: !activeIsTraining
-                        ? 'linear-gradient(135deg, rgba(239,68,68,0.2), rgba(220,38,38,0.35))'
-                        : 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(79,70,229,0.35))',
-                      border: `1px solid ${!activeIsTraining ? 'rgba(239,68,68,0.5)' : 'rgba(99,102,241,0.5)'}`,
-                      color: !activeIsTraining ? '#fca5a5' : '#a5b4fc',
+                      background: 'linear-gradient(135deg, rgba(239,68,68,0.10), rgba(220,38,38,0.20))',
+                      border: '1px solid rgba(239,68,68,0.35)',
+                      color: '#fca5a5',
                     }}
                   >
                     {!activeIsTraining ? '🔥 화재상황으로 승격 (나머지 대원 소집)' : '🎯 2차 출동 발령'}
@@ -865,12 +863,14 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                 </>
               )}
 
-              <button onClick={handleClose} className="btn" disabled={loading} style={{
-                background: 'transparent',
-                border: '2px solid var(--color-fire)',
-                color: 'var(--color-fire)',
-              }}>
-                <Square size={16} fill="var(--color-fire)" />
+              <button onClick={handleClose} className="btn" disabled={loading}
+                style={{
+                  background: 'rgba(59,130,246,0.06)',
+                  border: '1px solid rgba(59,130,246,0.45)',
+                  color: '#60a5fa',
+                }}
+              >
+                <Square size={16} fill="#60a5fa" />
                 상황 종료 및 리셋
               </button>
             </div>
