@@ -21,14 +21,20 @@ messaging.onBackgroundMessage(function(payload) {
   var mode = data.mode || '';
   var disaster = data.disaster || '';
   var location = data.location || '';
-  var eventName;
-  if (mode === '훈련/감지기') eventName = '훈련 감지기동작';
-  else if (mode === '훈련/전체') eventName = '훈련 화재';
-  else if (mode === '실제/감지기') eventName = '감지기동작';
-  else if (mode === '실제/화재') eventName = '화재';
-  else if (mode.indexOf('훈련') === 0) eventName = '훈련 ' + disaster;
-  else eventName = disaster || '재난';
-  var ttsBody = eventName + '발생! ' + location + '에서 ' + eventName + '발생 신속히 출동하시기 바랍니다.';
+  var ttsBody;
+  if (mode === '훈련/감지기') {
+    ttsBody = '훈련상황! 훈련상황 ' + location + '에서 화재감지기 동작! 초기대응대는 신속히 출동하시기 바랍니다.';
+  } else if (mode === '훈련/전체') {
+    ttsBody = '훈련상황! 화재발생! 훈련상황! 화재발생! ' + location + '으로 신속히 출동하시기 바랍니다.';
+  } else if (mode === '실제/감지기') {
+    ttsBody = '화재감지기동작!, 화재감지기동작! ' + location + '에서 화재감지기 동작! 초기대응대는 신속히 출동하시기 바랍니다.';
+  } else if (mode === '실제/화재') {
+    ttsBody = '화재발생!, 화재발생! ' + location + '에서 화재발생 신속히 출동하시기 바랍니다.';
+  } else if (mode.indexOf('훈련') === 0) {
+    ttsBody = '훈련 ' + disaster + '발생!, 훈련 ' + disaster + '발생! ' + location + '에서 훈련 ' + disaster + '발생 신속히 출동하시기 바랍니다.';
+  } else {
+    ttsBody = (disaster || '재난') + '발생!, ' + (disaster || '재난') + '발생! ' + location + '에서 ' + (disaster || '재난') + '발생 신속히 출동하시기 바랍니다.';
+  }
 
   self.registration.showNotification(n.title || '🚨 재난 발령', {
     body: ttsBody || n.body || '앱을 열어 임무를 확인하세요.',
