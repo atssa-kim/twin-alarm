@@ -2,7 +2,7 @@ import React, { useRef, useState, useMemo } from 'react';
 import { type Incident, type Responder, type MemberTask, type EmployeeDB, db } from '../services/supabase';
 import { DISASTERS } from '../data/disasters';
 import { stopAllAlerts } from '../utils/audio';
-import { Play, Square, ShieldAlert, Users, MapPin, Mic, UserCheck, Activity, BarChart2, Monitor } from 'lucide-react';
+import { Play, Square, ShieldAlert, Users, MapPin, Mic, UserCheck, BarChart2, Monitor } from 'lucide-react';
 
 // 화재 초기출동조 배지 (감지기동작 시 1차 소집)
 const FIRE_INITIAL_BADGES = new Set(['총괄', '상황실', '통제', '출동']);
@@ -74,9 +74,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
 
   // 대원 출동현황 아코디언
   const [showResponders, setShowResponders] = useState(true);
-  // 활동 로그 아코디언
-  const [showLog, setShowLog] = useState(false);
-
   const isFireDisaster = selectedDisasterKey === '화재';
 
 
@@ -271,9 +268,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const activeIsTraining = activeIncident?.mode.startsWith('훈련') ?? false;
   const activeIsInitial = activeIncident?.scope === 'fire_initial';
   const activeIsFire = activeIncident?.disaster === '화재';
-
-  // 로그인 대원 자신의 출동 현황
-  const myResponder = validResponders.find(r => r.emp_no === currentUser.empNo);
 
   return (
     <div className="content">
@@ -615,28 +609,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
             )}
           </div>
 
-          {/* 내 정보 */}
-          {myResponder && (
-            <div className="card" style={{ padding: '12px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <strong style={{ fontSize: '14px' }}>{myResponder.name}</strong>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '6px' }}>
-                    {myResponder.team} / {myResponder.role}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span className="status-dot" style={{
-                    backgroundColor: myResponder.status === '출동중' ? 'var(--color-power)'
-                      : myResponder.status === '현장' ? 'var(--color-water)'
-                      : myResponder.status === '복귀' ? 'var(--color-green)'
-                      : '#94a3b8'
-                  }}></span>
-                  <span style={{ fontSize: '13px', fontWeight: 700 }}>{myResponder.status}</span>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* 임무 수행률 */}
           <div className="card">
@@ -724,78 +696,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
             )}
           </div>
 
-          {/* 활동 로그 — 누가 뭐했는지 */}
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div
-              className="accordion-header"
-              onClick={() => setShowLog(v => !v)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '8px',
-                padding: '12px 16px',
-                borderBottom: showLog ? '1px solid rgba(255,255,255,0.06)' : 'none',
-              }}
-            >
-              <Activity size={16} color="var(--color-green)" />
-              <span style={{ flex: 1, fontSize: '13px', fontWeight: 700 }}>활동 로그</span>
-              <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginRight: '6px' }}>
-                완료 {tasks.filter(t => t.done).length}건
-              </span>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                {showLog ? '▲' : '▼'}
-              </span>
-            </div>
-            {showLog && (() => {
-              const fmtTime = (ms: number) => {
-                const d = new Date(ms);
-                return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-              };
-              const entries = [
-                ...validResponders.filter(r => r.status !== '미응답').map(r => ({
-                  time: r.updated_at,
-                  text: `${r.name} → ${r.status}`,
-                  color: r.status === '현장' ? '#60a5fa' : r.status === '출동중' ? 'var(--color-power)' : 'var(--color-green)',
-                  tag: '대원',
-                })),
-                ...tasks.filter(t => t.done).map(t => ({
-                  time: t.updated_at ?? 0,
-                  text: `${t.done_by ?? t.role} — ${t.label.length > 22 ? t.label.slice(0, 22) + '…' : t.label}`,
-                  color: 'var(--color-green)',
-                  tag: '임무',
-                })),
-              ].sort((a, b) => b.time - a.time).slice(0, 30);
-
-              if (entries.length === 0) return (
-                <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)', fontSize: '12px' }}>
-                  아직 활동 내역이 없습니다.
-                </div>
-              );
-
-              return (
-                <div style={{ maxHeight: '220px', overflowY: 'auto', padding: '8px 16px 12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  {entries.map((e, i) => (
-                    <div key={i} style={{
-                      display: 'flex', alignItems: 'baseline', gap: '6px',
-                      fontSize: '12px', padding: '4px 6px',
-                      background: 'rgba(255,255,255,0.02)',
-                      borderLeft: `2px solid ${e.color}`,
-                      borderRadius: '0 6px 6px 0',
-                    }}>
-                      <span style={{ fontSize: '10px', color: 'var(--text-muted)', flexShrink: 0, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                        {fmtTime(e.time)}
-                      </span>
-                      <span style={{
-                        fontSize: '10px', color: e.color, fontWeight: 800, flexShrink: 0,
-                        background: e.color + '22', padding: '0 4px', borderRadius: '3px',
-                      }}>
-                        {e.tag}
-                      </span>
-                      <span style={{ color: 'var(--text-main)', flex: 1, fontSize: '12px' }}>{e.text}</span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-          </div>
 
           {/* 지휘관 전용 액션 버튼 */}
           {isCommander && (
@@ -815,7 +715,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                           background: showEscalatePanel ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.08)',
                           color: '#a5b4fc', fontSize: '13px', fontWeight: 700,
                         }}>
-                        <span>나머지 대원 소집 대상 선택</span>
+                        <span>선택 : 2차 소집 대원</span>
                         <span style={{ fontSize: '12px', opacity: 0.8 }}>
                           {escalateEmps.size}명 / {employees.length}명 {showEscalatePanel ? '▲' : '▼'}
                         </span>
@@ -893,10 +793,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                       color: !activeIsTraining ? '#fca5a5' : '#a5b4fc',
                     }}
                   >
-                    <Users size={18} />
-                    {!activeIsTraining
-                      ? '🔥 화재상황으로 승격 (나머지 대원 소집)'
-                      : `🏋️ 전체훈련으로 승격 (${escalateEmps.size > 0 ? escalateEmps.size + '명 소집)' : '나머지 전원 소집)'}`}
+                    {!activeIsTraining ? '🔥 화재상황으로 승격 (나머지 대원 소집)' : '🎯 2차 출동 발령'}
                   </button>
                 </>
               )}
