@@ -225,30 +225,47 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
               아직 발생한 대응 활동 내역이 없습니다.
             </div>
           ) : (
-            [
-              // Create combined sorted log of responder updates and completed tasks
-              ...responders.map(r => ({
-                time: r.updated_at,
-                text: `[대원] ${r.name} (${r.role}) -> ${r.status} 상태 변경`
-              })),
-              ...tasks.filter(t => t.done).map(t => ({
-                time: t.updated_at || activeIncident.declared_at,
-                text: `[임무] ${t.role} -> "${t.label}" 완료 처리`
-              }))
-            ]
-            .sort((a, b) => b.time - a.time)
-            .slice(0, 20)
-            .map((log, idx) => (
-              <div key={idx} style={{ 
-                fontSize: '12px', 
-                padding: '6px 8px', 
-                background: 'rgba(255,255,255,0.02)', 
-                borderLeft: '2px solid rgba(255,255,255,0.1)',
-                color: log.text.startsWith('[임무]') ? 'var(--text-main)' : 'var(--text-muted)'
-              }}>
-                {log.text}
-              </div>
-            ))
+            (() => {
+              const fmtTime = (ms: number) => {
+                const d = new Date(ms);
+                return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+              };
+              const entries = [
+                ...responders.filter(r => r.emp_no && r.name).map(r => ({
+                  time: r.updated_at,
+                  tag: '대원',
+                  color: r.status === '현장' ? '#60a5fa' : r.status === '출동중' ? 'var(--color-power)' : r.status === '복귀' ? 'var(--color-green)' : 'var(--text-muted)',
+                  text: `${r.name} → ${r.status}`,
+                })),
+                ...tasks.filter(t => t.done).map(t => ({
+                  time: t.updated_at || activeIncident.declared_at,
+                  tag: '임무',
+                  color: 'var(--color-green)',
+                  text: `${t.done_by ?? t.role} — ${t.label.length > 22 ? t.label.slice(0, 22) + '…' : t.label}`,
+                })),
+              ].sort((a, b) => b.time - a.time).slice(0, 25);
+
+              return entries.map((e, idx) => (
+                <div key={idx} style={{
+                  display: 'flex', alignItems: 'baseline', gap: '6px',
+                  fontSize: '12px', padding: '4px 6px',
+                  background: 'rgba(255,255,255,0.02)',
+                  borderLeft: `2px solid ${e.color}`,
+                  borderRadius: '0 6px 6px 0',
+                }}>
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', flexShrink: 0, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtTime(e.time)}
+                  </span>
+                  <span style={{
+                    fontSize: '10px', color: e.color, fontWeight: 800, flexShrink: 0,
+                    background: e.color + '22', padding: '0 4px', borderRadius: '3px',
+                  }}>
+                    {e.tag}
+                  </span>
+                  <span style={{ color: 'var(--text-main)', flex: 1 }}>{e.text}</span>
+                </div>
+              ));
+            })()
           )}
         </div>
       </div>

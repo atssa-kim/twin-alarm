@@ -359,7 +359,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
               </div>
 
               {/* Task Checklist – 전체 아코디언 */}
-              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+              <div className="card" style={{ flex: showChecklist ? 1 : '0 0 auto', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
                 {/* 헤더 — 탭으로 접기/펼치기 */}
                 <div
                   className="accordion-header"
