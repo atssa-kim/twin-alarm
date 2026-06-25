@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState } from 'react';
 import { type Incident, type Responder, type MemberTask, type EmployeeDB, db } from '../services/supabase';
 import { DISASTERS } from '../data/disasters';
 import { stopAllAlerts } from '../utils/audio';
@@ -15,28 +15,48 @@ const normalizeParticipantTeam = (team: string, role: string) =>
 // 교대 여부
 const isShiftEmployee = (role: string) => role.includes('교대');
 
-// 그룹 내 정렬: 파트장 → 주간 파트원 → 교대 파트원
-const empSortRank = (role: string) =>
-  role.startsWith('파트장') || role === '센터장' || role === '상황실' ? 0
-  : isShiftEmployee(role) ? 2 : 1;
 
-const DEPT_GROUPS = [
-  { key: '소방', label: '소방', color: '#ef4444' },
-  { key: '전기', label: '전기', color: '#fbbf24' },
-  { key: '기계', label: '기계', color: '#60a5fa' },
-  { key: '운영', label: '운영', color: '#34d399' },
-  { key: '기타', label: '기타', color: '#94a3b8' },
-  { key: '교대', label: '교대', color: '#c084fc' },
+const INCIDENT_GROUPS = [
+  { key: '지휘연락', label: '지휘연락', color: '#f59e0b' },
+  { key: '현장대응', label: '현장대응', color: '#ef4444' },
+  { key: '대피지원', label: '대피지원', color: '#60a5fa' },
+  { key: '교대',    label: '교대',    color: '#c084fc' },
 ] as const;
+type IncidentGroupKey = typeof INCIDENT_GROUPS[number]['key'];
 
-const getEmpGroup = (e: EmployeeDB): string => {
+// 재난별 지휘연락반 파트장 팀 목록 (상황실·센터장은 항상 지휘연락)
+const CMD_TEAMS: Record<string, string[]> = {
+  '화재':     ['소방파트장'],
+  '정전':     ['전기파트장'],
+  '누수':     ['기계파트장'],
+  '태풍/홍수': ['소방파트장'],
+  '폭설':     ['운영파트장'],
+  '지진':     ['소방파트장'],
+  '가스누출':  ['기계파트장'],
+  '승강기':   [],
+  '테러':     [],
+};
+
+// 재난별 대피지원반 팀 목록
+const EVAC_TEAMS: Record<string, string[]> = {
+  '화재':     ['보안1', '보안2', '보안3', '운영파트장', '운영파트', '주차파트', '품질/안전파트', '미화파트'],
+  '정전':     ['보안1', '보안2', '보안3', '운영파트장', '운영파트', '미화파트', '주차파트'],
+  '누수':     ['보안1', '보안2', '보안3', '운영파트장', '운영파트'],
+  '태풍/홍수': ['보안1', '보안2', '보안3', '소방파트장', '소방파트', '운영파트장', '운영파트'],
+  '폭설':     ['미화파트', '보안1', '보안2', '보안3', '주차파트'],
+  '지진':     ['보안1', '보안2', '보안3', '운영파트장', '운영파트'],
+  '가스누출':  ['건축파트장', '건축파트', '보안1', '보안2', '보안3', '미화파트'],
+  '승강기':   ['보안1', '보안2', '보안3', '미화파트'],
+  '테러':     ['운영파트장', '운영파트', '건축파트장', '건축파트'],
+};
+
+const getIncidentGroup = (e: EmployeeDB, disasterKey: string): IncidentGroupKey => {
   if (isShiftEmployee(e.role)) return '교대';
-  const t = e.team.replace('파트장', '파트');
-  if (t.includes('소방')) return '소방';
-  if (t.includes('전기')) return '전기';
-  if (t.includes('기계')) return '기계';
-  if (t.includes('운영') || t.includes('건축') || t.includes('품질')) return '운영';
-  return '기타';
+  const { team } = e;
+  if (team === '상황실' || team === '센터장') return '지휘연락';
+  if ((CMD_TEAMS[disasterKey] ?? []).includes(team)) return '지휘연락';
+  if ((EVAC_TEAMS[disasterKey] ?? []).includes(team)) return '대피지원';
+  return '현장대응';
 };
 
 interface CommanderDashboardProps {
@@ -92,29 +112,8 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
 
   // 대원 출동현황 아코디언
   const [showResponders, setShowResponders] = useState(true);
+  const [openEscalateAccordions, setOpenEscalateAccordions] = useState<Set<string>>(new Set());
   const isFireDisaster = selectedDisasterKey === '화재';
-
-
-  // 직원 목록 팀별 그룹화 (파트장 → 파트에 통합, 주간→교대 순 정렬)
-  const groupedEmployees = useMemo(() => {
-    const map: Record<string, EmployeeDB[]> = {};
-    for (const e of employees) {
-      const grp = normalizeParticipantTeam(e.team, e.role);
-      if (!map[grp]) map[grp] = [];
-      map[grp].push(e);
-    }
-    for (const arr of Object.values(map)) {
-      arr.sort((a, b) => empSortRank(a.role) - empSortRank(b.role) || a.name.localeCompare(b.name, 'ko'));
-    }
-    const ordered: [string, EmployeeDB[]][] = [];
-    for (const t of TEAM_ORDER) {
-      if (map[t]) ordered.push([t, map[t]]);
-    }
-    for (const [t, emps] of Object.entries(map)) {
-      if (!TEAM_ORDER.includes(t)) ordered.push([t, emps]);
-    }
-    return ordered;
-  }, [employees]);
 
   // ── 발령 ─────────────────────────────────────────
   const handleDeclare = async (e: React.FormEvent) => {
@@ -452,8 +451,8 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                           }}>전체</button>
                         );
                       })()}
-                      {DEPT_GROUPS.map(({ key, label, color }) => {
-                        const grpIds = employees.filter(e => getEmpGroup(e) === key).map(e => e.emp_no);
+                      {INCIDENT_GROUPS.map(({ key, label, color }) => {
+                        const grpIds = employees.filter(e => getIncidentGroup(e, selectedDisasterKey) === key).map(e => e.emp_no);
                         if (grpIds.length === 0) return null;
                         const selCount = grpIds.filter(id => selectedEmps.has(id)).length;
                         const allSel = selCount === grpIds.length;
@@ -476,35 +475,37 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                       })}
                     </div>
 
-                    {/* ── 아코디언 목록 ── */}
-                    {DEPT_GROUPS.map(({ key, label, color }) => {
-                      const grpEmps = employees.filter(e => getEmpGroup(e) === key);
+                    {/* ── 아코디언 목록 (그룹 → 팀 서브섹션) ── */}
+                    {INCIDENT_GROUPS.map(({ key: grpKey, color }) => {
+                      const grpEmps = employees.filter(e => getIncidentGroup(e, selectedDisasterKey) === grpKey);
                       if (grpEmps.length === 0) return null;
                       const selCount = grpEmps.filter(e => selectedEmps.has(e.emp_no)).length;
                       const allSel = selCount === grpEmps.length;
                       const partSel = selCount > 0 && !allSel;
-                      const isOpen = openAccordions.has(key);
+                      const isOpen = openAccordions.has(grpKey);
 
-                      const toggleGroup = () => setSelectedEmps(prev => {
+                      const tmap: Record<string, EmployeeDB[]> = {};
+                      for (const e of grpEmps) {
+                        const t = normalizeParticipantTeam(e.team, e.role);
+                        (tmap[t] ??= []).push(e);
+                      }
+                      const teams: [string, EmployeeDB[]][] = [
+                        ...TEAM_ORDER.filter(t => tmap[t]).map(t => [t, tmap[t]] as [string, EmployeeDB[]]),
+                        ...Object.entries(tmap).filter(([t]) => !TEAM_ORDER.includes(t)),
+                      ];
+
+                      const toggleGrpSel = () => setSelectedEmps(prev => {
                         const next = new Set(prev);
                         if (allSel) grpEmps.forEach(e => next.delete(e.emp_no));
                         else grpEmps.forEach(e => next.add(e.emp_no));
                         return next;
                       });
 
-                      const toggleOpen = () => setOpenAccordions(prev => {
-                        const next = new Set(prev);
-                        next.has(key) ? next.delete(key) : next.add(key);
-                        return next;
-                      });
-
-                      const empRow = (emp: EmployeeDB, c: string) => {
+                      const mkEmpRow = (emp: EmployeeDB, c: string) => {
                         const checked = selectedEmps.has(emp.emp_no);
                         return (
                           <div key={emp.emp_no} onClick={() => setSelectedEmps(prev => {
-                            const next = new Set(prev);
-                            next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no);
-                            return next;
+                            const next = new Set(prev); next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no); return next;
                           })} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '5px 4px', cursor: 'pointer' }}>
                             <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? c : 'rgba(255,255,255,0.15)'}`, background: checked ? c + '33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               {checked && <span style={{ color: c, fontSize: '9px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
@@ -516,24 +517,23 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                       };
 
                       return (
-                        <div key={key} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div key={grpKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px' }}>
-                            <div onClick={toggleGroup} style={{ width: '15px', height: '15px', borderRadius: '4px', flexShrink: 0, border: `2px solid ${allSel || partSel ? color : 'rgba(255,255,255,0.18)'}`, background: allSel ? color + '33' : partSel ? color + '18' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                            <div onClick={toggleGrpSel} style={{ width: '15px', height: '15px', borderRadius: '4px', flexShrink: 0, border: `2px solid ${allSel || partSel ? color : 'rgba(255,255,255,0.18)'}`, background: allSel ? color + '33' : partSel ? color + '18' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                               {allSel && <span style={{ color, fontSize: '9px', fontWeight: 900 }}>✓</span>}
                               {partSel && <span style={{ color, fontSize: '10px', fontWeight: 900, lineHeight: 1 }}>−</span>}
                             </div>
-                            <span onClick={toggleGroup} style={{ flex: 1, fontSize: '13px', color: selCount > 0 ? color : '#94a3b8', fontWeight: 700, cursor: 'pointer' }}>{label}</span>
+                            <span onClick={toggleGrpSel} style={{ flex: 1, fontSize: '13px', color: selCount > 0 ? color : '#94a3b8', fontWeight: 700, cursor: 'pointer' }}>{grpKey}</span>
                             <span style={{ fontSize: '11px', color: selCount > 0 ? color : '#475569', fontWeight: 600, marginRight: '6px' }}>{selCount}/{grpEmps.length}명</span>
-                            <span onClick={toggleOpen} style={{ fontSize: '11px', color: '#475569', cursor: 'pointer', padding: '2px 4px' }}>{isOpen ? '▲' : '▼'}</span>
+                            <span onClick={() => setOpenAccordions(prev => { const next = new Set(prev); next.has(grpKey) ? next.delete(grpKey) : next.add(grpKey); return next; })} style={{ fontSize: '11px', color: '#475569', cursor: 'pointer', padding: '2px 4px' }}>{isOpen ? '▲' : '▼'}</span>
                           </div>
                           {isOpen && (
                             <div style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 12px 8px' }}>
-                              {key === '교대' ? (
+                              {grpKey === '교대' ? (
                                 (['A', 'B', 'C', 'D'] as const).map(cho => {
                                   const choEmps = grpEmps.filter(e => e.role.includes(cho + '조'));
                                   if (choEmps.length === 0) return null;
-                                  const choColors: Record<string, string> = { A: '#a5b4fc', B: '#86efac', C: '#fdba74', D: '#f9a8d4' };
-                                  const cc = choColors[cho];
+                                  const cc = ({ A: '#a5b4fc', B: '#86efac', C: '#fdba74', D: '#f9a8d4' } as Record<string, string>)[cho];
                                   const choSel = choEmps.filter(e => selectedEmps.has(e.emp_no)).length;
                                   const allChoSel = choSel === choEmps.length;
                                   return (
@@ -548,12 +548,29 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                                         <span style={{ fontSize: '10px', color: '#475569' }}>{choSel}/{choEmps.length}</span>
                                         <span style={{ marginLeft: 'auto', fontSize: '10px', color: allChoSel ? cc : '#475569' }}>{allChoSel ? '전체해제' : '전체선택'}</span>
                                       </div>
-                                      {choEmps.map(emp => empRow(emp, cc))}
+                                      {choEmps.map(emp => mkEmpRow(emp, cc))}
                                     </div>
                                   );
                                 })
                               ) : (
-                                grpEmps.map(emp => empRow(emp, color))
+                                teams.map(([team, teamEmps]) => {
+                                  const tSel = teamEmps.filter(e => selectedEmps.has(e.emp_no)).length;
+                                  const allTSel = tSel === teamEmps.length;
+                                  return (
+                                    <div key={team} style={{ marginBottom: '3px' }}>
+                                      <div onClick={() => setSelectedEmps(prev => {
+                                        const next = new Set(prev);
+                                        if (allTSel) teamEmps.forEach(e => next.delete(e.emp_no));
+                                        else teamEmps.forEach(e => next.add(e.emp_no));
+                                        return next;
+                                      })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 4px 2px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', marginBottom: '2px' }}>
+                                        <span style={{ fontSize: '11px', color: tSel > 0 ? color : '#64748b', fontWeight: 700, flex: 1 }}>{team}</span>
+                                        <span style={{ fontSize: '10px', color: '#475569' }}>{tSel}/{teamEmps.length}</span>
+                                      </div>
+                                      {teamEmps.map(emp => mkEmpRow(emp, color))}
+                                    </div>
+                                  );
+                                })
                               )}
                             </div>
                           )}
@@ -692,59 +709,148 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
 
                       {showEscalatePanel && (
                         <div style={{ marginTop: '6px', border: '1px solid rgba(165,180,252,0.2)', borderRadius: '10px', overflow: 'hidden', background: 'rgba(15,23,42,0.7)' }}>
-                          {/* 빠른 선택 */}
-                          <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <button type="button"
-                              onClick={() => setEscalateEmps(new Set(employees.map(e => e.emp_no)))}
-                              style={{ flex: 1, padding: '5px 0', borderRadius: '6px', cursor: 'pointer', border: '1px solid #a5b4fc44', background: '#a5b4fc14', color: '#a5b4fc', fontSize: '11px', fontWeight: 700 }}>
-                              전체 선택
-                            </button>
-                            <button type="button"
-                              onClick={() => setEscalateEmps(new Set())}
-                              style={{ flex: 1, padding: '5px 0', borderRadius: '6px', cursor: 'pointer', border: '1px solid #94a3b844', background: '#94a3b814', color: '#94a3b8', fontSize: '11px', fontWeight: 700 }}>
-                              전체 해제
-                            </button>
-                          </div>
-
-                          {/* 팀별 직원 목록 — groupedEmployees 재사용 (직전 훈련참여 선택 연동) */}
-                          <div style={{ maxHeight: '220px', overflowY: 'auto', padding: '4px 8px 4px' }}>
-                            {groupedEmployees.map(([team, teamEmps]) => {
-                              const allSel = teamEmps.length > 0 && teamEmps.every(e => escalateEmps.has(e.emp_no));
-                              const someSel = !allSel && teamEmps.some(e => escalateEmps.has(e.emp_no));
-                              const toggleTeam = () => setEscalateEmps(prev => {
-                                const next = new Set(prev);
-                                if (allSel) teamEmps.forEach(e => next.delete(e.emp_no));
-                                else teamEmps.forEach(e => next.add(e.emp_no));
-                                return next;
-                              });
+                          {/* ── 메뉴바 (1차와 동일 구조, escalateEmps 사용) ── */}
+                          <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)', overflowX: 'auto' }}>
+                            {(() => {
+                              const allIds = employees.map(e => e.emp_no);
+                              const allSel = allIds.length > 0 && allIds.every(id => escalateEmps.has(id));
+                              const partSel = !allSel && allIds.some(id => escalateEmps.has(id));
                               return (
-                                <div key={team} style={{ marginBottom: '2px' }}>
-                                  <div onClick={toggleTeam} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer' }}>
-                                    <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${allSel || someSel ? '#a5b4fc' : 'rgba(255,255,255,0.18)'}`, background: allSel ? '#a5b4fc' : someSel ? '#a5b4fc44' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                      {allSel && <span style={{ color: 'white', fontSize: '9px', fontWeight: 900 }}>✓</span>}
-                                      {someSel && <span style={{ color: '#a5b4fc', fontSize: '10px', fontWeight: 900 }}>−</span>}
-                                    </div>
-                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', flex: 1 }}>{team}</span>
-                                    <span style={{ fontSize: '10px', color: '#475569' }}>{teamEmps.filter(e => escalateEmps.has(e.emp_no)).length}/{teamEmps.length}</span>
-                                  </div>
-                                  {teamEmps.map(emp => {
-                                    const checked = escalateEmps.has(emp.emp_no);
-                                    return (
-                                      <div key={emp.emp_no}
-                                        onClick={() => setEscalateEmps(prev => { const next = new Set(prev); next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no); return next; })}
-                                        style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '4px 4px 4px 24px', cursor: 'pointer' }}>
-                                        <div style={{ width: '13px', height: '13px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? '#a5b4fc' : 'rgba(255,255,255,0.18)'}`, background: checked ? '#a5b4fc33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                          {checked && <span style={{ color: '#a5b4fc', fontSize: '9px', fontWeight: 900 }}>✓</span>}
-                                        </div>
-                                        <span style={{ fontSize: '12px', flex: 1, color: checked ? '#e2e8f0' : '#64748b' }}>{emp.name}</span>
-                                        <span style={{ fontSize: '10px', color: '#475569' }}>{emp.role}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
+                                <button type="button" onClick={() => setEscalateEmps(allSel ? new Set() : new Set(allIds))} style={{
+                                  padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 800, flexShrink: 0,
+                                  border: `1px solid ${allSel ? '#818cf8' : partSel ? '#818cf866' : '#818cf844'}`,
+                                  background: allSel ? '#818cf822' : partSel ? '#818cf80d' : 'transparent',
+                                  color: allSel ? '#818cf8' : partSel ? '#818cf8aa' : '#64748b',
+                                }}>전체</button>
+                              );
+                            })()}
+                            {INCIDENT_GROUPS.map(({ key, label, color }) => {
+                              const grpIds = employees.filter(e => getIncidentGroup(e, activeIncident!.disaster) === key).map(e => e.emp_no);
+                              if (grpIds.length === 0) return null;
+                              const selCount = grpIds.filter(id => escalateEmps.has(id)).length;
+                              const allSel = selCount === grpIds.length;
+                              const partSel = selCount > 0 && !allSel;
+                              return (
+                                <button key={key} type="button" onClick={() => setEscalateEmps(prev => {
+                                  const next = new Set(prev);
+                                  if (allSel) grpIds.forEach(id => next.delete(id));
+                                  else grpIds.forEach(id => next.add(id));
+                                  return next;
+                                })} style={{
+                                  padding: '5px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 700, flexShrink: 0,
+                                  border: `1px solid ${allSel ? color : partSel ? color + '66' : color + '44'}`,
+                                  background: allSel ? color + '22' : partSel ? color + '0d' : 'transparent',
+                                  color: allSel ? color : partSel ? color + 'bb' : '#64748b',
+                                }}>
+                                  {label}{selCount > 0 && <span style={{ fontSize: '10px', marginLeft: '3px', opacity: 0.8 }}>{selCount}</span>}
+                                </button>
                               );
                             })}
                           </div>
+
+                          {/* ── 아코디언 목록 (1차에서 이어받은 선택 표시) ── */}
+                          {INCIDENT_GROUPS.map(({ key: grpKey, color }) => {
+                            const grpEmps = employees.filter(e => getIncidentGroup(e, activeIncident!.disaster) === grpKey);
+                            if (grpEmps.length === 0) return null;
+                            const selCount = grpEmps.filter(e => escalateEmps.has(e.emp_no)).length;
+                            const allSel = selCount === grpEmps.length;
+                            const partSel = selCount > 0 && !allSel;
+                            const isOpen = openEscalateAccordions.has(grpKey);
+
+                            const tmap: Record<string, EmployeeDB[]> = {};
+                            for (const e of grpEmps) {
+                              const t = normalizeParticipantTeam(e.team, e.role);
+                              (tmap[t] ??= []).push(e);
+                            }
+                            const teams: [string, EmployeeDB[]][] = [
+                              ...TEAM_ORDER.filter(t => tmap[t]).map(t => [t, tmap[t]] as [string, EmployeeDB[]]),
+                              ...Object.entries(tmap).filter(([t]) => !TEAM_ORDER.includes(t)),
+                            ];
+
+                            const toggleGrpSel = () => setEscalateEmps(prev => {
+                              const next = new Set(prev);
+                              if (allSel) grpEmps.forEach(e => next.delete(e.emp_no));
+                              else grpEmps.forEach(e => next.add(e.emp_no));
+                              return next;
+                            });
+
+                            const mkEmpRow = (emp: EmployeeDB, c: string) => {
+                              const checked = escalateEmps.has(emp.emp_no);
+                              return (
+                                <div key={emp.emp_no} onClick={() => setEscalateEmps(prev => {
+                                  const next = new Set(prev); next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no); return next;
+                                })} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '5px 4px', cursor: 'pointer' }}>
+                                  <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? c : 'rgba(255,255,255,0.15)'}`, background: checked ? c + '33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    {checked && <span style={{ color: c, fontSize: '9px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
+                                  </div>
+                                  <span style={{ fontSize: '12px', flex: 1, color: checked ? '#e2e8f0' : '#94a3b8' }}>{emp.name}</span>
+                                  <span style={{ fontSize: '10px', color: '#475569' }}>{emp.role}</span>
+                                </div>
+                              );
+                            };
+
+                            return (
+                              <div key={grpKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px' }}>
+                                  <div onClick={toggleGrpSel} style={{ width: '15px', height: '15px', borderRadius: '4px', flexShrink: 0, border: `2px solid ${allSel || partSel ? color : 'rgba(255,255,255,0.18)'}`, background: allSel ? color + '33' : partSel ? color + '18' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                                    {allSel && <span style={{ color, fontSize: '9px', fontWeight: 900 }}>✓</span>}
+                                    {partSel && <span style={{ color, fontSize: '10px', fontWeight: 900, lineHeight: 1 }}>−</span>}
+                                  </div>
+                                  <span onClick={toggleGrpSel} style={{ flex: 1, fontSize: '13px', color: selCount > 0 ? color : '#94a3b8', fontWeight: 700, cursor: 'pointer' }}>{grpKey}</span>
+                                  <span style={{ fontSize: '11px', color: selCount > 0 ? color : '#475569', fontWeight: 600, marginRight: '6px' }}>{selCount}/{grpEmps.length}명</span>
+                                  <span onClick={() => setOpenEscalateAccordions(prev => { const next = new Set(prev); next.has(grpKey) ? next.delete(grpKey) : next.add(grpKey); return next; })} style={{ fontSize: '11px', color: '#475569', cursor: 'pointer', padding: '2px 4px' }}>{isOpen ? '▲' : '▼'}</span>
+                                </div>
+                                {isOpen && (
+                                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 12px 8px' }}>
+                                    {grpKey === '교대' ? (
+                                      (['A', 'B', 'C', 'D'] as const).map(cho => {
+                                        const choEmps = grpEmps.filter(e => e.role.includes(cho + '조'));
+                                        if (choEmps.length === 0) return null;
+                                        const cc = ({ A: '#a5b4fc', B: '#86efac', C: '#fdba74', D: '#f9a8d4' } as Record<string, string>)[cho];
+                                        const choSel = choEmps.filter(e => escalateEmps.has(e.emp_no)).length;
+                                        const allChoSel = choSel === choEmps.length;
+                                        return (
+                                          <div key={cho}>
+                                            <div onClick={() => setEscalateEmps(prev => {
+                                              const next = new Set(prev);
+                                              if (allChoSel) choEmps.forEach(e => next.delete(e.emp_no));
+                                              else choEmps.forEach(e => next.add(e.emp_no));
+                                              return next;
+                                            })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 4px 3px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', marginBottom: '2px' }}>
+                                              <span style={{ fontSize: '11px', color: cc, fontWeight: 700 }}>{cho}조</span>
+                                              <span style={{ fontSize: '10px', color: '#475569' }}>{choSel}/{choEmps.length}</span>
+                                              <span style={{ marginLeft: 'auto', fontSize: '10px', color: allChoSel ? cc : '#475569' }}>{allChoSel ? '전체해제' : '전체선택'}</span>
+                                            </div>
+                                            {choEmps.map(emp => mkEmpRow(emp, cc))}
+                                          </div>
+                                        );
+                                      })
+                                    ) : (
+                                      teams.map(([team, teamEmps]) => {
+                                        const tSel = teamEmps.filter(e => escalateEmps.has(e.emp_no)).length;
+                                        const allTSel = tSel === teamEmps.length;
+                                        return (
+                                          <div key={team} style={{ marginBottom: '3px' }}>
+                                            <div onClick={() => setEscalateEmps(prev => {
+                                              const next = new Set(prev);
+                                              if (allTSel) teamEmps.forEach(e => next.delete(e.emp_no));
+                                              else teamEmps.forEach(e => next.add(e.emp_no));
+                                              return next;
+                                            })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 4px 2px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', marginBottom: '2px' }}>
+                                              <span style={{ fontSize: '11px', color: tSel > 0 ? color : '#64748b', fontWeight: 700, flex: 1 }}>{team}</span>
+                                              <span style={{ fontSize: '10px', color: '#475569' }}>{tSel}/{teamEmps.length}</span>
+                                            </div>
+                                            {teamEmps.map(emp => mkEmpRow(emp, color))}
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+
                           <div style={{ padding: '5px 12px 7px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>
                             <strong style={{ color: '#e2e8f0' }}>{escalateEmps.size}명</strong> 선택 (선택 대원에게만 알람 발송)
                           </div>
