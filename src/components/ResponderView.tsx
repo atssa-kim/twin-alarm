@@ -461,7 +461,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                           >
                             <div className="checkbox-visual"><Check size={14} strokeWidth={3} /></div>
                             <div className="task-label">
-                              <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {num}</span>
+                              <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{num}</span>
                               {stripPrefix(task.label)}
                             </div>
                           </div>
@@ -507,7 +507,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                                   >
                                     <div className="checkbox-visual"><Check size={14} strokeWidth={3} /></div>
                                     <div className="task-label">
-                                      <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {childNum}</span>
+                                      <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{childNum}</span>
                                       {stripPrefix(child.label)}
                                     </div>
                                   </div>
@@ -670,7 +670,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                             <Check size={14} strokeWidth={3} />
                           </div>
                           <div className="task-label">
-                            <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {num}</span>
+                            <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{num}</span>
                             {stripPrefix(task.label)}
                           </div>
                         </div>
@@ -748,7 +748,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                                     <Check size={14} strokeWidth={3} />
                                   </div>
                                   <div className="task-label">
-                                    <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {childNum}</span>
+                                    <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{childNum}</span>
                                     {stripPrefix(child.label)}
                                   </div>
                                 </div>
