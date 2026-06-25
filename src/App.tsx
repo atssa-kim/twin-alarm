@@ -326,17 +326,14 @@ const App: React.FC = () => {
           </a>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {/* 알림(FCM) 허용 버튼 */}
           <button
             onClick={handleEnableNotif}
             style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '4px',
-              display: 'flex',
-              alignItems: 'center',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              padding: '2px 4px',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
               color: notifPerm === 'granted' ? '#22c55e' : notifPerm === 'denied' ? '#ef4444' : '#f59e0b',
             }}
             title={
@@ -345,9 +342,10 @@ const App: React.FC = () => {
                                         '탭하여 알림 허용'
             }
           >
-            {notifPerm === 'granted'
-              ? <Bell size={20} />
-              : <BellOff size={20} />}
+            {notifPerm === 'granted' ? <Bell size={18} /> : <BellOff size={18} />}
+            <span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1 }}>
+              {notifPerm === 'granted' ? '활성' : notifPerm === 'denied' ? '차단' : '알림'}
+            </span>
           </button>
 
           {/* Sound toggle button */}
@@ -359,36 +357,34 @@ const App: React.FC = () => {
               if (!next) stopAllAlerts();
             }}
             style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '4px',
-              display: 'flex',
-              alignItems: 'center',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              padding: '2px 4px',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
               color: soundEnabled ? '#ef4444' : 'var(--text-muted)',
-              opacity: soundEnabled ? 1 : 0.4,
+              opacity: soundEnabled ? 1 : 0.5,
             }}
             title={soundEnabled ? '육성 안내 켜짐' : '육성 안내 꺼짐'}
           >
-            <Megaphone size={20} />
+            <Megaphone size={18} />
+            <span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1 }}>
+              {soundEnabled ? '음성' : '음소거'}
+            </span>
           </button>
 
           <span className="badge badge-live">LIVE</span>
-          
+
           <button
             onClick={handleLogout}
             style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--color-fire)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              padding: '4px'
+              background: 'transparent', border: 'none',
+              color: 'var(--color-fire)', cursor: 'pointer',
+              padding: '2px 4px',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
             }}
             title="로그아웃"
           >
-            <LogOut size={22} />
+            <LogOut size={18} />
+            <span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1, color: 'var(--color-fire)' }}>exit</span>
           </button>
         </div>
       </header>
