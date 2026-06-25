@@ -69,27 +69,50 @@ npm run deploy           # GitHub Pages 배포
 - 미등록: 보안파트(보안1/2/3 구분 필요), 미화파트, 주차파트
 - 재실행: `npm run seed-employees` (upsert이므로 중복 실행 무관)
 
-## 현재 브랜치: feature/supabase-disaster-db
-- 정적 ROSTER 제거 → `employees` DB 테이블로 대체
-- `currentUser.badge` 정적 배지 제거 → 재난 발령 시 `employee_disaster_badges` 에서 동적 조회
-
 ## 데이터 흐름
 ```
-disa_app (편집) → Supabase disaster_roles/tasks → twintower-ops (실행)
+disa_app (편집) → Supabase disaster_roles/tasks → twin-alarm (실행)
 seed-employees.ts → Supabase employees/employee_disaster_badges → Login 직원목록/나의임무
 ```
 
 ## 핵심 파일
+- `src/main.tsx` — 앱 진입점, SW 조기 등록 (PWA 설치 보장)
+- `src/App.tsx` — 메인 앱, PWA 설치·알림 배너, 진동 알림
 - `src/services/supabase.ts` — DB 타입 및 헬퍼 함수 (getEmployees, getEmployeeBadge 포함)
 - `src/hooks/useRealtime.ts` — Supabase Realtime 구독
 - `src/data/disasters.ts` — 재난 유형 목록 (key/label/color/icon만 관리)
+- `src/components/CommanderDashboard.tsx` — 지휘관 화면 (참여인원 그룹화: 지휘연락/현장대응/대피지원/교대)
 - `scripts/seed-disasters.ts` — disaster_roles/tasks DB 적재
 - `scripts/seed-employees.ts` — employees + employee_disaster_badges DB 적재 (팀→배지 매핑표 포함)
 - `supabase_schema.sql` — 전체 테이블 DDL (Supabase SQL Editor에서 실행)
+- `public/manifest.json` — PWA 매니페스트 (icon-192.png / icon-512.png 참조)
+- `public/firebase-messaging-sw.js` — FCM 백그라운드 메시지 처리 서비스워커
+
+## 참여인원 그룹 (CommanderDashboard)
+재난 발령 시 직원을 4개 그룹으로 분류:
+| 그룹 | 분류 기준 |
+|---|---|
+| 지휘연락 | 센터장, 상황실, 재난별 파트장(CMD_TEAMS) |
+| 현장대응 | 해당 재난 현장 주력 파트 |
+| 대피지원 | 보안·주차·운영 등 대피 지원 파트(EVAC_TEAMS) |
+| 교대 | 교대 직원 (`role`에 '교대' 포함) |
+
+## PWA 설정
+- `public/manifest.json` — `start_url`, `scope`: `/twin-alarm/`
+- `public/icon-192.png`, `public/icon-512.png` — 정확한 크기의 정사각형 아이콘
+- `src/main.tsx` — 앱 로드 시 SW 즉시 등록 (`beforeinstallprompt` 발생 보장)
+- Android Chrome: [설치] 버튼 → `beforeinstallprompt.prompt()` 호출
+- iOS Safari: 하단 공유버튼 □↑ → 홈 화면에 추가
+- 기존 캐시 있을 때 테스트: Chrome 설정 → 사이트 설정 → 저장된데이터 삭제
+
+## FCM 푸시 알림
+- `src/services/notifications.ts` — 알림 권한 요청 + 포그라운드 메시지
+- `public/firebase-messaging-sw.js` — 백그라운드 메시지 수신 + 진동
+- 진동 패턴: `[400, 150, 400, 150, 600]` (발령·승격·포그라운드 FCM 모두)
 
 ## 배포 URL
-- 운영: https://atssa-kim.github.io/twintower-ops
-- 기준 브랜치: main (feature 브랜치 작업 완료 후 merge)
+- 운영: https://atssa-kim.github.io/twin-alarm/
+- 기준 브랜치: main
 
 ## Supabase 스키마 캐시 오류 시
 ```sql
