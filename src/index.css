@@ -359,7 +359,7 @@ input:focus, select:focus {
 }
 
 .task-label {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.45;
   color: var(--text-main);
   word-break: break-word;

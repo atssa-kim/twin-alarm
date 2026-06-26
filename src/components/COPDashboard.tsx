@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { type Incident, type Responder, type MemberTask } from '../services/supabase';
-import { DISASTERS } from '../data/disasters';
 import { Activity, Clock } from 'lucide-react';
 
 interface COPDashboardProps {
@@ -31,7 +30,6 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
     );
   }
 
-  const disasterManual = DISASTERS.find(d => d.key === activeIncident.disaster);
   const [showRoles, setShowRoles] = useState(true);
   const [showActivityLog, setShowActivityLog] = useState(false);
 
@@ -116,99 +114,61 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
         </div>
 
         {showRoles && (() => {
-          const members = disasterManual?.members ?? [];
-          const grouped = members.reduce((acc, m) => {
-            (acc[m.group] ??= []).push(m);
-            return acc;
-          }, {} as Record<string, typeof members>);
+          // tasks 기준으로 역할별 임무 완수율 집계 (◇◆ 헤더 제외)
+          const roleMap: Record<string, { done: number; total: number }> = {};
+          tasks.forEach(t => {
+            if (t.label.startsWith('◇') || t.label.startsWith('◆')) return;
+            if (!roleMap[t.role]) roleMap[t.role] = { done: 0, total: 0 };
+            roleMap[t.role].total++;
+            if (t.done) roleMap[t.role].done++;
+          });
+          const roles = Object.entries(roleMap);
+
+          if (roles.length === 0) {
+            return (
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', padding: '16px' }}>
+                발령된 임무 데이터가 없습니다.
+              </div>
+            );
+          }
 
           return (
-            <div style={{ padding: '8px 16px 12px' }}>
-              {Object.entries(grouped).map(([group, groupMembers]) => (
-                <div key={group} style={{ marginBottom: '10px' }}>
-                  <div style={{
-                    fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)',
-                    textTransform: 'uppercase', letterSpacing: '0.5px',
-                    paddingBottom: '4px',
-                    borderBottom: '1px solid rgba(255,255,255,0.05)',
-                    marginBottom: '4px',
+            <div style={{ padding: '8px 16px 12px', maxHeight: '360px', overflowY: 'auto' }}>
+              {roles.map(([role, { done, total }]) => {
+                const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                return (
+                  <div key={role} style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    padding: '6px 0',
+                    borderBottom: '1px solid rgba(255,255,255,0.04)',
                   }}>
-                    {group}
-                  </div>
-                  {groupMembers.map(member => {
-                    const roleTasks = tasks.filter(t => t.role === member.role);
-                    const roleCompleted = roleTasks.filter(t => t.done).length;
-                    const roleTotal = roleTasks.length;
-                    const rolePct = roleTotal > 0 ? Math.round((roleCompleted / roleTotal) * 100) : 0;
-                    const roleResponders = responders.filter(
-                      r => r.role === member.role || r.role.includes(member.badge)
-                    );
-                    const bc = member.bc || '#6b7280';
-
-                    return (
-                      <div key={member.role} style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
-                        padding: '5px 0',
-                        borderBottom: '1px solid rgba(255,255,255,0.03)',
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: '12px', fontWeight: 600, color: 'var(--text-main)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        marginBottom: '4px',
                       }}>
-                        {/* Badge pill */}
-                        <span style={{
-                          fontSize: '9px', fontWeight: 800,
-                          padding: '1px 5px', borderRadius: '4px',
-                          background: bc + '33', color: bc,
-                          border: `1px solid ${bc}55`,
-                          whiteSpace: 'nowrap', flexShrink: 0,
-                          minWidth: '30px', textAlign: 'center',
-                        }}>
-                          {member.badge}
-                        </span>
-
-                        {/* Role name + thin progress bar */}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{
-                            fontSize: '11px', fontWeight: 600, color: 'var(--text-main)',
-                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                            marginBottom: '3px',
-                          }}>
-                            {member.role}
-                          </div>
-                          <div className="progress-track" style={{ height: '3px' }}>
-                            <div className="progress-fill" style={{
-                              width: `${rolePct}%`,
-                              backgroundColor: rolePct === 100 ? 'var(--color-green)' : bc,
-                            }} />
-                          </div>
-                        </div>
-
-                        {/* Percentage + count */}
-                        <div style={{ textAlign: 'right', flexShrink: 0, minWidth: '38px' }}>
-                          <div style={{
-                            fontSize: '12px', fontWeight: 800,
-                            color: rolePct === 100 ? 'var(--color-green)' : 'var(--text-main)',
-                          }}>
-                            {rolePct === 100 ? '✓' : `${rolePct}%`}
-                          </div>
-                          {roleTotal > 0 && (
-                            <div style={{ fontSize: '9px', color: 'var(--text-muted)' }}>
-                              {roleCompleted}/{roleTotal}건
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Responder count */}
-                        {roleResponders.length > 0 && (
-                          <span style={{
-                            fontSize: '10px', color: 'var(--color-water)',
-                            flexShrink: 0, fontWeight: 700,
-                          }}>
-                            👤{roleResponders.length}
-                          </span>
-                        )}
+                        {role}
                       </div>
-                    );
-                  })}
-                </div>
-              ))}
+                      <div className="progress-track" style={{ height: '3px' }}>
+                        <div className="progress-fill" style={{
+                          width: `${pct}%`,
+                          backgroundColor: pct === 100 ? 'var(--color-green)' : 'var(--color-water)',
+                        }} />
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0, minWidth: '42px' }}>
+                      <div style={{
+                        fontSize: '12px', fontWeight: 800,
+                        color: pct === 100 ? 'var(--color-green)' : 'var(--text-main)',
+                      }}>
+                        {pct === 100 ? '✓' : `${pct}%`}
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{done}/{total}건</div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           );
         })()}
@@ -217,8 +177,9 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
       {/* 4. Live Activity Section */}
       <div className="card" style={{ marginTop: '10px', padding: 0, overflow: 'hidden' }}>
         <div
+          className="accordion-header"
           onClick={() => setShowActivityLog(v => !v)}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', cursor: 'pointer', borderBottom: showActivityLog ? '1px solid rgba(255,255,255,0.06)' : 'none' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', borderBottom: showActivityLog ? '1px solid rgba(255,255,255,0.06)' : 'none' }}
         >
           <Activity size={18} color="var(--color-green)" />
           <h3 style={{ margin: 0, fontSize: '14px', flex: 1 }}>활동로그</h3>
@@ -253,21 +214,21 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
               return entries.map((e, idx) => (
                 <div key={idx} style={{
                   display: 'flex', alignItems: 'baseline', gap: '6px',
-                  fontSize: '12px', padding: '4px 6px',
+                  fontSize: '14px', padding: '5px 6px',
                   background: 'rgba(255,255,255,0.02)',
                   borderLeft: `2px solid ${e.color}`,
                   borderRadius: '0 6px 6px 0',
                 }}>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', flexShrink: 0, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                     {fmtTime(e.time)}
                   </span>
                   <span style={{
-                    fontSize: '10px', color: e.color, fontWeight: 800, flexShrink: 0,
+                    fontSize: '11px', color: e.color, fontWeight: 800, flexShrink: 0,
                     background: e.color + '22', padding: '0 4px', borderRadius: '3px',
                   }}>
                     {e.tag}
                   </span>
-                  <span style={{ color: 'var(--text-main)', flex: 1 }}>{e.text}</span>
+                  <span style={{ color: 'var(--text-main)', flex: 1, fontSize: '14px' }}>{e.text}</span>
                 </div>
               ));
             })()
