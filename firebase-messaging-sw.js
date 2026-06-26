@@ -1,6 +1,12 @@
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
+// 새 SW 배포 시 즉시 활성화
+self.addEventListener('install', function() { self.skipWaiting(); });
+self.addEventListener('activate', function(event) {
+  event.waitUntil(self.clients.claim());
+});
+
 firebase.initializeApp({
   apiKey: "AIzaSyAvKPBGm0jHgQb4hsPhARi7AH2stXoyTiA",
   authDomain: "disaster-response-system-f669b.firebaseapp.com",
@@ -29,18 +35,34 @@ function computeTtsBody(mode, disaster, location) {
 }
 
 // 앱이 백그라운드(꺼진 상태)일 때 FCM 수신
+// data-only 메시지이므로 이 핸들러가 항상 실행됨
 messaging.onBackgroundMessage(function(payload) {
   var n = payload.notification || {};
   var data = payload.data || {};
 
-  var mode = data.mode || '';
+  var mode     = data.mode     || '';
   var disaster = data.disaster || '';
   var location = data.location || '';
-  var ttsBody = computeTtsBody(mode, disaster, location);
+  var ttsBody  = data.body || computeTtsBody(mode, disaster, location);
 
-  var notifTitle = n.title || (mode.indexOf('훈련') === 0 ? '🏋️ 훈련 발령' : '🚨 재난 발령');
+  var notifTitle = data.title
+    || n.title
+    || (mode.indexOf('훈련') === 0 ? '🏋️ 훈련 발령' : '🚨 재난 발령');
 
-  // 1) 열려 있는 탭에 postMessage → 즉시 TTS/사이렌 재생 (백그라운드 탭 대응)
+  // 1) 시스템 알림 표시 — 항상 먼저 실행 (클라이언트 조회 실패와 무관하게 보장)
+  self.registration.showNotification(notifTitle, {
+    body: ttsBody,
+    icon: '/twin-alarm/favicon.png',
+    badge: '/twin-alarm/favicon.png',
+    tag: 'twin-alarm-incident',
+    renotify: true,
+    requireInteraction: true,
+    vibrate: [800, 200, 800, 200, 800, 200, 800, 200, 1200],
+    silent: false,
+    data: { link: 'https://atssa-kim.github.io/twin-alarm/?alert=1', mode: mode, disaster: disaster, location: location }
+  });
+
+  // 2) 열려 있는 탭에 postMessage → 탭이 살아있으면 즉시 TTS/사이렌 재생
   self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(windowClients) {
     windowClients.forEach(function(client) {
       client.postMessage({
@@ -51,29 +73,13 @@ messaging.onBackgroundMessage(function(payload) {
         ttsText: ttsBody
       });
     });
-
-    // 2) 시스템 알림 표시 (앱 완전 종료 시 유일한 신호)
-    //    탭이 이미 열려 있어도 알림은 표시 (시각적 확인용)
-    self.registration.showNotification(notifTitle, {
-      body: ttsBody,
-      icon: '/twin-alarm/favicon.png',
-      badge: '/twin-alarm/favicon.png',
-      tag: 'twin-alarm-incident',
-      renotify: true,
-      requireInteraction: true,
-      // 강한 진동: 긴 울림 → 짧은 쉼 반복 5회
-      vibrate: [800, 200, 800, 200, 800, 200, 800, 200, 1200],
-      silent: false,
-      data: { link: 'https://atssa-kim.github.io/twin-alarm/', mode: mode, disaster: disaster, location: location }
-    });
   });
 });
 
 // 알림 클릭 시 앱 열기 — ?alert=1 파라미터로 TTS 강제 재생
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-  var base = 'https://atssa-kim.github.io/twin-alarm/';
-  var alertUrl = base + '?alert=1';
+  var alertUrl = 'https://atssa-kim.github.io/twin-alarm/?alert=1';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
       for (var i = 0; i < clientList.length; i++) {
