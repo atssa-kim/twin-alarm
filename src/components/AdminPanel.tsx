@@ -4,23 +4,39 @@ import { UserPlus, Pencil, Trash2, X, Save, Users, ChevronDown } from 'lucide-re
 
 const ALL_TEAMS = [
   '센터장', '상황실',
-  '기계파트', '전기파트', '소방파트',
-  '운영파트', '건축파트', '품질/안전파트',
+  '운영파트', '건축파트',
+  '기계파트', '전기파트', '소방파트', '품질/안전파트',
   '보안1', '보안2', '보안3',
   '주차파트', '미화파트',
 ];
 
-const DISASTERS_LIST = [
-  { key: '화재', icon: '🔥' },
-  { key: '정전', icon: '⚡' },
-  { key: '누수', icon: '💧' },
-  { key: '태풍/홍수', icon: '🌀' },
-  { key: '폭설', icon: '❄️' },
-  { key: '지진', icon: '🌍' },
-  { key: '가스누출', icon: '💨' },
-  { key: '승강기', icon: '🛗' },
-  { key: '테러', icon: '🚨' },
+// 카테고리별 팀 그룹핑 (필터 탭)
+const TEAM_CATEGORIES: { label: string; teams: string[] | null }[] = [
+  { label: '전체',   teams: null },
+  { label: '운영',   teams: ['센터장', '상황실', '운영파트', '건축파트'] },
+  { label: '기계',   teams: ['기계파트'] },
+  { label: '전기',   teams: ['전기파트'] },
+  { label: '소방',   teams: ['소방파트'] },
+  { label: '안전',   teams: ['품질/안전파트'] },
+  { label: '협력',   teams: ['보안1', '보안2', '보안3', '보안파트', '주차파트', '미화파트'] },
 ];
+
+const DISASTERS_LIST = [
+  { key: '화재',    icon: '🔥' },
+  { key: '정전',    icon: '⚡' },
+  { key: '누수',    icon: '💧' },
+  { key: '태풍/홍수', icon: '🌀' },
+  { key: '폭설',    icon: '❄️' },
+  { key: '지진',    icon: '🌍' },
+  { key: '가스누출', icon: '💨' },
+  { key: '승강기',  icon: '🛗' },
+  { key: '테러',    icon: '🚨' },
+];
+
+const generateEmpNo = () => `E${Date.now().toString().slice(-7)}`;
+
+const getLocalPart = (email: string) =>
+  email.endsWith('@sni.co.kr') ? email.slice(0, -'@sni.co.kr'.length) : email;
 
 interface FormState {
   emp_no: string;
@@ -33,8 +49,8 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
-  emp_no: '', name: '', team: ALL_TEAMS[0], role: '파트원',
-  is_commander: false, phone: '', email: '',
+  emp_no: '', name: '', team: '운영파트', role: '파트원',
+  is_commander: false, phone: '010-', email: '',
 };
 
 interface AdminPanelProps {
@@ -43,7 +59,7 @@ interface AdminPanelProps {
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) => {
-  const [filterTeam, setFilterTeam] = useState('전체');
+  const [filterCategory, setFilterCategory] = useState('전체');
   const [search, setSearch] = useState('');
   const [modalMode, setModalMode] = useState<'add' | 'edit' | null>(null);
   const [modalTab, setModalTab] = useState<'info' | 'badge'>('info');
@@ -54,39 +70,37 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
   const [saving, setSaving] = useState(false);
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
 
-  // 재난별 배지 목록 한 번만 로드
   useEffect(() => {
     db.getAllDisasterBadgeOptions().then(setBadgeOptions).catch(console.error);
   }, []);
 
-  // 팀 목록 (실제 DB 기준)
-  const teamList = useMemo(() => {
-    const teamSet = new Set(employees.map(e => e.team));
-    return ['전체', ...ALL_TEAMS.filter(t => teamSet.has(t)), ...Array.from(teamSet).filter(t => !ALL_TEAMS.includes(t)).sort()];
-  }, [employees]);
+  const categoryTeams = useMemo(() => {
+    const cat = TEAM_CATEGORIES.find(c => c.label === filterCategory);
+    return cat?.teams ?? null;
+  }, [filterCategory]);
 
-  // 필터링
   const filtered = useMemo(() => {
     let list = employees;
-    if (filterTeam !== '전체') list = list.filter(e => e.team === filterTeam);
+    if (categoryTeams) list = list.filter(e => categoryTeams.includes(e.team));
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      list = list.filter(e => e.name.includes(q) || e.role.toLowerCase().includes(q) || e.emp_no.includes(q));
+      list = list.filter(e =>
+        e.name.includes(q) || e.role.toLowerCase().includes(q) || e.emp_no.includes(q)
+      );
     }
-    return [...list].sort((a, b) => a.team.localeCompare(b.team, 'ko') || a.name.localeCompare(b.name, 'ko'));
-  }, [employees, filterTeam, search]);
+    return [...list].sort((a, b) =>
+      a.team.localeCompare(b.team, 'ko') || a.name.localeCompare(b.name, 'ko')
+    );
+  }, [employees, categoryTeams, search]);
 
-  // 팀별 그룹화
   const grouped = useMemo(() => {
     const map: Record<string, EmployeeDB[]> = {};
-    for (const e of filtered) {
-      (map[e.team] ??= []).push(e);
-    }
+    for (const e of filtered) (map[e.team] ??= []).push(e);
     return map;
   }, [filtered]);
 
   const openAdd = () => {
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, emp_no: generateEmpNo() });
     setFormBadges({});
     setModalTab('info');
     setEditEmpNo(null);
@@ -97,7 +111,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
     setForm({
       emp_no: emp.emp_no, name: emp.name, team: emp.team,
       role: emp.role, is_commander: emp.is_commander,
-      phone: emp.phone ?? '', email: emp.email ?? '',
+      phone: emp.phone ?? '010-', email: emp.email ?? '',
     });
     setEditEmpNo(emp.emp_no);
     setModalTab('info');
@@ -111,30 +125,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
   };
 
   const handleSave = async () => {
-    if (!form.emp_no.trim()) return alert('사번을 입력하세요.');
     if (!form.name.trim()) return alert('이름을 입력하세요.');
-    if (!form.phone.trim()) return alert('전화번호를 입력하세요 (로그인 비밀번호로 사용).');
+    const rawPhone = form.phone.trim();
+    if (!rawPhone || rawPhone === '010-') return alert('전화번호를 입력하세요 (로그인 비밀번호로 사용).');
+
+    const empNo = modalMode === 'add' ? generateEmpNo() : form.emp_no;
+    const emailVal = form.email.trim();
+    const finalEmail = (!emailVal || emailVal === '@sni.co.kr') ? undefined : emailVal;
 
     setSaving(true);
     try {
       const empData: EmployeeDB = {
-        emp_no: form.emp_no.trim(),
+        emp_no: empNo,
         name: form.name.trim(),
         team: form.team,
         role: form.role.trim(),
         is_commander: form.is_commander,
-        phone: form.phone.trim(),
-        email: form.email.trim() || undefined,
+        phone: rawPhone,
+        email: finalEmail,
       };
 
       if (modalMode === 'add') {
         await db.addEmployee(empData);
+        for (const { key: disaster } of DISASTERS_LIST) {
+          const badge = formBadges[disaster];
+          if (badge) await db.upsertEmployeeBadge(empNo, disaster, badge);
+        }
       } else if (modalMode === 'edit' && editEmpNo) {
         await db.updateEmployee(editEmpNo, empData);
-      }
-
-      // 배지 저장 (편집 모드에서만, 추가 시에는 배지 탭에서 별도 저장)
-      if (modalMode === 'edit' && editEmpNo) {
         for (const { key: disaster } of DISASTERS_LIST) {
           const badge = formBadges[disaster];
           if (badge) {
@@ -143,18 +161,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
             try { await db.deleteEmployeeBadge(editEmpNo, disaster); } catch { /* 없으면 무시 */ }
           }
         }
-      } else if (modalMode === 'add') {
-        // 추가 시 배지도 함께 저장
-        for (const { key: disaster } of DISASTERS_LIST) {
-          const badge = formBadges[disaster];
-          if (badge) await db.upsertEmployeeBadge(form.emp_no.trim(), disaster, badge);
-        }
       }
 
       setModalMode(null);
       onRefresh();
     } catch (err: any) {
-      alert('저장 실패: ' + (err.message ?? err));
+      if (err.message?.includes('row-level security') || err.code === '42501') {
+        alert(
+          '저장 실패: RLS 정책 오류\n\n' +
+          'Supabase SQL Editor에서 아래를 실행해주세요:\n\n' +
+          'ALTER TABLE employees DISABLE ROW LEVEL SECURITY;\n' +
+          'ALTER TABLE employee_disaster_badges DISABLE ROW LEVEL SECURITY;'
+        );
+      } else {
+        alert('저장 실패: ' + (err.message ?? err));
+      }
     } finally {
       setSaving(false);
     }
@@ -166,13 +187,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       await db.deleteEmployee(emp.emp_no);
       onRefresh();
     } catch (err: any) {
-      alert('삭제 실패: ' + (err.message ?? err));
+      if (err.message?.includes('row-level security') || err.code === '42501') {
+        alert('삭제 실패: RLS 정책 오류\nSupabase에서 employees 테이블의 RLS를 비활성화해주세요.');
+      } else {
+        alert('삭제 실패: ' + (err.message ?? err));
+      }
     }
   };
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '9px 12px',
-    background: 'rgba(255,255,255,0.06)',
+    background: '#1e293b',
     border: '1px solid rgba(255,255,255,0.12)',
     borderRadius: '8px', color: '#e2e8f0',
     fontSize: '13px', outline: 'none', boxSizing: 'border-box',
@@ -215,80 +240,72 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       {/* 검색 */}
       <input
         type="text"
-        placeholder="이름 · 사번 · 역할 검색"
+        placeholder="이름 · 역할 검색"
         value={search}
         onChange={e => setSearch(e.target.value)}
-        style={{
-          ...inputStyle,
-          padding: '10px 14px',
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.09)',
-        }}
+        style={{ ...inputStyle, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)' }}
       />
 
-      {/* 팀 필터 */}
+      {/* 카테고리 필터 */}
       <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
-        {teamList.map(t => (
-          <button key={t} onClick={() => setFilterTeam(t)} style={{
-            flexShrink: 0, padding: '5px 12px', borderRadius: '20px', cursor: 'pointer',
-            fontSize: '12px', fontWeight: 700,
-            background: filterTeam === t ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-            border: `1px solid ${filterTeam === t ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.1)'}`,
-            color: filterTeam === t ? '#60a5fa' : 'var(--text-muted)',
-          }}>
-            {t}
+        {TEAM_CATEGORIES.map(cat => (
+          <button
+            key={cat.label}
+            onClick={() => { setFilterCategory(cat.label); setExpandedTeam(null); }}
+            style={{
+              flexShrink: 0, padding: '5px 12px', borderRadius: '20px', cursor: 'pointer',
+              fontSize: '12px', fontWeight: 700,
+              background: filterCategory === cat.label ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
+              border: `1px solid ${filterCategory === cat.label ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.1)'}`,
+              color: filterCategory === cat.label ? '#60a5fa' : 'var(--text-muted)',
+            }}
+          >
+            {cat.label}
           </button>
         ))}
       </div>
 
-      {/* 직원 목록 */}
+      {/* 직원 목록 — 팀별 아코디언 */}
       {filtered.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: '13px' }}>
           {search ? '검색 결과가 없습니다.' : '등록된 직원이 없습니다.'}
         </div>
       ) : (
-        filterTeam === '전체' ? (
-          // 팀별 그룹 아코디언
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {teamGroups.map(([team, emps]) => (
-              <div key={team} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div
-                  className="accordion-header"
-                  onClick={() => setExpandedTeam(expandedTeam === team ? null : team)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '8px',
-                    padding: '11px 14px',
-                    borderBottom: expandedTeam === team ? '1px solid rgba(255,255,255,0.06)' : 'none',
-                  }}
-                >
-                  <span style={{ fontSize: '13px', fontWeight: 800, flex: 1 }}>{team}</span>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{emps.length}명</span>
-                  <ChevronDown size={14} color="var(--text-muted)"
-                    style={{ transform: expandedTeam === team ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                </div>
-                {expandedTeam === team && (
-                  <div>
-                    {emps.map(emp => <EmpRow key={emp.emp_no} emp={emp} onEdit={openEdit} onDelete={handleDelete} />)}
-                  </div>
-                )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {teamGroups.map(([team, emps]) => (
+            <div key={team} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div
+                className="accordion-header"
+                onClick={() => setExpandedTeam(expandedTeam === team ? null : team)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '11px 14px',
+                  borderBottom: expandedTeam === team ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                }}
+              >
+                <span style={{ fontSize: '13px', fontWeight: 800, flex: 1 }}>{team}</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{emps.length}명</span>
+                <ChevronDown size={14} color="var(--text-muted)"
+                  style={{ transform: expandedTeam === team ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
               </div>
-            ))}
-          </div>
-        ) : (
-          // 단일 팀 — 바로 목록
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            {filtered.map(emp => <EmpRow key={emp.emp_no} emp={emp} onEdit={openEdit} onDelete={handleDelete} />)}
-          </div>
-        )
+              {expandedTeam === team && (
+                <div>
+                  {emps.map(emp => <EmpRow key={emp.emp_no} emp={emp} onEdit={openEdit} onDelete={handleDelete} />)}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
 
       {/* ── 추가/편집 모달 ── */}
       {modalMode && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 300,
-          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'flex-end',
-        }}
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 300,
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'flex-end',
+          }}
           onClick={e => { if (e.target === e.currentTarget) setModalMode(null); }}
         >
           <div style={{
@@ -307,8 +324,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                 {modalMode === 'add' ? '직원 추가' : '직원 수정'}
               </span>
               <button onClick={() => setModalMode(null)} style={{
-                background: 'transparent', border: 'none', color: 'var(--text-muted)',
-                cursor: 'pointer', padding: '2px',
+                background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px',
               }}>
                 <X size={20} />
               </button>
@@ -324,76 +340,112 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
 
             {/* 스크롤 영역 */}
             <div style={{ overflowY: 'auto', flex: 1, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-
               {modalTab === 'info' ? (
                 <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={labelStyle}>사번 {modalMode === 'edit' && <span style={{ color: '#475569' }}>(변경불가)</span>}</label>
-                      <input style={{ ...inputStyle, opacity: modalMode === 'edit' ? 0.5 : 1 }}
-                        value={form.emp_no}
-                        onChange={e => setForm(f => ({ ...f, emp_no: e.target.value }))}
-                        readOnly={modalMode === 'edit'}
-                        placeholder="예: E001"
-                      />
-                    </div>
+                  {/* 이름 + 사번(자동) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
                     <div>
                       <label style={labelStyle}>이름</label>
-                      <input style={inputStyle}
+                      <input
+                        style={inputStyle}
                         value={form.name}
                         onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                         placeholder="홍길동"
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>사번 (자동)</label>
+                      <input
+                        style={{ ...inputStyle, opacity: 0.35, fontSize: '10px', color: '#64748b' }}
+                        value={form.emp_no}
+                        readOnly
                       />
                     </div>
                   </div>
 
+                  {/* 파트 */}
                   <div>
                     <label style={labelStyle}>파트 (팀)</label>
-                    <select style={{ ...inputStyle, cursor: 'pointer' }}
+                    <select
+                      style={{ ...inputStyle, cursor: 'pointer', background: '#1e293b', color: '#e2e8f0' }}
                       value={form.team}
-                      onChange={e => setForm(f => ({ ...f, team: e.target.value }))}>
-                      {ALL_TEAMS.map(t => <option key={t} value={t}>{t}</option>)}
+                      onChange={e => setForm(f => ({ ...f, team: e.target.value }))}
+                    >
+                      {ALL_TEAMS.map(t => (
+                        <option key={t} value={t} style={{ background: '#1e293b', color: '#e2e8f0' }}>{t}</option>
+                      ))}
                     </select>
                   </div>
 
+                  {/* 역할 */}
                   <div>
                     <label style={labelStyle}>역할</label>
-                    <input style={inputStyle}
+                    <input
+                      style={inputStyle}
                       value={form.role}
                       onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
                       placeholder="파트장 / 파트원 / 파트원(A조 교대) 등"
                     />
                   </div>
 
+                  {/* 전화번호 */}
                   <div>
-                    <label style={labelStyle}>전화번호 <span style={{ color: '#f59e0b', fontWeight: 500 }}>* 뒤 4자리 = 로그인 비밀번호</span></label>
-                    <input style={inputStyle}
+                    <label style={labelStyle}>
+                      전화번호{' '}
+                      <span style={{ color: '#f59e0b', fontWeight: 500, textTransform: 'none' }}>
+                        * 뒤 4자리 = 로그인 비밀번호
+                      </span>
+                    </label>
+                    <input
+                      style={inputStyle}
                       type="tel"
                       value={form.phone}
                       onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                      placeholder="01012345678"
+                      placeholder="010-0000-0000"
                     />
-                    {form.phone && (
+                    {form.phone && form.phone !== '010-' && (
                       <div style={{ marginTop: '5px', fontSize: '11px', color: '#94a3b8' }}>
-                        로그인 비밀번호: <strong style={{ color: '#fbbf24' }}>
+                        로그인 비밀번호:{' '}
+                        <strong style={{ color: '#fbbf24' }}>
                           {form.phone.replace(/\D/g, '').slice(-4) || '—'}
                         </strong>
                       </div>
                     )}
                   </div>
 
+                  {/* 이메일 */}
                   <div>
                     <label style={labelStyle}>이메일 (선택)</label>
-                    <input style={inputStyle}
-                      type="email"
-                      value={form.email}
-                      onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                      placeholder="hong@example.com"
-                    />
+                    <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                      <input
+                        style={{ ...inputStyle, borderRadius: '8px 0 0 8px', flex: 1 }}
+                        type="text"
+                        value={getLocalPart(form.email)}
+                        onChange={e => {
+                          const local = e.target.value;
+                          setForm(f => ({ ...f, email: local ? `${local}@sni.co.kr` : '' }));
+                        }}
+                        placeholder="hong.gildong"
+                      />
+                      <span style={{
+                        padding: '0 10px', flexShrink: 0,
+                        background: 'rgba(255,255,255,0.04)',
+                        border: '1px solid rgba(255,255,255,0.12)', borderLeft: 'none',
+                        borderRadius: '0 8px 8px 0',
+                        color: '#64748b', fontSize: '12px',
+                        display: 'flex', alignItems: 'center', whiteSpace: 'nowrap',
+                      }}>
+                        @sni.co.kr
+                      </span>
+                    </div>
                   </div>
 
+                  {/* 지휘관 체크 */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
-                    <input type="checkbox" id="is_commander_chk"
+                    <input
+                      type="checkbox"
+                      id="is_commander_chk"
                       checked={form.is_commander}
                       onChange={e => setForm(f => ({ ...f, is_commander: e.target.checked }))}
                       style={{ width: '16px', height: '16px', cursor: 'pointer' }}
@@ -428,13 +480,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                             onChange={e => setFormBadges(prev => ({ ...prev, [key]: e.target.value }))}
                             style={{
                               padding: '5px 8px', borderRadius: '6px', fontSize: '12px',
-                              background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.15)',
-                              color: current ? '#60a5fa' : '#475569', cursor: 'pointer', outline: 'none',
-                              minWidth: '80px',
+                              background: '#1e293b', border: '1px solid rgba(255,255,255,0.15)',
+                              color: current ? '#60a5fa' : '#94a3b8',
+                              cursor: 'pointer', outline: 'none', minWidth: '80px',
                             }}
                           >
-                            <option value="">없음</option>
-                            {options.map(b => <option key={b} value={b}>{b}</option>)}
+                            <option value="" style={{ background: '#1e293b', color: '#64748b' }}>없음</option>
+                            {options.map(b => (
+                              <option key={b} value={b} style={{ background: '#1e293b', color: '#e2e8f0' }}>{b}</option>
+                            ))}
                           </select>
                         </div>
                       );
@@ -446,12 +500,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
 
             {/* 저장 버튼 */}
             <div style={{ padding: '12px 18px 20px', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-              <button onClick={handleSave} disabled={saving} style={{
-                width: '100%', padding: '13px', borderRadius: '10px', cursor: saving ? 'not-allowed' : 'pointer',
-                background: saving ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.2)',
-                border: '1px solid rgba(59,130,246,0.5)', color: '#60a5fa',
-                fontSize: '14px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-              }}>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                style={{
+                  width: '100%', padding: '13px', borderRadius: '10px',
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  background: saving ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.2)',
+                  border: '1px solid rgba(59,130,246,0.5)', color: '#60a5fa',
+                  fontSize: '14px', fontWeight: 800,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                }}
+              >
                 <Save size={16} />
                 {saving ? '저장 중...' : modalMode === 'add' ? '직원 추가 완료' : '변경사항 저장'}
               </button>
@@ -470,7 +530,6 @@ const EmpRow: React.FC<{
   onDelete: (emp: EmployeeDB) => void;
 }> = ({ emp, onEdit, onDelete }) => {
   const lastFour = emp.phone?.replace(/\D/g, '').slice(-4) ?? '—';
-
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: '10px',

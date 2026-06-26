@@ -495,7 +495,7 @@ const App: React.FC = () => {
           <Radio size={17} />
           <span>업무수행율</span>
         </button>
-        {currentUser.isCommander && (
+        {currentUser.isCommander && currentUser.name === '김견수' && (
           <button
             onClick={() => setCurrentView('admin')}
             style={{
@@ -613,7 +613,7 @@ const App: React.FC = () => {
           />
         )}
 
-        {currentView === 'admin' && currentUser.isCommander && (
+        {currentView === 'admin' && currentUser.isCommander && currentUser.name === '김견수' && (
           <AdminPanel
             employees={employees}
             onRefresh={() => db.getEmployees().then(setEmployees).catch(console.error)}
