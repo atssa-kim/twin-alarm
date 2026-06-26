@@ -7,13 +7,14 @@ import { COPDashboard } from './components/COPDashboard';
 import { triggerEmergencyAlert, stopAllAlerts, unlockAudio } from './utils/audio';
 import { db, type EmployeeDB } from './services/supabase';
 import { requestNotificationPermission, onForegroundMessage } from './services/notifications';
-import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Bell, BellOff, Megaphone } from 'lucide-react';
+import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Bell, BellOff, Megaphone, Settings } from 'lucide-react';
+import { AdminPanel } from './components/AdminPanel';
 
 const App: React.FC = () => {
   const { activeIncident, responders, tasks, loading, disasterRoles } = useRealtime();
   const [currentUser, setCurrentUser] = useState<Employee | null>(null);
   const [employees, setEmployees] = useState<EmployeeDB[]>([]);
-  const [currentView, setCurrentView] = useState<'cmd' | 'responder' | 'cop' | 'log'>('responder');
+  const [currentView, setCurrentView] = useState<'cmd' | 'responder' | 'cop' | 'admin'>('responder');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>(
     'Notification' in window ? Notification.permission : 'denied'
@@ -154,7 +155,7 @@ const App: React.FC = () => {
       try {
         const parsedUser = JSON.parse(savedUser) as Employee;
         setCurrentUser(parsedUser);
-        setCurrentView(parsedUser.isCommander ? 'cmd' : 'responder');
+        setCurrentView(parsedUser.isCommander ? 'cmd' : 'responder' as 'cmd' | 'responder' | 'cop' | 'admin');
       } catch (e) {
         localStorage.removeItem('tt_user_session');
       }
@@ -494,6 +495,20 @@ const App: React.FC = () => {
           <Radio size={17} />
           <span>업무수행율</span>
         </button>
+        {currentUser.isCommander && (
+          <button
+            onClick={() => setCurrentView('admin')}
+            style={{
+              flex: '1 1 0', minWidth: 0, background: 'transparent', border: 'none',
+              color: currentView === 'admin' ? '#3b82f6' : 'var(--text-muted)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+            }}
+          >
+            <Settings size={17} />
+            <span>인원관리</span>
+          </button>
+        )}
       </nav>
 
       {/* ── PWA 설치 / 알림 허용 배너 ── */}
@@ -595,6 +610,13 @@ const App: React.FC = () => {
             activeIncident={activeIncident}
             responders={responders}
             tasks={tasks}
+          />
+        )}
+
+        {currentView === 'admin' && currentUser.isCommander && (
+          <AdminPanel
+            employees={employees}
+            onRefresh={() => db.getEmployees().then(setEmployees).catch(console.error)}
           />
         )}
 

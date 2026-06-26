@@ -270,4 +270,61 @@ export const db = {
     if (error) throw error;
     return data?.badge ?? null;
   },
+
+  // ── 인원 관리 CRUD ────────────────────────────────────────────
+  async addEmployee(emp: EmployeeDB): Promise<void> {
+    const { error } = await supabase.from('employees').insert(emp);
+    if (error) throw error;
+  },
+
+  async updateEmployee(empNo: string, updates: Partial<EmployeeDB>): Promise<void> {
+    const { error } = await supabase.from('employees').update(updates).eq('emp_no', empNo);
+    if (error) throw error;
+  },
+
+  async deleteEmployee(empNo: string): Promise<void> {
+    const { error } = await supabase.from('employees').delete().eq('emp_no', empNo);
+    if (error) throw error;
+  },
+
+  async getEmployeeAllBadges(empNo: string): Promise<Record<string, string>> {
+    const { data, error } = await supabase
+      .from('employee_disaster_badges')
+      .select('disaster, badge')
+      .eq('emp_no', empNo);
+    if (error) throw error;
+    const map: Record<string, string> = {};
+    for (const row of data ?? []) map[row.disaster] = row.badge;
+    return map;
+  },
+
+  async upsertEmployeeBadge(empNo: string, disaster: string, badge: string): Promise<void> {
+    const { error } = await supabase
+      .from('employee_disaster_badges')
+      .upsert({ emp_no: empNo, disaster, badge }, { onConflict: 'emp_no,disaster' });
+    if (error) throw error;
+  },
+
+  async deleteEmployeeBadge(empNo: string, disaster: string): Promise<void> {
+    const { error } = await supabase
+      .from('employee_disaster_badges')
+      .delete()
+      .eq('emp_no', empNo)
+      .eq('disaster', disaster);
+    if (error) throw error;
+  },
+
+  async getAllDisasterBadgeOptions(): Promise<Record<string, string[]>> {
+    const { data, error } = await supabase
+      .from('disaster_roles')
+      .select('disaster, badge')
+      .order('id');
+    if (error) throw error;
+    const map: Record<string, string[]> = {};
+    for (const row of data ?? []) {
+      if (!map[row.disaster]) map[row.disaster] = [];
+      if (!map[row.disaster].includes(row.badge)) map[row.disaster].push(row.badge);
+    }
+    return map;
+  },
 };
