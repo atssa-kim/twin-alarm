@@ -224,6 +224,11 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     setOptimisticDone(prev => ({ ...prev, [task.id]: true }));
     try {
       await db.toggleTaskDone(task.id, true, currentUser.name);
+      // 2개 이상 체크 완료 시 → 자동 현장 도착 처리 (상황실 제외)
+      if (!isSituationRoom && responderStatus !== '현장' && responderStatus !== '복귀') {
+        const newDoneCount = completedTasksCount + 1;
+        if (newDoneCount >= 2) updateStatus('현장');
+      }
     } catch (err: any) {
       // 실패 시 롤백
       setOptimisticDone(prev => ({ ...prev, [task.id]: false }));

@@ -314,6 +314,36 @@ export const db = {
     if (error) throw error;
   },
 
+  // ── 종료 재난 이력 조회 ──────────────────────────────────────
+  async getClosedIncidents(): Promise<Incident[]> {
+    const { data, error } = await supabase
+      .from('incidents')
+      .select('*')
+      .eq('status', 'closed')
+      .order('declared_at', { ascending: false })
+      .limit(30);
+    if (error) throw error;
+    return (data ?? []) as Incident[];
+  },
+
+  async getIncidentResponders(incidentId: string): Promise<Responder[]> {
+    const { data, error } = await supabase
+      .from('responders')
+      .select('*')
+      .eq('incident_id', incidentId);
+    if (error) throw error;
+    return (data ?? []) as Responder[];
+  },
+
+  async getIncidentTasks(incidentId: string): Promise<MemberTask[]> {
+    const { data, error } = await supabase
+      .from('member_tasks')
+      .select('*')
+      .eq('incident_id', incidentId);
+    if (error) throw error;
+    return (data ?? []) as MemberTask[];
+  },
+
   async getAllDisasterBadgeOptions(): Promise<Record<string, string[]>> {
     const { data, error } = await supabase
       .from('disaster_roles')

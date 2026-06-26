@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { type Incident, type Responder, type MemberTask, type EmployeeDB, db } from '../services/supabase';
 import { DISASTERS } from '../data/disasters';
 import { stopAllAlerts } from '../utils/audio';
-import { Play, Square, ShieldAlert, Users, Mic, UserCheck, BarChart2, Monitor } from 'lucide-react';
+import { Play, Square, ShieldAlert, Users, Mic, UserCheck, BarChart2, Monitor, History, X, ChevronDown } from 'lucide-react';
 
 // 화재 초기출동조 배지 (감지기동작 시 1차 소집)
 const FIRE_INITIAL_BADGES = new Set(['총괄', '상황실', '통제', '출동']);
@@ -114,6 +114,53 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const [showResponders, setShowResponders] = useState(true);
   const [openEscalateAccordions, setOpenEscalateAccordions] = useState<Set<string>>(new Set());
   const isFireDisaster = selectedDisasterKey === '화재';
+
+  // ── 종료 재난 로그 ───────────────────────────────────────────
+  const [showLog, setShowLog] = useState(false);
+  const [logIncidents, setLogIncidents] = useState<import('../services/supabase').Incident[]>([]);
+  const [logLoading, setLogLoading] = useState(false);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [logDetail, setLogDetail] = useState<{
+    responders: import('../services/supabase').Responder[];
+    tasks: import('../services/supabase').MemberTask[];
+  } | null>(null);
+  const [logDetailLoading, setLogDetailLoading] = useState(false);
+
+  const loadLog = async () => {
+    setLogLoading(true);
+    try {
+      const list = await db.getClosedIncidents();
+      setLogIncidents(list);
+      setShowLog(true);
+    } catch (e: any) {
+      alert('기록 로드 실패: ' + e.message);
+    } finally {
+      setLogLoading(false);
+    }
+  };
+
+  const loadLogDetail = async (incidentId: string) => {
+    if (expandedLogId === incidentId) { setExpandedLogId(null); return; }
+    setExpandedLogId(incidentId);
+    setLogDetail(null);
+    setLogDetailLoading(true);
+    try {
+      const [responders, tasks] = await Promise.all([
+        db.getIncidentResponders(incidentId),
+        db.getIncidentTasks(incidentId),
+      ]);
+      setLogDetail({ responders, tasks });
+    } catch (e: any) {
+      alert('상세 로드 실패: ' + e.message);
+    } finally {
+      setLogDetailLoading(false);
+    }
+  };
+
+  const fmtDate = (ms: number) => {
+    const d = new Date(ms);
+    return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
 
   // ── 발령 ─────────────────────────────────────────
   const handleDeclare = async (e: React.FormEvent) => {
@@ -297,112 +344,115 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
             <div style={{ fontSize: '13px', marginTop: '6px' }}>발령이 시작되면 여기에 대원 현황이 표시됩니다.</div>
           </div>
         ) : (
-        <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-            <ShieldAlert color="var(--color-fire)" size={24} style={{ flexShrink: 0 }} />
-            <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '17px', margin: 0, flex: 1 }}>
-              신규 비상 상황 발령
-            </h3>
-            {/* 화자변경 버튼 */}
-            <div ref={voicePickerRef} style={{ position: 'relative', flexShrink: 0 }}>
-              <button
-                type="button"
-                onClick={() => setShowVoicePicker(v => !v)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '5px',
-                  background: showVoicePicker ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.05)',
-                  border: showVoicePicker ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '8px', padding: '6px 10px',
-                  color: showVoicePicker ? '#60a5fa' : 'var(--text-muted)',
-                  fontSize: '12px', fontWeight: 700, cursor: 'pointer',
-                }}
-              >
-                <Mic size={13} />화자변경
-              </button>
-              {showVoicePicker && (
-                <div style={{
-                  position: 'absolute', top: '100%', right: 0, marginTop: '6px',
-                  background: 'rgba(15,23,42,0.97)', backdropFilter: 'blur(16px)',
-                  border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
-                  padding: '6px 0', minWidth: '200px', maxHeight: '260px',
-                  overflowY: 'auto', zIndex: 200, boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
-                }}>
-                  <div style={{ padding: '6px 14px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>🎙 TTS 화자 선택</span>
+        <>
+          {/* 헤더 카드 (제목 + 화자변경) */}
+          <div className="card" style={{ padding: '12px 14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <ShieldAlert color="var(--color-fire)" size={22} style={{ flexShrink: 0 }} />
+              <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '16px', margin: 0, flex: 1 }}>
+                신규 비상 상황 발령
+              </h3>
+              {/* 화자변경 버튼 */}
+              <div ref={voicePickerRef} style={{ position: 'relative', flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowVoicePicker(v => !v)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '5px',
+                    background: showVoicePicker ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.05)',
+                    border: showVoicePicker ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '8px', padding: '6px 10px',
+                    color: showVoicePicker ? '#60a5fa' : 'var(--text-muted)',
+                    fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                  }}
+                >
+                  <Mic size={13} />화자변경
+                </button>
+                {showVoicePicker && (
+                  <div style={{
+                    position: 'absolute', top: '100%', right: 0, marginTop: '6px',
+                    background: 'rgba(15,23,42,0.97)', backdropFilter: 'blur(16px)',
+                    border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
+                    padding: '6px 0', minWidth: '200px', maxHeight: '260px',
+                    overflowY: 'auto', zIndex: 200, boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+                  }}>
+                    <div style={{ padding: '6px 14px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>🎙 TTS 화자 선택</span>
+                    </div>
+                    {availableVoices.length === 0 ? (
+                      <div style={{ padding: '10px 14px', color: '#64748b', fontSize: '13px' }}>사용 가능한 화자 없음</div>
+                    ) : (
+                      [...availableVoices]
+                        .sort((a, b) => getCleanVoiceName(a.name).localeCompare(getCleanVoiceName(b.name), 'ko'))
+                        .map(voice => (
+                          <button key={voice.name} type="button"
+                            onClick={() => { handleVoiceChange(voice.name); setShowVoicePicker(false); }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '8px',
+                              width: '100%', padding: '9px 14px',
+                              background: selectedVoiceName === voice.name ? 'rgba(59,130,246,0.15)' : 'transparent',
+                              border: 'none',
+                              color: selectedVoiceName === voice.name ? '#60a5fa' : '#e2e8f0',
+                              fontSize: '13px', cursor: 'pointer', textAlign: 'left',
+                            }}
+                          >
+                            <span style={{ width: '16px', textAlign: 'center' }}>{selectedVoiceName === voice.name ? '✓' : ''}</span>
+                            <span>{getCleanVoiceName(voice.name)}</span>
+                          </button>
+                        ))
+                    )}
                   </div>
-                  {availableVoices.length === 0 ? (
-                    <div style={{ padding: '10px 14px', color: '#64748b', fontSize: '13px' }}>사용 가능한 화자 없음</div>
-                  ) : (
-                    [...availableVoices]
-                      .sort((a, b) => getCleanVoiceName(a.name).localeCompare(getCleanVoiceName(b.name), 'ko'))
-                      .map(voice => (
-                        <button key={voice.name} type="button"
-                          onClick={() => { handleVoiceChange(voice.name); setShowVoicePicker(false); }}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: '8px',
-                            width: '100%', padding: '9px 14px',
-                            background: selectedVoiceName === voice.name ? 'rgba(59,130,246,0.15)' : 'transparent',
-                            border: 'none',
-                            color: selectedVoiceName === voice.name ? '#60a5fa' : '#e2e8f0',
-                            fontSize: '13px', cursor: 'pointer', textAlign: 'left',
-                          }}
-                        >
-                          <span style={{ width: '16px', textAlign: 'center' }}>{selectedVoiceName === voice.name ? '✓' : ''}</span>
-                          <span>{getCleanVoiceName(voice.name)}</span>
-                        </button>
-                      ))
-                  )}
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 
-          <form onSubmit={handleDeclare} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* 재난 유형 */}
-            <div>
-              <label htmlFor="disaster-select">재난 유형</label>
-              <select id="disaster-select" value={selectedDisasterKey}
-                onChange={(e) => { setSelectedDisasterKey(e.target.value); setFireSubMode('initial'); }}
-              >
-                {DISASTERS.map((d) => (
-                  <option key={d.key} value={d.key}>{d.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* 발령 구분 */}
-            <div>
-              <label>발령 구분</label>
-              <div className="segmented-control">
-                <button type="button" className={`segmented-btn ${selectedMode === '훈련' ? 'active' : ''}`}
-                  onClick={() => setSelectedMode('훈련')}>
-                  🎓 훈련상황
-                </button>
-                <button type="button" className={`segmented-btn ${selectedMode === '실제' ? 'active' : ''}`}
-                  onClick={() => setSelectedMode('실제')}
-                  style={{ color: selectedMode === '실제' ? 'var(--color-fire)' : '' }}>
-                  ⚠️ 실제상황
-                </button>
-              </div>
-            </div>
-
-            {/* 화재 전용: 서브모드 선택 */}
-            {isFireDisaster && (
+          <form onSubmit={handleDeclare} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {/* 재난 유형 + 발령구분 + 화재서브모드 */}
+            <div className="card" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label>{selectedMode === '훈련' ? '훈련 유형' : '화재 단계'}</label>
+                <label htmlFor="disaster-select">재난 유형</label>
+                <select id="disaster-select" value={selectedDisasterKey}
+                  onChange={(e) => { setSelectedDisasterKey(e.target.value); setFireSubMode('initial'); }}
+                >
+                  {DISASTERS.map((d) => (
+                    <option key={d.key} value={d.key}>{d.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label>발령 구분</label>
                 <div className="segmented-control">
-                  <button type="button" className={`segmented-btn ${fireSubMode === 'initial' ? 'active' : ''}`}
-                    onClick={() => setFireSubMode('initial')}>
-                    🔔 감지기동작
+                  <button type="button" className={`segmented-btn ${selectedMode === '훈련' ? 'active' : ''}`}
+                    onClick={() => setSelectedMode('훈련')}>
+                    🎓 훈련상황
                   </button>
-                  <button type="button" className={`segmented-btn ${fireSubMode === 'full' ? 'active' : ''}`}
-                    onClick={() => setFireSubMode('full')}
-                    style={{ color: fireSubMode === 'full' ? (selectedMode === '실제' ? 'var(--color-fire)' : '#a78bfa') : '' }}>
-                    {selectedMode === '훈련' ? '🎯 전체훈련' : '🔥 화재상황'}
+                  <button type="button" className={`segmented-btn ${selectedMode === '실제' ? 'active' : ''}`}
+                    onClick={() => setSelectedMode('실제')}
+                    style={{ color: selectedMode === '실제' ? 'var(--color-fire)' : '' }}>
+                    ⚠️ 실제상황
                   </button>
                 </div>
               </div>
-            )}
+
+              {isFireDisaster && (
+                <div>
+                  <label>{selectedMode === '훈련' ? '훈련 유형' : '화재 단계'}</label>
+                  <div className="segmented-control">
+                    <button type="button" className={`segmented-btn ${fireSubMode === 'initial' ? 'active' : ''}`}
+                      onClick={() => setFireSubMode('initial')}>
+                      🔔 감지기동작
+                    </button>
+                    <button type="button" className={`segmented-btn ${fireSubMode === 'full' ? 'active' : ''}`}
+                      onClick={() => setFireSubMode('full')}
+                      style={{ color: fireSubMode === 'full' ? (selectedMode === '실제' ? 'var(--color-fire)' : '#a78bfa') : '' }}>
+                      {selectedMode === '훈련' ? '🎯 전체훈련' : '🔥 화재상황'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* 위치 */}
             <div>
@@ -587,13 +637,93 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
               즉시 비상 발령 (사이렌/임무 생성)
             </button>
           </form>
-        </div>
+
+          {/* 이전 재난 기록 */}
+          <button type="button" onClick={loadLog} disabled={logLoading}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              padding: '10px 14px', borderRadius: '10px', cursor: logLoading ? 'default' : 'pointer',
+              border: '1px solid rgba(148,163,184,0.2)',
+              background: 'rgba(148,163,184,0.04)',
+              color: '#64748b', fontSize: '13px', fontWeight: 700,
+            }}>
+            <History size={15} />
+            {logLoading ? '로딩 중...' : '이전 재난 기록 보기'}
+          </button>
+
+          {showLog && (
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <span style={{ fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8' }}>
+                  <History size={14} /> 종료 재난 기록 (최근 30건)
+                </span>
+                <button type="button" onClick={() => setShowLog(false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '2px', display: 'flex' }}>
+                  <X size={16} />
+                </button>
+              </div>
+              {logIncidents.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#475569', fontSize: '13px' }}>종료된 재난 기록이 없습니다.</div>
+              ) : (
+                logIncidents.map(inc => {
+                  const isExpanded = expandedLogId === inc.id;
+                  return (
+                    <div key={inc.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                      <div onClick={() => loadLogDetail(inc.id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '11px 14px', cursor: 'pointer', background: isExpanded ? 'rgba(255,255,255,0.04)' : 'transparent' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#e2e8f0' }}>{inc.disaster} — {inc.location}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{inc.mode} · {fmtDate(inc.declared_at)}</div>
+                        </div>
+                        <ChevronDown size={14} color="#475569" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
+                      </div>
+                      {isExpanded && (
+                        <div style={{ padding: '8px 14px 12px', background: 'rgba(0,0,0,0.2)' }}>
+                          {logDetailLoading ? (
+                            <div style={{ fontSize: '12px', color: '#64748b', textAlign: 'center', padding: '8px' }}>로딩 중...</div>
+                          ) : logDetail ? (
+                            <>
+                              <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 700, marginBottom: '6px' }}>참여인원 ({logDetail.responders.length}명)</div>
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                                {(['현장', '복귀', '출동중', '미응답'] as const).map(st => {
+                                  const cnt = logDetail.responders.filter(r => r.status === st).length;
+                                  if (cnt === 0) return null;
+                                  const c = st === '출동중' ? '#f97316' : st === '현장' ? '#38bdf8' : st === '복귀' ? '#4ade80' : '#64748b';
+                                  return <span key={st} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: c + '22', color: c, fontWeight: 700 }}>{st} {cnt}명</span>;
+                                })}
+                              </div>
+                              {(() => {
+                                const checkable = logDetail.tasks.filter(t => !t.label.startsWith('◇') && !t.label.startsWith('◆'));
+                                const done = checkable.filter(t => t.done).length;
+                                const pct = checkable.length > 0 ? Math.round(done / checkable.length * 100) : 0;
+                                return (
+                                  <div>
+                                    <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 700, marginBottom: '5px' }}>임무 수행율</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <div style={{ flex: 1, height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)' }}>
+                                        <div style={{ width: `${pct}%`, height: '100%', borderRadius: '3px', background: '#10b981' }} />
+                                      </div>
+                                      <span style={{ fontSize: '12px', color: '#10b981', fontWeight: 700, minWidth: '36px' }}>{pct}%</span>
+                                      <span style={{ fontSize: '11px', color: '#475569' }}>{done}/{checkable.length}건</span>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </>
         )
       ) : (
         // ── 발령 중 모니터링 ────────────────────────
         <>
           {/* 임무 수행률 */}
-          <div className="card">
+          <div className="card" style={{ padding: '12px 16px' }}>
             <div className="progress-header">
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <BarChart2 size={15} color="var(--color-green)" />
