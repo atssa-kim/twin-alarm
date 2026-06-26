@@ -162,6 +162,11 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
     return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   };
 
+  const fmtDateFull = (ms: number) => {
+    const d = new Date(ms);
+    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+
   // ── 발령 ─────────────────────────────────────────
   const handleDeclare = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -676,39 +681,111 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                         <ChevronDown size={14} color="#475569" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
                       </div>
                       {isExpanded && (
-                        <div style={{ padding: '8px 14px 12px', background: 'rgba(0,0,0,0.2)' }}>
+                        <div style={{ padding: '10px 14px 14px', background: 'rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                           {logDetailLoading ? (
-                            <div style={{ fontSize: '12px', color: '#64748b', textAlign: 'center', padding: '8px' }}>로딩 중...</div>
-                          ) : logDetail ? (
-                            <>
-                              <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 700, marginBottom: '6px' }}>참여인원 ({logDetail.responders.length}명)</div>
-                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                                {(['현장', '복귀', '출동중', '미응답'] as const).map(st => {
-                                  const cnt = logDetail.responders.filter(r => r.status === st).length;
-                                  if (cnt === 0) return null;
-                                  const c = st === '출동중' ? '#f97316' : st === '현장' ? '#38bdf8' : st === '복귀' ? '#4ade80' : '#64748b';
-                                  return <span key={st} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: c + '22', color: c, fontWeight: 700 }}>{st} {cnt}명</span>;
-                                })}
-                              </div>
-                              {(() => {
-                                const checkable = logDetail.tasks.filter(t => !t.label.startsWith('◇') && !t.label.startsWith('◆'));
-                                const done = checkable.filter(t => t.done).length;
-                                const pct = checkable.length > 0 ? Math.round(done / checkable.length * 100) : 0;
-                                return (
-                                  <div>
-                                    <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 700, marginBottom: '5px' }}>임무 수행율</div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                      <div style={{ flex: 1, height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)' }}>
-                                        <div style={{ width: `${pct}%`, height: '100%', borderRadius: '3px', background: '#10b981' }} />
+                            <div style={{ fontSize: '12px', color: '#64748b', textAlign: 'center', padding: '12px' }}>로딩 중...</div>
+                          ) : logDetail ? (() => {
+                            const getEmpName = (empNo: string | null | undefined) =>
+                              employees.find(e => e.emp_no === empNo)?.name ?? (empNo || '—');
+
+                            const checkable = logDetail.tasks.filter(t => !t.label.startsWith('◇') && !t.label.startsWith('◆'));
+                            const doneTasks = checkable.filter(t => t.done);
+                            const pct = checkable.length > 0 ? Math.round(doneTasks.length / checkable.length * 100) : 0;
+
+                            const roleGroups: Record<string, typeof logDetail.tasks> = {};
+                            for (const t of checkable) { (roleGroups[t.role] ??= []).push(t); }
+
+                            const secTitle: React.CSSProperties = { fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '7px' };
+
+                            return (
+                              <>
+                                {/* ① 발령 정보 */}
+                                <div>
+                                  <div style={secTitle}>📋 발령 정보</div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                                    {([
+                                      ['발령 시각', fmtDateFull(inc.declared_at)],
+                                      ['발령자', getEmpName(inc.declared_by)],
+                                      ['구분', inc.mode],
+                                      ['위치', inc.location],
+                                    ] as [string, string][]).map(([lbl, val]) => (
+                                      <div key={lbl} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '6px', padding: '5px 8px' }}>
+                                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, marginBottom: '2px' }}>{lbl}</div>
+                                        <div style={{ fontSize: '12px', color: '#e2e8f0', fontWeight: 600, wordBreak: 'break-all' }}>{val}</div>
                                       </div>
-                                      <span style={{ fontSize: '12px', color: '#10b981', fontWeight: 700, minWidth: '36px' }}>{pct}%</span>
-                                      <span style={{ fontSize: '11px', color: '#475569' }}>{done}/{checkable.length}건</span>
-                                    </div>
+                                    ))}
                                   </div>
-                                );
-                              })()}
-                            </>
-                          ) : null}
+                                </div>
+
+                                {/* ② 출동 현황 */}
+                                <div>
+                                  <div style={secTitle}>👥 출동 현황 ({logDetail.responders.length}명)</div>
+                                  <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                                    {(['현장', '복귀', '출동중', '미응답'] as const).map(st => {
+                                      const cnt = logDetail.responders.filter(r => r.status === st).length;
+                                      if (cnt === 0) return null;
+                                      const c = st === '출동중' ? '#f97316' : st === '현장' ? '#38bdf8' : st === '복귀' ? '#4ade80' : '#64748b';
+                                      return <span key={st} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: c + '22', color: c, fontWeight: 700 }}>{st} {cnt}명</span>;
+                                    })}
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxHeight: '180px', overflowY: 'auto' }}>
+                                    {[...logDetail.responders]
+                                      .sort((a, b) => {
+                                        const ord = ['현장', '복귀', '출동중', '미응답'];
+                                        return ord.indexOf(a.status) - ord.indexOf(b.status);
+                                      })
+                                      .map(r => {
+                                        const c = r.status === '출동중' ? '#f97316' : r.status === '현장' ? '#38bdf8' : r.status === '복귀' ? '#4ade80' : '#64748b';
+                                        return (
+                                          <div key={r.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 6px', borderRadius: '5px', background: 'rgba(255,255,255,0.03)' }}>
+                                            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: c, flexShrink: 0 }} />
+                                            <span style={{ fontSize: '12px', color: '#e2e8f0', flex: 1 }}>{r.name}</span>
+                                            <span style={{ fontSize: '10px', color: '#475569' }}>{r.team}</span>
+                                            <span style={{ fontSize: '11px', color: c, fontWeight: 700, marginLeft: '4px' }}>{r.status}</span>
+                                          </div>
+                                        );
+                                      })
+                                    }
+                                  </div>
+                                </div>
+
+                                {/* ③ 임무 수행 내역 */}
+                                <div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                    <div style={secTitle}>✅ 임무 수행 내역</div>
+                                    <div style={{ flex: 1, height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.06)' }}>
+                                      <div style={{ width: `${pct}%`, height: '100%', borderRadius: '2px', background: '#10b981' }} />
+                                    </div>
+                                    <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 700, whiteSpace: 'nowrap' }}>{pct}% ({doneTasks.length}/{checkable.length}건)</span>
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '320px', overflowY: 'auto' }}>
+                                    {Object.entries(roleGroups).map(([role, roleTasks]) => {
+                                      const doneInRole = roleTasks.filter(t => t.done).length;
+                                      return (
+                                        <div key={role}>
+                                          <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, padding: '3px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '4px' }}>
+                                            {role} ({doneInRole}/{roleTasks.length})
+                                          </div>
+                                          {[...roleTasks].sort((a, b) => a.task_idx - b.task_idx).map(t => (
+                                            <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', padding: '3px 2px', opacity: t.done ? 1 : 0.4 }}>
+                                              <span style={{ fontSize: '11px', marginTop: '1px', flexShrink: 0 }}>{t.done ? '✅' : '⬜'}</span>
+                                              <span style={{ fontSize: '12px', color: t.done ? '#e2e8f0' : '#64748b', flex: 1 }}>{t.label}</span>
+                                              {t.done && (
+                                                <span style={{ fontSize: '10px', color: '#475569', flexShrink: 0, textAlign: 'right' }}>
+                                                  {t.done_by ? getEmpName(t.done_by) : ''}
+                                                  {t.updated_at ? ` ${fmtDate(t.updated_at)}` : ''}
+                                                </span>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </>
+                            );
+                          })() : null}
                         </div>
                       )}
                     </div>
