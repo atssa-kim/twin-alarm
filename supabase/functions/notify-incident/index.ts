@@ -146,6 +146,8 @@ async function sendFcmPush(
 ): Promise<void> {
   // 알림 탭 시 ?alert=1 파라미터로 앱을 열어 TTS 강제 재생
   const alertUrl = APP_URL + '?alert=1';
+  // notification 필드를 제거하고 data-only 메시지로 전송
+  // → onBackgroundMessage 가 항상 실행됨 (notification 필드가 있으면 브라우저가 직접 처리하여 SW 콜백 미실행)
   const resp = await fetch(FCM_URL, {
     method: 'POST',
     headers: {
@@ -155,19 +157,9 @@ async function sendFcmPush(
     body: JSON.stringify({
       message: {
         token,
-        notification: { title, body },
-        data,
+        data: { ...data, title, body },   // title/body 도 data 에 포함 (SW 에서 읽음)
         webpush: {
-          notification: {
-            title,
-            body,
-            icon: APP_ICON,
-            badge: APP_ICON,
-            requireInteraction: true,
-            vibrate: [400, 150, 400, 150, 600],
-            tag: 'twin-alarm-incident',
-            renotify: true,
-          },
+          headers: { Urgency: 'high' },    // 배터리 절약 모드에서도 즉시 전달
           fcm_options: { link: alertUrl },
         },
       },

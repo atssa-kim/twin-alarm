@@ -28,6 +28,8 @@ const App: React.FC = () => {
   const alertedModeKeys = useRef<Set<string>>(new Set());
   // SW postMessage 중복 방지 — disaster|location|mode 조합으로 중복 차단 (dedup Set 클리어 안 함)
   const swAlertedKeys = useRef<Set<string>>(new Set());
+  // 알림 탭으로 앱 재진입 시 TTS 강제 재생 플래그
+  const pendingAlertRef = useRef(false);
 
   // PWA 설치 / 알림 배너
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
@@ -132,15 +134,36 @@ const App: React.FC = () => {
     db.getEmployees().then(setEmployees).catch(console.error);
   }, []);
 
-  // 0-a. 알림 탭으로 앱 진입 시(?alert=1) 중복방지 Set 초기화 → TTS 강제 재생
+  // 0-a. 알림 탭으로 앱 진입 시(?alert=1) 중복방지 Set 초기화 → TTS 강제 재생 플래그
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('alert')) {
       alertedIncidentIds.current.clear();
       alertedModeKeys.current.clear();
       swAlertedKeys.current.clear();
+      pendingAlertRef.current = true;   // activeIncident 로드 후 TTS 즉시 재생
       window.history.replaceState({}, '', window.location.pathname);
     }
+  }, []);
+
+  // 0-b. pendingAlert 플래그 → activeIncident+currentUser 로드되면 즉시 TTS
+  useEffect(() => {
+    if (!pendingAlertRef.current) return;
+    if (!activeIncident || !currentUser) return;
+    pendingAlertRef.current = false;
+    if (soundEnabled) {
+      triggerEmergencyAlert(activeIncident.disaster, activeIncident.location, activeIncident.mode);
+      if ('vibrate' in navigator) navigator.vibrate([400, 150, 400, 150, 600]);
+    }
+  }, [activeIncident?.id, activeIncident?.mode, currentUser?.empNo, soundEnabled]);
+
+  // 0-c. 화면 복귀 시 AudioContext 재활성화 (백그라운드 복귀 후 사이렌 묵음 방지)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') unlockAudio();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
   // 새 재난 발령 시 swAlertedKeys 초기화 (이전 재난 키는 새 사이클과 무관)

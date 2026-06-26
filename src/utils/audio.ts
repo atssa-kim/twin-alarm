@@ -150,7 +150,17 @@ export function announceTTS(text: string) {
 
       u.pitch = 1.0;
       u.rate = 1.0;
+
+      // Chrome 일시정지 버그 해결: speak() 전 반드시 resume()
+      if (speechSynthesis.paused) speechSynthesis.resume();
       speechSynthesis.speak(u);
+
+      // 1초 후 실제로 발화 중인지 확인 → 묵음이면 사이렌으로 폴백
+      setTimeout(() => {
+        if (!speechSynthesis.speaking) {
+          playSynthesizedSiren();
+        }
+      }, 1000);
     };
 
     if (speechSynthesis.getVoices().length) {
