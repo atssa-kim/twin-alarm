@@ -817,15 +817,15 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
             </div>
           </div>
 
-          {/* 대원 현황 — 아코디언 */}
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          {/* 대원 현황 — 아코디언 (flex: 1 로 남은 높이 채움) */}
+          <div className="card" style={{ padding: 0, overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             {/* 헤더 (항상 표시) */}
             <div
               className="accordion-header"
               onClick={() => setShowResponders(v => !v)}
               style={{
                 display: 'flex', alignItems: 'center', gap: '8px',
-                padding: '14px 16px',
+                padding: '14px 16px', flexShrink: 0,
                 borderBottom: showResponders ? '1px solid rgba(255,255,255,0.06)' : 'none',
               }}
             >
@@ -850,9 +850,9 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
               </div>
             </div>
 
-            {/* 펼쳐진 내용 */}
+            {/* 펼쳐진 내용 — 스크롤 */}
             {showResponders && (
-              <div style={{ padding: '12px 16px' }}>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
                 <div className="roster-grid">
                   {validResponders.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>
@@ -885,10 +885,9 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
             )}
           </div>
 
-
           {/* 지휘관 전용 액션 버튼 */}
           {isCommander && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flexShrink: 0 }}>
               {/* 화재 감지기동작 → 전체 승격 + 나머지 대원 선택 */}
               {activeIsFire && activeIsInitial && (
                 <>
