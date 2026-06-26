@@ -282,9 +282,9 @@ const App: React.FC = () => {
     return () => navigator.serviceWorker.removeEventListener('message', handler);
   }, [currentUser, soundEnabled, activeIncident?.id, activeIncident?.mode]);
 
-  // 2. 신규 발령 경보 — 동일 incident ID는 한 번만 발령
+  // 2. 신규 발령 경보 — 로그인 후 + 동일 incident ID는 한 번만
   useEffect(() => {
-    if (!activeIncident) return;
+    if (!activeIncident || !currentUser) return;
     if (alertedIncidentIds.current.has(activeIncident.id)) return;
 
     alertedIncidentIds.current.add(activeIncident.id);
@@ -295,11 +295,11 @@ const App: React.FC = () => {
       triggerEmergencyAlert(activeIncident.disaster, activeIncident.location, activeIncident.mode);
       vibrateAlert();
     }
-  }, [activeIncident?.id]);
+  }, [activeIncident?.id, currentUser?.empNo]);
 
-  // 3. 승격 경보 — mode가 바뀔 때만 (동일 mode 재진입은 무시)
+  // 3. 승격 경보 — 로그인 후 + mode가 바뀔 때만 (동일 mode 재진입은 무시)
   useEffect(() => {
-    if (!activeIncident) return;
+    if (!activeIncident || !currentUser) return;
     const key = `${activeIncident.id}__${activeIncident.mode}`;
     if (alertedModeKeys.current.has(key)) return;
 
@@ -308,7 +308,7 @@ const App: React.FC = () => {
       triggerEmergencyAlert(activeIncident.disaster, activeIncident.location, activeIncident.mode);
       vibrateAlert();
     }
-  }, [activeIncident?.mode]);
+  }, [activeIncident?.mode, currentUser?.empNo]);
 
   // Loading Screen
   if (loading) {

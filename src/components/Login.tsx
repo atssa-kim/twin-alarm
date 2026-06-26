@@ -130,11 +130,19 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
     border: '1px solid rgba(255,255,255,0.15)',
     borderRadius: '12px',
     padding: '14px 16px',
+    height: 'auto',      // 글로벌 CSS height:48px 오버라이드
+    minHeight: '50px',
     color: '#111',
     fontSize: '14px',
     width: '100%',
     outline: 'none',
     cursor: 'pointer',
+    WebkitAppearance: 'none',
+    appearance: 'none',
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 14px center',
+    paddingRight: '36px',
   };
 
   const labelStyle: React.CSSProperties = {
@@ -288,7 +296,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
                 <option disabled value="">직원 데이터 로딩 중...</option>
               )}
               {teams.map((team) => (
-                <option key={team} value={team} style={{ color: '#111' }}>
+                <option key={team} value={team}>
                   {team}
                 </option>
               ))}
@@ -313,7 +321,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
                 {selectedTeam ? '-- 이름을 선택하세요 --' : '부서를 먼저 선택하세요'}
               </option>
               {filteredEmployees.map((emp) => (
-                <option key={emp.emp_no} value={emp.emp_no} style={{ color: '#111' }}>
+                <option key={emp.emp_no} value={emp.emp_no}>
                   {emp.name} ({emp.team} · {emp.role})
                 </option>
               ))}
