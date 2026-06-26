@@ -1,6 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { db, type EmployeeDB } from '../services/supabase';
-import { UserPlus, Pencil, Trash2, X, Save, Users, ChevronDown } from 'lucide-react';
+import { UserPlus, Pencil, Trash2, X, Save, Users, ChevronDown, Copy, ExternalLink } from 'lucide-react';
+
+const RLS_FIX_SQL =
+  `ALTER TABLE employees DISABLE ROW LEVEL SECURITY;\nALTER TABLE employee_disaster_badges DISABLE ROW LEVEL SECURITY;`;
+
+const SUPABASE_SQL_URL = 'https://supabase.com/dashboard/project/hzqesdprnlpzaomaeswx/sql/new';
 
 const ALL_TEAMS = [
   '센터장', '상황실',
@@ -69,6 +74,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
   const [badgeOptions, setBadgeOptions] = useState<Record<string, string[]>>({});
   const [saving, setSaving] = useState(false);
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+  const [rlsError, setRlsError] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     db.getAllDisasterBadgeOptions().then(setBadgeOptions).catch(console.error);
@@ -167,12 +174,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       onRefresh();
     } catch (err: any) {
       if (err.message?.includes('row-level security') || err.code === '42501') {
-        alert(
-          '저장 실패: RLS 정책 오류\n\n' +
-          'Supabase SQL Editor에서 아래를 실행해주세요:\n\n' +
-          'ALTER TABLE employees DISABLE ROW LEVEL SECURITY;\n' +
-          'ALTER TABLE employee_disaster_badges DISABLE ROW LEVEL SECURITY;'
-        );
+        setRlsError(true);
       } else {
         alert('저장 실패: ' + (err.message ?? err));
       }
@@ -188,7 +190,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       onRefresh();
     } catch (err: any) {
       if (err.message?.includes('row-level security') || err.code === '42501') {
-        alert('삭제 실패: RLS 정책 오류\nSupabase에서 employees 테이블의 RLS를 비활성화해주세요.');
+        setRlsError(true);
       } else {
         alert('삭제 실패: ' + (err.message ?? err));
       }
@@ -211,8 +213,89 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
 
   const teamGroups = Object.entries(grouped);
 
+  const handleCopySQL = () => {
+    navigator.clipboard.writeText(RLS_FIX_SQL).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
+
   return (
     <div className="content" style={{ gap: '12px' }}>
+
+      {/* RLS 오류 안내 모달 */}
+      {rlsError && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 400,
+          background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(6px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '20px',
+        }}>
+          <div style={{
+            width: '100%', maxWidth: '420px',
+            background: '#0f172a', borderRadius: '16px',
+            border: '1px solid rgba(239,68,68,0.4)',
+            padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '22px' }}>🔒</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#fca5a5' }}>RLS 정책 오류</div>
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+                  Supabase SQL Editor에서 1회 실행이 필요합니다
+                </div>
+              </div>
+              <button onClick={() => setRlsError(false)} style={{
+                background: 'transparent', border: 'none', color: '#475569',
+                cursor: 'pointer', padding: '2px',
+              }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{
+              background: 'rgba(0,0,0,0.4)', borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.08)',
+              padding: '12px 14px', fontFamily: 'monospace', fontSize: '12px',
+              color: '#7dd3fc', lineHeight: 1.8,
+              userSelect: 'all',
+            }}>
+              {RLS_FIX_SQL.split('\n').map((line, i) => (
+                <div key={i}>{line}</div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={handleCopySQL} style={{
+                flex: 1, padding: '11px', borderRadius: '8px', cursor: 'pointer',
+                background: copied ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)',
+                border: `1px solid ${copied ? 'rgba(16,185,129,0.4)' : 'rgba(59,130,246,0.4)'}`,
+                color: copied ? '#34d399' : '#60a5fa',
+                fontSize: '13px', fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              }}>
+                <Copy size={14} />
+                {copied ? '복사 완료!' : 'SQL 복사'}
+              </button>
+              <button onClick={() => window.open(SUPABASE_SQL_URL, '_blank')} style={{
+                flex: 1, padding: '11px', borderRadius: '8px', cursor: 'pointer',
+                background: 'rgba(16,185,129,0.12)',
+                border: '1px solid rgba(16,185,129,0.35)',
+                color: '#34d399',
+                fontSize: '13px', fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              }}>
+                <ExternalLink size={14} />
+                Supabase 열기
+              </button>
+            </div>
+
+            <div style={{ fontSize: '11px', color: '#475569', textAlign: 'center', lineHeight: 1.6 }}>
+              SQL 복사 → Supabase 열기 → SQL Editor에 붙여넣기 → Run
+            </div>
+          </div>
+        </div>
+      )}
       {/* 헤더 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <Users size={18} color="#60a5fa" />
