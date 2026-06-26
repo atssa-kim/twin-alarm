@@ -137,7 +137,9 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     : null;
 
   const rawTasks = myRole
-    ? tasks.filter(t => situationRoleNames ? situationRoleNames.has(t.role) : t.role === myRole.role)
+    ? tasks
+        .filter(t => situationRoleNames ? situationRoleNames.has(t.role) : t.role === myRole.role)
+        .sort((a, b) => a.task_idx - b.task_idx)
     : [];
 
   // Optimistic 상태 병합 (Realtime 응답 전 즉시 UI 반영)

@@ -63,7 +63,7 @@ export function useRealtime() {
     const fetchAll = async () => {
       const [respRes, tasksRes, rolesRes] = await Promise.all([
         supabase.from('responders').select('*').eq('incident_id', activeIncident.id),
-        supabase.from('member_tasks').select('*').eq('incident_id', activeIncident.id),
+        supabase.from('member_tasks').select('*').eq('incident_id', activeIncident.id).order('task_idx'),
         supabase.from('disaster_roles').select('*').eq('disaster', activeIncident.disaster).order('id'),
       ]);
       if (respRes.data) setResponders(respRes.data as Responder[]);
@@ -97,7 +97,7 @@ export function useRealtime() {
         (payload) => {
           if (payload.eventType === 'INSERT') {
             const nt = payload.new as MemberTask;
-            setTasks((prev) => [...prev.filter((t) => t.id !== nt.id), nt]);
+            setTasks((prev) => [...prev.filter((t) => t.id !== nt.id), nt].sort((a, b) => a.task_idx - b.task_idx));
           } else if (payload.eventType === 'UPDATE') {
             const nt = payload.new as MemberTask;
             setTasks((prev) => prev.map((t) => (t.id === nt.id ? nt : t)));
