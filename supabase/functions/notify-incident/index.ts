@@ -1,13 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// ─── Kakao 알림톡 (SOLAPI) ───────────────────────────────────────────────────
+// ─── SOLAPI (SMS + Kakao 알림톡) ─────────────────────────────────────────────
 // 필요 Supabase Secrets:
 //   SOLAPI_API_KEY      - SOLAPI 계정 API Key
 //   SOLAPI_API_SECRET   - SOLAPI 계정 API Secret
-//   KAKAO_PF_ID         - 카카오 채널(발신프로필) ID  ex) KA01PF...
-//   KAKAO_TEMPLATE_ID   - 승인된 알림톡 템플릿 ID    ex) KA01TP...
 //   SENDER_PHONE        - 발신 번호 (등록된 번호)     ex) 0212345678
-// 템플릿 변수 예시: #{재난} #{장소} #{내용}
+//   KAKAO_PF_ID         - 카카오 채널(발신프로필) ID  ex) KA01PF...  (알림톡 승인 후 설정)
+//   KAKAO_TEMPLATE_ID   - 승인된 알림톡 템플릿 ID    ex) KA01TP...  (알림톡 승인 후 설정)
+// SMS는 SOLAPI_API_KEY + SOLAPI_API_SECRET + SENDER_PHONE 만으로 즉시 발송
+// 알림톡은 KAKAO_PF_ID + KAKAO_TEMPLATE_ID 추가 설정 후 자동 활성화
 
 async function hmacSha256(message: string, secret: string): Promise<string> {
   const enc = new TextEncoder();
@@ -70,6 +71,55 @@ async function sendKakaoAlimtalk(
     console.log(`[Kakao] sent=${result?.groupInfo?.count?.total ?? validPhones.length}, status=${resp.status}`);
   } catch (e) {
     console.warn('[Kakao] 발송 실패:', e);
+  }
+}
+
+// ─── SMS 발송 (SOLAPI LMS) ────────────────────────────────────────────────────
+// 알림톡 심사 전/후 관계없이 항상 발송. KAKAO_TEMPLATE_ID 미설정 시 SMS만 발송됨.
+async function sendSMS(
+  phones: string[],
+  disaster: string,
+  location: string,
+  content: string,
+): Promise<void> {
+  const apiKey = Deno.env.get('SOLAPI_API_KEY');
+  const apiSecret = Deno.env.get('SOLAPI_API_SECRET');
+  const senderPhone = Deno.env.get('SENDER_PHONE');
+
+  if (!apiKey || !apiSecret || !senderPhone) return;
+
+  const validPhones = phones
+    .map(p => p.replace(/[-\s]/g, ''))
+    .filter(p => /^0\d{9,10}$/.test(p));
+  if (validPhones.length === 0) return;
+
+  const date = new Date().toISOString();
+  const salt = crypto.randomUUID().replace(/-/g, '');
+  const signature = await hmacSha256(`${date}${salt}`, apiSecret);
+
+  const text = `[트윈타워 재난알람]\n${disaster} 발생\n위치: ${location}\n\n${content}\n\n앱에서 행동매뉴얼을 확인하세요.`;
+
+  const messages = validPhones.map(to => ({
+    to,
+    from: senderPhone.replace(/[-\s]/g, ''),
+    type: 'LMS',
+    subject: `[재난알람] ${disaster} 발생`,
+    text,
+  }));
+
+  try {
+    const resp = await fetch('https://api.solapi.com/messages/v4/send-many', {
+      method: 'POST',
+      headers: {
+        'Authorization': `HMAC-SHA256 apiKey=${apiKey}, date=${date}, salt=${salt}, signature=${signature}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messages }),
+    });
+    const result = await resp.json();
+    console.log(`[SMS] sent=${result?.groupInfo?.count?.total ?? validPhones.length}, status=${resp.status}`);
+  } catch (e) {
+    console.warn('[SMS] 발송 실패:', e);
   }
 }
 // ────────────────────────────────────────────────────────────────────────────
@@ -252,7 +302,7 @@ Deno.serve(async (req) => {
       )
     );
 
-    // ── Kakao 알림톡 발송 (SOLAPI Secrets 설정 시 자동 실행) ──────────────
+    // ── SMS + Kakao 알림톡 병행 발송 ─────────────────────────────────────────
     const empNoList: string[] = drillEmpNos
       ? String(drillEmpNos).split(',').map((s: string) => s.trim()).filter(Boolean)
       : [];
@@ -260,10 +310,14 @@ Deno.serve(async (req) => {
     if (empNoList.length > 0) phoneQuery = (phoneQuery as any).in('emp_no', empNoList);
     const { data: empPhones } = await phoneQuery;
     const phones = (empPhones ?? []).map((e: { phone: string }) => e.phone).filter(Boolean);
-    await sendKakaoAlimtalk(phones, disaster, location, bodyText);
-    // ────────────────────────────────────────────────────────────────────────
 
-    return new Response(JSON.stringify({ sent: subs.length, kakao: phones.length }), {
+    // SMS: SOLAPI_API_KEY + SENDER_PHONE 설정 시 즉시 발송 (알림톡 심사와 무관)
+    await sendSMS(phones, disaster, location, bodyText);
+    // 알림톡: KAKAO_PF_ID + KAKAO_TEMPLATE_ID 설정 시 추가 발송 (심사 완료 후)
+    await sendKakaoAlimtalk(phones, disaster, location, bodyText);
+    // ─────────────────────────────────────────────────────────────────────────
+
+    return new Response(JSON.stringify({ sent: subs.length, sms: phones.length, kakao: phones.length }), {
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   } catch (err: unknown) {
