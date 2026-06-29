@@ -88,7 +88,47 @@ interface AdminPanelProps {
   onRefresh: () => void;
 }
 
+// ── 편제표: 재난별 그룹 분류 ────────────────────────────────
+const CMD_TEAMS: Record<string, string[]> = {
+  '화재':     ['소방파트장'],
+  '정전':     ['전기파트장'],
+  '누수':     ['기계파트장'],
+  '태풍/홍수': ['소방파트장'],
+  '폭설':     ['운영파트장'],
+  '지진':     ['소방파트장'],
+  '가스누출':  ['기계파트장'],
+  '승강기':   [],
+  '테러':     [],
+};
+const EVAC_TEAMS: Record<string, string[]> = {
+  '화재':     ['보안1','보안2','보안3','운영파트장','운영파트','주차파트','품질/안전파트','미화파트'],
+  '정전':     ['보안1','보안2','보안3','운영파트장','운영파트','미화파트','주차파트'],
+  '누수':     ['보안1','보안2','보안3','운영파트장','운영파트'],
+  '태풍/홍수': ['보안1','보안2','보안3','소방파트장','소방파트','운영파트장','운영파트'],
+  '폭설':     ['미화파트','보안1','보안2','보안3','주차파트'],
+  '지진':     ['보안1','보안2','보안3','운영파트장','운영파트'],
+  '가스누출':  ['건축파트장','건축파트','보안1','보안2','보안3','미화파트'],
+  '승강기':   ['보안1','보안2','보안3','미화파트'],
+  '테러':     ['운영파트장','운영파트','건축파트장','건축파트'],
+};
+type OrgGroup = '지휘연락' | '현장대응' | '대피지원' | '교대';
+const getOrgGroup = (team: string, role: string, disaster: string): OrgGroup => {
+  if (role.includes('교대')) return '교대';
+  if (team === '상황실' || team === '센터장') return '지휘연락';
+  if ((CMD_TEAMS[disaster] ?? []).includes(team)) return '지휘연락';
+  if ((EVAC_TEAMS[disaster] ?? []).includes(team)) return '대피지원';
+  return '현장대응';
+};
+const ORG_GROUPS: { key: OrgGroup; color: string }[] = [
+  { key: '지휘연락', color: '#f59e0b' },
+  { key: '현장대응', color: '#ef4444' },
+  { key: '대피지원', color: '#60a5fa' },
+  { key: '교대',    color: '#c084fc' },
+];
+
 export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) => {
+  const [adminTab, setAdminTab] = useState<'list' | 'org'>('list');
+  const [orgDisaster, setOrgDisaster] = useState<Disaster>('화재');
   const [filterCategory, setFilterCategory] = useState('전체');
   const [search, setSearch] = useState('');
   const [modalMode, setModalMode] = useState<'add' | 'edit' | null>(null);
@@ -130,6 +170,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
     if (!map) return [];
     return ALL_DISASTERS.filter(d => map[d]).map(d => ({ disaster: d, badge: map[d]! }));
   }, [form.team]);
+
+  // 편제표: 재난별 그룹 계산
+  const orgGroups = useMemo(() => {
+    const groups: Record<OrgGroup, EmployeeDB[]> = { '지휘연락': [], '현장대응': [], '대피지원': [], '교대': [] };
+    for (const e of employees) {
+      groups[getOrgGroup(e.team, e.role, orgDisaster)].push(e);
+    }
+    return groups;
+  }, [employees, orgDisaster]);
 
   const openAdd = () => {
     setForm({ ...EMPTY_FORM, emp_no: generateEmpNo() });
@@ -301,14 +350,90 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
         <span style={{ fontSize: '11px', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px' }}>
           총 {employees.length}명
         </span>
-        <button onClick={openAdd} style={{
-          display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 12px', borderRadius: '8px', cursor: 'pointer',
-          background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', color: '#60a5fa', fontSize: '12px', fontWeight: 700,
-        }}>
-          <UserPlus size={14} />직원 추가
-        </button>
+        {adminTab === 'list' && (
+          <button onClick={openAdd} style={{
+            display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 12px', borderRadius: '8px', cursor: 'pointer',
+            background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', color: '#60a5fa', fontSize: '12px', fontWeight: 700,
+          }}>
+            <UserPlus size={14} />직원 추가
+          </button>
+        )}
       </div>
 
+      {/* 탭 스위처 */}
+      <div style={{ display: 'flex', background: 'rgba(10,15,30,0.6)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '3px', gap: '3px' }}>
+        {([
+          { key: 'list' as const, label: '👥 직원 목록' },
+          { key: 'org'  as const, label: '🗂 재난 편제표' },
+        ]).map(tab => (
+          <button key={tab.key} type="button" onClick={() => setAdminTab(tab.key)} style={{
+            flex: 1, padding: '8px 0', fontSize: '12px', fontWeight: 700, cursor: 'pointer', borderRadius: '7px',
+            background: adminTab === tab.key ? 'rgba(59,130,246,0.2)' : 'transparent',
+            border: adminTab === tab.key ? '1px solid rgba(59,130,246,0.4)' : '1px solid transparent',
+            color: adminTab === tab.key ? '#60a5fa' : '#64748b',
+            transition: 'all 0.15s',
+          }}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── 편제표 탭 ── */}
+      {adminTab === 'org' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <select value={orgDisaster} onChange={ev => setOrgDisaster(ev.target.value as Disaster)}
+            style={{ height: '42px', background: 'rgba(10,15,30,0.8)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', padding: '0 14px', color: '#e2e8f0', fontSize: '14px', fontWeight: 700 }}>
+            {ALL_DISASTERS.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+
+          {ORG_GROUPS.map(({ key: grp, color }) => {
+            const grpEmps = orgGroups[grp];
+            const teamMap: Record<string, EmployeeDB[]> = {};
+            for (const emp of grpEmps) (teamMap[emp.team] ??= []).push(emp);
+
+            return (
+              <div key={grp} style={{ border: `1px solid ${color}33`, borderRadius: '10px', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', background: `${color}10`, borderBottom: `1px solid ${color}22` }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, flexShrink: 0 }} />
+                  <span style={{ fontSize: '13px', fontWeight: 800, color, flex: 1 }}>{grp}</span>
+                  <span style={{ fontSize: '11px', color: color + 'aa', fontWeight: 600 }}>{grpEmps.length}명</span>
+                </div>
+                {grpEmps.length === 0 ? (
+                  <div style={{ padding: '10px 14px', fontSize: '12px', color: '#475569', textAlign: 'center' }}>해당 없음</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {Object.entries(teamMap).map(([team, teamEmps]) => {
+                      const badge = TEAM_BADGE_MAP[team]?.[orgDisaster];
+                      return (
+                        <div key={team} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 12px 4px', background: 'rgba(255,255,255,0.02)' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', flex: 1 }}>{team}</span>
+                            {badge && (
+                              <span style={{ fontSize: '10px', padding: '1px 7px', borderRadius: '4px', background: color + '22', color, fontWeight: 700, border: `1px solid ${color}44` }}>
+                                {badge}
+                              </span>
+                            )}
+                          </div>
+                          {teamEmps.map(emp => (
+                            <div key={emp.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 12px 4px 20px' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0', flex: 1 }}>{emp.name}</span>
+                              <span style={{ fontSize: '11px', color: '#64748b' }}>{emp.role}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── 직원 목록 탭 ── */}
+      {adminTab === 'list' && (
+      <>
       {/* 검색 */}
       <input
         type="text" placeholder="이름 · 역할 검색" value={search}
@@ -357,6 +482,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
 
       {/* ── 추가/편집 모달 ── */}
