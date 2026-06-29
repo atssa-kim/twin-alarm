@@ -568,35 +568,74 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
 
               <div>
                 <label>발령 구분</label>
-                <div className="segmented-control">
-                  <button type="button" className={`segmented-btn ${selectedMode === '훈련' ? 'active' : ''}`}
-                    onClick={() => setSelectedMode('훈련')}>
-                    🎓 훈련상황
-                  </button>
-                  <button type="button" className={`segmented-btn ${selectedMode === '실제' ? 'active' : ''}`}
-                    onClick={() => setSelectedMode('실제')}
-                    style={{ color: selectedMode === '실제' ? 'var(--color-fire)' : '' }}>
-                    ⚠️ 실제상황
-                  </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {(['훈련', '실제'] as const).map(mode => {
+                    const isSel = selectedMode === mode;
+                    const color = mode === '훈련' ? '#a78bfa' : '#ef4444';
+                    const modeLabel = mode === '훈련' ? '🎓 훈련상황' : '⚠️ 실제상황';
+                    const subOptions = isFireDisaster
+                      ? mode === '훈련'
+                        ? [{ key: 'initial' as const, icon: '🔔', label: '감지기동작' }, { key: 'full' as const, icon: '🎯', label: '전체훈련' }]
+                        : [{ key: 'initial' as const, icon: '🔔', label: '감지기동작' }, { key: 'full' as const, icon: '🔥', label: '화재상황' }]
+                      : [];
+                    const subLabel = isSel && isFireDisaster
+                      ? (fireSubMode === 'initial' ? '감지기동작' : mode === '훈련' ? '전체훈련' : '화재상황')
+                      : '';
+                    return (
+                      <div key={mode} style={{
+                        border: `1px solid ${isSel ? color + '55' : 'rgba(255,255,255,0.08)'}`,
+                        borderRadius: '10px', overflow: 'hidden',
+                        background: isSel ? color + '08' : 'transparent',
+                        transition: 'all 0.2s',
+                      }}>
+                        <div
+                          onClick={() => setSelectedMode(mode)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            padding: '11px 14px', cursor: 'pointer',
+                            borderLeft: `3px solid ${isSel ? color : 'transparent'}`,
+                          }}
+                        >
+                          <span style={{ fontSize: '14px', fontWeight: 700, color: isSel ? color : '#64748b', flex: 1 }}>
+                            {modeLabel}
+                          </span>
+                          {subLabel && (
+                            <span style={{ fontSize: '11px', color: color + 'bb', fontWeight: 600 }}>{subLabel}</span>
+                          )}
+                          {isFireDisaster && (
+                            <span style={{ fontSize: '10px', color: '#475569' }}>{isSel ? '▲' : '▶'}</span>
+                          )}
+                        </div>
+                        {isSel && isFireDisaster && (
+                          <div style={{
+                            display: 'flex', gap: '6px', padding: '8px 12px 10px',
+                            borderTop: `1px solid ${color}22`,
+                            background: 'rgba(0,0,0,0.18)',
+                          }}>
+                            {subOptions.map(opt => (
+                              <button
+                                key={opt.key}
+                                type="button"
+                                onClick={e => { e.stopPropagation(); setFireSubMode(opt.key); }}
+                                style={{
+                                  flex: 1, padding: '8px 0', borderRadius: '8px', cursor: 'pointer',
+                                  fontSize: '12px', fontWeight: 700,
+                                  background: fireSubMode === opt.key ? color + '22' : 'rgba(255,255,255,0.04)',
+                                  border: `1px solid ${fireSubMode === opt.key ? color + '66' : 'rgba(255,255,255,0.07)'}`,
+                                  color: fireSubMode === opt.key ? color : '#64748b',
+                                  transition: 'all 0.15s',
+                                }}
+                              >
+                                {opt.icon} {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-
-              {isFireDisaster && (
-                <div>
-                  <label>{selectedMode === '훈련' ? '훈련 유형' : '화재 단계'}</label>
-                  <div className="segmented-control">
-                    <button type="button" className={`segmented-btn ${fireSubMode === 'initial' ? 'active' : ''}`}
-                      onClick={() => setFireSubMode('initial')}>
-                      🔔 감지기동작
-                    </button>
-                    <button type="button" className={`segmented-btn ${fireSubMode === 'full' ? 'active' : ''}`}
-                      onClick={() => setFireSubMode('full')}
-                      style={{ color: fireSubMode === 'full' ? (selectedMode === '실제' ? 'var(--color-fire)' : '#a78bfa') : '' }}>
-                      {selectedMode === '훈련' ? '🎯 전체훈련' : '🔥 화재상황'}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* 위치 */}

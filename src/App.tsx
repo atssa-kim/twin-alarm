@@ -31,12 +31,8 @@ const App: React.FC = () => {
   // 알림 탭으로 앱 재진입 시 TTS 강제 재생 플래그
   const pendingAlertRef = useRef(false);
 
-  // PWA 설치 / 알림 배너
-  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  // 알림 배너
   const [showNotifBanner, setShowNotifBanner] = useState(false);
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-  const isPWAInstalled = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
 
   // Load available voices
   useEffect(() => {
@@ -106,22 +102,6 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // PWA 설치 프롬프트 캡처 (Android Chrome — 설치 버튼용)
-  useEffect(() => {
-    const handler = (e: any) => {
-      e.preventDefault();
-      setDeferredInstallPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-
-  // 설치 배너: 로그인 후, 미설치 + 미닫음이면 항상 표시 (이벤트 기다리지 않음)
-  useEffect(() => {
-    if (currentUser && !isPWAInstalled && !localStorage.getItem('tt_install_dismissed')) {
-      setShowInstallBanner(true);
-    }
-  }, [currentUser, isPWAInstalled]);
 
   // 알림 허용 배너: 로그인 후 미허용이면 표시 (세션 단위 — 로그인마다 다시 표시)
   useEffect(() => {
@@ -247,16 +227,6 @@ const App: React.FC = () => {
     if (window.confirm('로그아웃 하시겠습니까?')) {
       setCurrentUser(null);
       localStorage.removeItem('tt_user_session');
-    }
-  };
-
-  const handleInstall = async () => {
-    if (!deferredInstallPrompt) return;
-    deferredInstallPrompt.prompt();
-    const { outcome } = await deferredInstallPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setShowInstallBanner(false);
-      setDeferredInstallPrompt(null);
     }
   };
 
@@ -394,7 +364,7 @@ const App: React.FC = () => {
             className="topbar-title"
             style={{ textDecoration: 'none', cursor: 'pointer' }}
           >
-            Twin-alarm/대응
+            Twin-alarm
           </a>
         </div>
 
@@ -516,7 +486,7 @@ const App: React.FC = () => {
           }}
         >
           <Radio size={17} />
-          <span>업무수행율</span>
+          <span>상황판</span>
         </button>
         {currentUser.isCommander && currentUser.name === '김견수' && (
           <button
@@ -534,42 +504,9 @@ const App: React.FC = () => {
         )}
       </nav>
 
-      {/* ── PWA 설치 / 알림 허용 배너 ── */}
-      {(showInstallBanner || showNotifBanner) && (
+      {/* ── 알림 허용 배너 ── */}
+      {showNotifBanner && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '6px 12px 0' }}>
-          {/* PWA 설치 배너 */}
-          {showInstallBanner && !isPWAInstalled && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '10px',
-              padding: '10px 12px', borderRadius: '10px',
-              background: 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(217,119,6,0.06))',
-              border: '1px solid rgba(245,158,11,0.3)',
-            }}>
-              <span style={{ fontSize: '20px', flexShrink: 0 }}>📱</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '12px', fontWeight: 700, color: '#fbbf24' }}>홈 화면에 앱 추가</div>
-                <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
-                  {isIOS
-                    ? '하단 공유버튼 □↑ → 홈 화면에 추가 → 추가'
-                    : '설치하면 화면 꺼진 상태에서도 알람이 울립니다'}
-                </div>
-              </div>
-              {!isIOS && (
-                deferredInstallPrompt
-                  ? <button type="button" onClick={handleInstall} style={{
-                      padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', flexShrink: 0,
-                      fontSize: '11px', fontWeight: 700,
-                      background: 'rgba(245,158,11,0.2)', border: '1px solid rgba(245,158,11,0.5)',
-                      color: '#fbbf24',
-                    }}>설치</button>
-                  : <span style={{ fontSize: '10px', color: '#f59e0b', flexShrink: 0 }}>Chrome ⋮ → 앱 설치</span>
-              )}
-              <button type="button" onClick={() => { setShowInstallBanner(false); localStorage.setItem('tt_install_dismissed', '1'); }} style={{
-                background: 'transparent', border: 'none', color: '#475569',
-                cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: '2px', flexShrink: 0,
-              }}>✕</button>
-            </div>
-          )}
 
           {/* 알림 허용 배너 */}
           {showNotifBanner && notifPerm !== 'granted' && (
