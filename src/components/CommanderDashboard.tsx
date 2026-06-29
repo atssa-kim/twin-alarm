@@ -1,5 +1,5 @@
 import React, { useRef, useState, useMemo } from 'react';
-import { type Incident, type Responder, type MemberTask, type EmployeeDB, db } from '../services/supabase';
+import { type Incident, type Responder, type MemberTask, type EmployeeDB, db, supabase } from '../services/supabase';
 import { DISASTERS } from '../data/disasters';
 import { stopAllAlerts } from '../utils/audio';
 import { Play, Square, ShieldAlert, Users, Mic, UserCheck, BarChart2, Monitor, History, X, ChevronDown } from 'lucide-react';
@@ -113,8 +113,10 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   // 대원 출동현황 아코디언
   const [showResponders, setShowResponders] = useState(true);
   const [openEscalateAccordions, setOpenEscalateAccordions] = useState<Set<string>>(new Set());
-  // 모니터링 탭: 출동현황 | 활동기록
-  const [activeMonitorTab, setActiveMonitorTab] = useState<'roster' | 'log'>('roster');
+  // 모니터링 탭: 출동현황 | 활동기록 | AI보고서
+  const [activeMonitorTab, setActiveMonitorTab] = useState<'roster' | 'log' | 'ai'>('roster');
+  const [aiReport, setAiReport] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
   const isFireDisaster = selectedDisasterKey === '화재';
 
   // ── 종료 재난 로그 ───────────────────────────────────────────
@@ -172,6 +174,24 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const fmtDateFull = (ms: number) => {
     const d = new Date(ms);
     return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+
+  const generateAIReport = async () => {
+    if (!activeIncident) return;
+    setAiLoading(true);
+    setAiReport(null);
+    setActiveMonitorTab('ai');
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-report', {
+        body: { incident: activeIncident, responders: validResponders, tasks, activityLog },
+      });
+      if (error) throw error;
+      setAiReport(data.report ?? '보고서를 생성할 수 없습니다.');
+    } catch (e: any) {
+      setAiReport('오류: ' + (e.message ?? String(e)));
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const fmtTime = (ms: number) => {
@@ -996,15 +1016,23 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                 {/* 탭 버튼 */}
                 <div style={{ display: 'flex', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                   {([
-                    { key: 'roster' as const, label: '👥 출동 현황', color: '#38bdf8' },
-                    { key: 'log'    as const, label: '📋 활동 기록', color: '#a855f7' },
+                    { key: 'roster' as const, label: '👥 출동', color: '#38bdf8' },
+                    { key: 'log'    as const, label: '📋 활동', color: '#a855f7' },
+                    { key: 'ai'     as const, label: '🤖 AI보고서', color: '#10b981' },
                   ]).map(tab => (
                     <button
                       key={tab.key}
                       type="button"
-                      onClick={e => { e.stopPropagation(); setActiveMonitorTab(tab.key); }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (tab.key === 'ai' && activeMonitorTab !== 'ai') {
+                          generateAIReport();
+                        } else {
+                          setActiveMonitorTab(tab.key);
+                        }
+                      }}
                       style={{
-                        flex: 1, padding: '8px 0', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                        flex: 1, padding: '8px 0', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
                         background: activeMonitorTab === tab.key ? tab.color + '18' : 'transparent',
                         border: 'none',
                         borderBottom: `2px solid ${activeMonitorTab === tab.key ? tab.color : 'transparent'}`,
@@ -1012,7 +1040,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                         transition: 'all 0.15s',
                       }}
                     >
-                      {tab.label}
+                      {tab.key === 'ai' && aiLoading ? '⏳ 생성중...' : tab.label}
                     </button>
                   ))}
                 </div>
@@ -1070,6 +1098,53 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* AI 보고서 탭 */}
+                {activeMonitorTab === 'ai' && (
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+                    {aiLoading ? (
+                      <div style={{ textAlign: 'center', padding: '30px 20px', color: '#64748b' }}>
+                        <div style={{ fontSize: '28px', marginBottom: '10px' }}>🤖</div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#10b981' }}>AI가 상황을 분석 중입니다...</div>
+                        <div style={{ fontSize: '11px', marginTop: '6px', color: '#475569' }}>현재 데이터를 종합하여 보고서를 작성합니다</div>
+                      </div>
+                    ) : aiReport ? (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+                          <button
+                            type="button"
+                            onClick={generateAIReport}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '5px',
+                              padding: '5px 11px', borderRadius: '6px', cursor: 'pointer',
+                              fontSize: '11px', fontWeight: 700,
+                              background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)',
+                              color: '#34d399',
+                            }}
+                          >
+                            🔄 재생성
+                          </button>
+                        </div>
+                        <div style={{
+                          fontSize: '12px', lineHeight: 1.8, color: '#e2e8f0',
+                          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                        }}>
+                          {aiReport.split('\n').map((line, i) => {
+                            if (line.startsWith('## ')) return <div key={i} style={{ fontSize: '14px', fontWeight: 800, color: '#f8fafc', margin: '6px 0 8px', paddingBottom: '4px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>{line.replace('## ', '')}</div>;
+                            if (line.startsWith('**') && line.endsWith('**')) return <div key={i} style={{ fontSize: '12px', fontWeight: 700, color: '#10b981', margin: '10px 0 4px' }}>{line.replace(/\*\*/g, '')}</div>;
+                            if (line.trim() === '') return <div key={i} style={{ height: '4px' }} />;
+                            return <div key={i} style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: 1.7 }}>{line}</div>;
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '30px 20px', color: '#64748b' }}>
+                        <div style={{ fontSize: '28px', marginBottom: '10px' }}>🤖</div>
+                        <div style={{ fontSize: '13px' }}>탭을 다시 클릭하면 보고서를 생성합니다</div>
                       </div>
                     )}
                   </div>
