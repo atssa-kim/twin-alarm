@@ -285,6 +285,10 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
     setLoading(true);
     try {
       const scope = isInitial ? 'fire_initial' : (selectedMode === '훈련' ? 'drill' : 'all');
+      // 훈련이고 참여인원을 선택했으면 drill_emp_nos 로 발령 시점부터 푸시 대상을 제한
+      const drillEmpNos = selectedMode === '훈련' && selectedEmps.size > 0
+        ? [...selectedEmps].join(',')
+        : null;
       const allRoles = await db.getDisasterRolesWithTasks(selectedDisasterKey);
       if (!allRoles.length) throw new Error('임무 데이터가 없습니다. npm run seed 를 먼저 실행하세요.');
 
@@ -294,7 +298,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
         : allRoles;
 
       const incident = await db.declareIncident(
-        selectedDisasterKey, modeLabel, location.trim(), scope, currentUser.empNo
+        selectedDisasterKey, modeLabel, location.trim(), scope, currentUser.empNo, drillEmpNos
       );
 
       const bulkTasks: Omit<MemberTask, 'updated_at' | 'done_by'>[] = [];
@@ -328,8 +332,8 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
         setShowEscalatePanel(false);
       }
 
-      // FCM 직접 호출 (pg_net 트리거 백업)
-      await db.sendIncidentPush(incident, 'INSERT');
+      // FCM 직접 호출 (pg_net 트리거 백업 + drill_emp_nos 필터)
+      await db.sendIncidentPush(incident, 'INSERT', null, drillEmpNos);
     } catch (err: any) {
       alert('상황 발령 중 오류가 발생했습니다: ' + err.message);
     } finally {

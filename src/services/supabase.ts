@@ -71,7 +71,7 @@ export interface EmployeeDB {
 // Database helper functions
 export const db = {
   // 1. Declare active incident
-  async declareIncident(disaster: string, mode: string, location: string, scope: string, declaredBy: string) {
+  async declareIncident(disaster: string, mode: string, location: string, scope: string, declaredBy: string, drillEmpNos: string | null = null) {
     const incidentId = `inc_${Date.now()}`;
     const incident: Incident = {
       id: incidentId,
@@ -82,6 +82,7 @@ export const db = {
       declared_by: declaredBy,
       mode,
       scope,
+      drill_emp_nos: drillEmpNos,
     };
 
     // Close any previous incidents just in case
