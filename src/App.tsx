@@ -460,13 +460,7 @@ const App: React.FC = () => {
           <span style={{ whiteSpace: 'nowrap' }}>지휘본부</span>
         </button>
         <button
-          onClick={() => {
-            if (!activeIncident) {
-              window.open('https://atssa-kim.github.io/disa_app/', '_blank');
-            } else {
-              setCurrentView('responder');
-            }
-          }}
+          onClick={() => setCurrentView('responder')}
           style={{
             flex: '1 1 0', minWidth: '68px', background: 'transparent', border: 'none',
             color: currentView === 'responder' ? '#3b82f6' : 'var(--text-muted)',
