@@ -445,18 +445,19 @@ const App: React.FC = () => {
         position: 'sticky',
         top: 'calc(env(safe-area-inset-top, 0px) + 52px)',
         zIndex: 90,
+        overflowX: 'auto',
       }}>
         <button
           onClick={() => setCurrentView('cmd')}
           style={{
-            flex: '1 1 0', minWidth: 0, background: 'transparent', border: 'none',
+            flex: '1 1 0', minWidth: '68px', background: 'transparent', border: 'none',
             color: currentView === 'cmd' ? '#3b82f6' : 'var(--text-muted)',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
           }}
         >
           <LayoutDashboard size={17} />
-          <span>지휘본부</span>
+          <span style={{ whiteSpace: 'nowrap' }}>지휘본부</span>
         </button>
         <button
           onClick={() => {
@@ -467,39 +468,39 @@ const App: React.FC = () => {
             }
           }}
           style={{
-            flex: '1 1 0', minWidth: 0, background: 'transparent', border: 'none',
+            flex: '1 1 0', minWidth: '68px', background: 'transparent', border: 'none',
             color: currentView === 'responder' ? '#3b82f6' : 'var(--text-muted)',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
           }}
         >
           <ClipboardCheck size={17} />
-          <span>나의 임무</span>
+          <span style={{ whiteSpace: 'nowrap' }}>나의 임무</span>
         </button>
         <button
           onClick={() => setCurrentView('cop')}
           style={{
-            flex: '1 1 0', minWidth: 0, background: 'transparent', border: 'none',
+            flex: '1 1 0', minWidth: '68px', background: 'transparent', border: 'none',
             color: currentView === 'cop' ? '#3b82f6' : 'var(--text-muted)',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
           }}
         >
           <Radio size={17} />
-          <span>상황판</span>
+          <span style={{ whiteSpace: 'nowrap' }}>상황판</span>
         </button>
         {currentUser.isCommander && currentUser.name === '김견수' && (
           <button
             onClick={() => setCurrentView('admin')}
             style={{
-              flex: '1 1 0', minWidth: 0, background: 'transparent', border: 'none',
+              flex: '1 1 0', minWidth: '68px', background: 'transparent', border: 'none',
               color: currentView === 'admin' ? '#3b82f6' : 'var(--text-muted)',
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
             }}
           >
             <Settings size={17} />
-            <span>인원관리</span>
+            <span style={{ whiteSpace: 'nowrap' }}>인원관리</span>
           </button>
         )}
       </nav>
