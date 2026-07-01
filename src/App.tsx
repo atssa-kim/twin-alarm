@@ -534,7 +534,7 @@ const App: React.FC = () => {
       )}
 
       {/* Main Content Area */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' } as React.CSSProperties}>
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
         {currentView === 'cmd' && (
           <CommanderDashboard
             activeIncident={activeIncident}

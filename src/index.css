@@ -90,14 +90,6 @@ img, svg, video, canvas, audio, iframe, embed, object {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
-#app::-webkit-scrollbar { width: 0; }
-
-/* main scroll container — scrollbar 폭 잠식 방지 */
-main {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-main::-webkit-scrollbar { width: 0; }
 
 @media (min-width: 481px) {
   #app {
@@ -486,7 +478,7 @@ input:focus, select:focus {
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* Custom Scrollbars */
+/* Custom Scrollbars — #app 외부(데스크톱 body 등)만 적용 */
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -499,4 +491,19 @@ input:focus, select:focus {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── #app 내부 모든 스크롤바 제거 ──────────────────────────────────────
+   뷰마다 내부 스크롤 컨테이너(main·card 내부 div 등) 수가 달라 6px
+   스크롤바가 레이아웃 폭을 잠식하면 메뉴 전환 시 폭이 달라 보임.
+   #app 안에서는 일괄 width:0 처리 → 터치 스크롤은 그대로 동작. */
+#app::-webkit-scrollbar,
+#app *::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+}
+#app,
+#app * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
