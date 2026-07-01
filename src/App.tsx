@@ -441,7 +441,7 @@ const App: React.FC = () => {
         height: '56px',
         alignItems: 'center',
         padding: '0 8px',
-        margin: '8px 12px 0',
+        margin: '8px 14px 0',
         position: 'sticky',
         top: 'calc(env(safe-area-inset-top, 0px) + 52px)',
         zIndex: 90,
@@ -534,7 +534,7 @@ const App: React.FC = () => {
       )}
 
       {/* Main Content Area */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' } as React.CSSProperties}>
         {currentView === 'cmd' && (
           <CommanderDashboard
             activeIncident={activeIncident}
