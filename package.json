@@ -12,7 +12,8 @@
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
     "seed": "npx tsx scripts/seed-disasters.ts",
-    "seed-employees": "npx tsx scripts/seed-employees.ts"
+    "seed-employees": "npx tsx scripts/seed-employees.ts",
+    "seed-bangho": "npx tsx scripts/seed-bangho.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
