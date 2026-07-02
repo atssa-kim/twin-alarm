@@ -7,15 +7,14 @@ import { COPDashboard } from './components/COPDashboard';
 import { triggerEmergencyAlert, stopAllAlerts, unlockAudio } from './utils/audio';
 import { db, type EmployeeDB } from './services/supabase';
 import { requestNotificationPermission, onForegroundMessage } from './services/notifications';
-import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Bell, BellOff, Megaphone, Settings, Package } from 'lucide-react';
+import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Bell, BellOff, Megaphone, Settings } from 'lucide-react';
 import { AdminPanel } from './components/AdminPanel';
-import { EquipmentView } from './components/EquipmentView';
 
 const App: React.FC = () => {
   const { activeIncident, responders, tasks, loading, disasterRoles } = useRealtime();
   const [currentUser, setCurrentUser] = useState<Employee | null>(null);
   const [employees, setEmployees] = useState<EmployeeDB[]>([]);
-  const [currentView, setCurrentView] = useState<'cmd' | 'responder' | 'cop' | 'admin' | 'equipment'>('responder');
+  const [currentView, setCurrentView] = useState<'cmd' | 'responder' | 'cop' | 'admin'>('responder');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>(
     'Notification' in window ? Notification.permission : 'denied'
@@ -159,7 +158,7 @@ const App: React.FC = () => {
       try {
         const parsedUser = JSON.parse(savedUser) as Employee;
         setCurrentUser(parsedUser);
-        setCurrentView(parsedUser.isCommander ? 'cmd' : 'responder' as 'cmd' | 'responder' | 'cop' | 'admin' | 'equipment');
+        setCurrentView(parsedUser.isCommander ? 'cmd' : 'responder' as 'cmd' | 'responder' | 'cop' | 'admin');
       } catch (e) {
         localStorage.removeItem('tt_user_session');
       }
@@ -484,18 +483,6 @@ const App: React.FC = () => {
           <Radio size={17} />
           <span style={{ whiteSpace: 'nowrap' }}>상황판</span>
         </button>
-        <button
-          onClick={() => setCurrentView('equipment')}
-          style={{
-            flex: '1 1 0', minWidth: '68px', background: 'transparent', border: 'none',
-            color: currentView === 'equipment' ? '#3b82f6' : 'var(--text-muted)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center',
-            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
-          }}
-        >
-          <Package size={17} />
-          <span style={{ whiteSpace: 'nowrap' }}>비상장비</span>
-        </button>
         {currentUser.isCommander && currentUser.name === '김견수' && (
           <button
             onClick={() => setCurrentView('admin')}
@@ -580,8 +567,6 @@ const App: React.FC = () => {
             tasks={tasks}
           />
         )}
-
-        {currentView === 'equipment' && <EquipmentView />}
 
         {currentView === 'admin' && currentUser.isCommander && currentUser.name === '김견수' && (
           <AdminPanel
