@@ -5,6 +5,7 @@ import { type EmployeeDB } from '../services/supabase';
 const normalizeTeam = (team: string): string => {
   if (team.startsWith('보안')) return '보안파트'; // 보안1, 보안2, 보안3
   if (team.endsWith('파트장')) return team.replace('파트장', '파트');
+  if (team === '건축사무' || team === '건축현장') return '건축파트'; // 건축 소속 전체 → 건축파트
   return team;
 };
 
