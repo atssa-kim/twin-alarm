@@ -494,7 +494,7 @@ const App: React.FC = () => {
             }}
           >
             <Settings size={17} />
-            <span style={{ whiteSpace: 'nowrap' }}>인원관리</span>
+            <span style={{ whiteSpace: 'nowrap' }}>조직관리</span>
           </button>
         )}
       </nav>

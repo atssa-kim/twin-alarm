@@ -3,7 +3,7 @@ import { ShieldCheck } from 'lucide-react';
 import { type EmployeeDB } from '../services/supabase';
 
 const normalizeTeam = (team: string): string => {
-  if (team.startsWith('보안')) return '보안파트'; // 보안1, 보안2, 보안3
+  if (team.startsWith('보안')) return '보안파트';
   if (team.endsWith('파트장')) return team.replace('파트장', '파트');
   return team;
 };
@@ -31,7 +31,7 @@ export interface Employee {
   name: string;
   team: string;
   role: string;
-  badge?: string; // 재난 발령 시 employee_disaster_badges 에서 동적으로 조회
+  badge?: string;
   isCommander: boolean;
 }
 
@@ -50,8 +50,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
     const teamSet = new Set<string>();
     for (const e of employees) {
       if (e.role.includes('교대')) {
-        if (e.role.includes('방재')) teamSet.add('상황실'); // 방재직원만 상황실 탭
-        teamSet.add('교대근무자'); // 모든 교대 직원은 교대근무자 탭에도 표시
+        if (e.role.includes('방재')) teamSet.add('상황실');
+        teamSet.add('교대근무자');
       } else {
         teamSet.add(normalizeTeam(e.team));
       }
@@ -68,21 +68,16 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
 
   const filteredEmployees = useMemo(() => {
     if (!selectedTeam) return [];
-
     if (selectedTeam === '상황실') {
-      // 방재직원만 — 로그인 시 지휘본부(발령 화면)로 이동
       return employees
         .filter(e => e.role.includes('교대') && e.role.includes('방재'))
         .sort((a, b) => getShiftRank(a.role) - getShiftRank(b.role) || a.name.localeCompare(b.name, 'ko'));
     }
     if (selectedTeam === '교대근무자') {
-      // 모든 교대 직원 — 로그인 시 대원 뷰(야간 임무)로 이동
       return employees
         .filter(e => e.role.includes('교대'))
         .sort((a, b) => getShiftRank(a.role) - getShiftRank(b.role) || a.name.localeCompare(b.name, 'ko'));
     }
-
-    // 일반 팀: 교대 직원 제외 (상황실/교대근무자 그룹으로 별도 관리)
     return employees
       .filter(e => normalizeTeam(e.team) === selectedTeam && !e.role.includes('교대'))
       .sort((a, b) => getRoleRank(a.role) - getRoleRank(b.role) || a.name.localeCompare(b.name, 'ko'));
@@ -97,56 +92,23 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
     const emp = employees.find((e) => e.emp_no === selectedEmpNo);
-    if (!emp) {
-      setError('직원을 선택해주세요.');
-      return;
-    }
-
+    if (!emp) { setError('직원을 선택해주세요.'); return; }
     const digits = emp.phone?.replace(/\D/g, '') ?? '';
     const expectedPw = digits.slice(-4);
-    if (!expectedPw) {
-      setError('등록된 전화번호가 없습니다. 관리자에게 문의하세요.');
-      return;
-    }
-    if (password !== expectedPw) {
-      setError('비밀번호가 틀렸습니다. (전화번호 뒤 4자리)');
-      return;
-    }
-
+    if (!expectedPw) { setError('등록된 전화번호가 없습니다. 관리자에게 문의하세요.'); return; }
+    if (password !== expectedPw) { setError('비밀번호가 틀렸습니다. (전화번호 뒤 4자리)'); return; }
     onLogin({
       empNo: emp.emp_no,
       name: emp.name,
       team: emp.team,
       role: emp.role,
-      // 교대근무자 탭으로 로그인 시 방재직원도 대원 뷰(야간 임무)로 이동
       isCommander: selectedTeam !== '교대근무자' && emp.is_commander,
     });
   };
 
-  const selectStyle: React.CSSProperties = {
-    background: '#fff',
-    border: '1px solid rgba(255,255,255,0.15)',
-    borderRadius: '12px',
-    padding: '14px 16px',
-    height: 'auto',      // 글로벌 CSS height:48px 오버라이드
-    minHeight: '50px',
-    color: '#111',
-    fontSize: '14px',
-    width: '100%',
-    outline: 'none',
-    cursor: 'pointer',
-    WebkitAppearance: 'none',
-    appearance: 'none',
-    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'right 14px center',
-    paddingRight: '36px',
-  };
-
   const labelStyle: React.CSSProperties = {
-    fontSize: '12px',
+    fontSize: '11px',
     fontWeight: 700,
     color: '#64748b',
     textTransform: 'uppercase',
@@ -154,6 +116,33 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
     marginBottom: '8px',
     display: 'block',
   };
+
+  const teamBtnStyle = (active: boolean): React.CSSProperties => ({
+    padding: '8px 14px',
+    borderRadius: '10px',
+    border: active ? 'none' : '1px solid rgba(255,255,255,0.12)',
+    background: active ? '#2563eb' : 'rgba(255,255,255,0.05)',
+    color: active ? '#fff' : '#94a3b8',
+    fontSize: '13px',
+    fontWeight: active ? 700 : 500,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+    whiteSpace: 'nowrap' as const,
+  });
+
+  const empBtnStyle = (active: boolean): React.CSSProperties => ({
+    padding: '10px 14px',
+    borderRadius: '8px',
+    border: active ? '1px solid #3b82f6' : '1px solid transparent',
+    background: active ? 'rgba(37,99,235,0.25)' : 'rgba(255,255,255,0.03)',
+    color: active ? '#93c5fd' : '#e2e8f0',
+    fontSize: '14px',
+    fontWeight: active ? 700 : 400,
+    textAlign: 'left' as const,
+    cursor: 'pointer',
+    width: '100%',
+    transition: 'all 0.12s',
+  });
 
   return (
     <div className="content" style={{ justifyContent: 'center' }}>
@@ -167,186 +156,130 @@ export const Login: React.FC<LoginProps> = ({ onLogin, employees }) => {
           50% { opacity: 1; width: 80px; }
         }
         .login-card-bold {
-          padding: 36px 28px;
+          padding: 28px 22px;
           background: linear-gradient(145deg, rgba(15,23,42,0.95), rgba(30,41,59,0.85));
           border: 1px solid rgba(59,130,246,0.15);
           border-radius: 20px;
           backdrop-filter: blur(20px);
           box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
         }
-        .login-card-bold:hover {
-          border-color: rgba(59,130,246,0.3);
-          box-shadow: 0 12px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05), 0 0 60px rgba(59,130,246,0.05);
-        }
         .btn-bold-enter {
-          height: 52px;
-          border: none;
-          border-radius: 14px;
-          font-size: 15px;
-          font-weight: 800;
-          letter-spacing: 1.5px;
-          text-transform: uppercase;
-          color: #fff;
-          cursor: pointer;
+          height: 52px; width: 100%;
+          border: none; border-radius: 14px;
+          font-size: 15px; font-weight: 800;
+          letter-spacing: 1.5px; text-transform: uppercase;
+          color: #fff; cursor: pointer;
           background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
           box-shadow: 0 4px 20px rgba(59,130,246,0.35), inset 0 1px 0 rgba(255,255,255,0.15);
           transition: all 0.3s ease;
-          position: relative;
-          overflow: hidden;
         }
-        .btn-bold-enter::before {
-          content: '';
-          position: absolute;
-          top: 0; left: -100%; width: 100%; height: 100%;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-          transition: left 0.5s ease;
-        }
-        .btn-bold-enter:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 30px rgba(59,130,246,0.5), inset 0 1px 0 rgba(255,255,255,0.2);
-        }
-        .btn-bold-enter:hover::before { left: 100%; }
-        .btn-bold-enter:active { transform: translateY(0); }
+        .btn-bold-enter:active { transform: translateY(1px); }
         .login-pw-input {
-          background: #fff;
+          background: rgba(255,255,255,0.06);
           border: 1px solid rgba(255,255,255,0.15);
-          border-radius: 12px;
-          padding: 14px 16px;
-          color: #111;
-          font-size: 20px;
-          width: 100%;
-          outline: none;
-          box-sizing: border-box;
-          letter-spacing: 8px;
-          font-weight: 900;
+          border-radius: 12px; padding: 14px 16px;
+          color: #f1f5f9; font-size: 20px; width: 100%;
+          outline: none; box-sizing: border-box;
+          letter-spacing: 8px; font-weight: 900;
         }
         .login-pw-input:focus {
-          background: #fff;
-          color: #111;
           border-color: #3b82f6;
           box-shadow: 0 0 0 3px rgba(59,130,246,0.25);
         }
-        .login-pw-input::placeholder { letter-spacing: 0; font-weight: 400; font-size: 14px; color: #aaa; }
+        .login-pw-input::placeholder { letter-spacing: 0; font-weight: 400; font-size: 14px; color: #475569; }
         .login-error {
-          background: rgba(239,68,68,0.15);
-          border: 1px solid rgba(239,68,68,0.3);
-          border-radius: 10px;
-          padding: 10px 14px;
-          color: #fca5a5;
-          font-size: 13px;
-          font-weight: 600;
+          background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3);
+          border-radius: 10px; padding: 10px 14px;
+          color: #fca5a5; font-size: 13px; font-weight: 600;
         }
+        .emp-scroll::-webkit-scrollbar { width: 0; }
       `}</style>
 
       <div className="login-card-bold">
-        {/* Shield Icon */}
-        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+        {/* 아이콘 */}
+        <div style={{ textAlign: 'center', marginBottom: '16px' }}>
           <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '64px',
-            height: '64px',
-            borderRadius: '50%',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: '60px', height: '60px', borderRadius: '50%',
             background: 'radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%)',
             animation: 'shieldPulse 3s ease-in-out infinite',
           }}>
-            <ShieldCheck size={36} color="#3b82f6" strokeWidth={2.2} />
+            <ShieldCheck size={34} color="#3b82f6" strokeWidth={2.2} />
           </div>
         </div>
 
-        {/* Title */}
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <h2 style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 900,
-            fontSize: '26px',
-            marginBottom: '12px',
-            color: '#f1f5f9',
-            letterSpacing: '-0.3px',
-          }}>
+        {/* 타이틀 */}
+        <div style={{ textAlign: 'center', marginBottom: '22px' }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '24px', marginBottom: '8px', color: '#f1f5f9', letterSpacing: '-0.3px' }}>
             트윈타워 재난알람
           </h2>
-          <p style={{ color: '#94a3b8', fontSize: '14px', fontWeight: 500, marginBottom: '10px' }}>
-            상황전파 협업업무
-          </p>
+          <p style={{ color: '#94a3b8', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>상황전파 협업업무</p>
           <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <div style={{
-              height: '3px',
-              width: '70px',
-              borderRadius: '2px',
-              background: 'linear-gradient(90deg, transparent, #f97316, #fb923c, transparent)',
-              animation: 'accentGlow 2.5s ease-in-out infinite',
-            }} />
+            <div style={{ height: '3px', width: '70px', borderRadius: '2px', background: 'linear-gradient(90deg, transparent, #f97316, #fb923c, transparent)', animation: 'accentGlow 2.5s ease-in-out infinite' }} />
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Step 1: 부서 선택 */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+          {/* ① 부서 선택 — 인라인 버튼 그리드 (시스템 팝업 없음) */}
           <div>
             <label style={labelStyle}>① 부서 선택</label>
-            <select
-              value={selectedTeam}
-              onChange={(e) => handleTeamChange(e.target.value)}
-              required
-              style={selectStyle}
-            >
-              <option value="">-- 부서를 먼저 선택하세요 --</option>
-              {employees.length === 0 && (
-                <option disabled value="">직원 데이터 로딩 중...</option>
-              )}
-              {teams.map((team) => (
-                <option key={team} value={team}>
-                  {team}
-                </option>
-              ))}
-            </select>
+            {employees.length === 0 ? (
+              <div style={{ color: '#64748b', fontSize: '13px', padding: '10px 0' }}>직원 데이터 로딩 중…</div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {teams.map(team => (
+                  <button key={team} type="button" onClick={() => handleTeamChange(team)} style={teamBtnStyle(selectedTeam === team)}>
+                    {team}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Step 2: 이름 선택 (부서 선택 후 활성화) */}
-          <div>
-            <label style={labelStyle}>② 이름(부서) 선택</label>
-            <select
-              value={selectedEmpNo}
-              onChange={(e) => { setSelectedEmpNo(e.target.value); setError(''); }}
-              required
-              disabled={!selectedTeam}
-              style={{
-                ...selectStyle,
-                opacity: selectedTeam ? 1 : 0.5,
-                cursor: selectedTeam ? 'pointer' : 'not-allowed',
-              }}
-            >
-              <option value="">
-                {selectedTeam ? '-- 이름을 선택하세요 --' : '부서를 먼저 선택하세요'}
-              </option>
-              {filteredEmployees.map((emp) => (
-                <option key={emp.emp_no} value={emp.emp_no}>
-                  {emp.name} ({emp.team} · {emp.role})
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* ② 이름 선택 — 인라인 스크롤 리스트 (시스템 팝업 없음) */}
+          {selectedTeam && (
+            <div>
+              <label style={labelStyle}>② 이름 선택 <span style={{ color: '#3b82f6', textTransform: 'none', letterSpacing: 0 }}>— {selectedTeam}</span></label>
+              <div className="emp-scroll" style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '3px', borderRadius: '12px', background: 'rgba(0,0,0,0.2)', padding: '6px', border: '1px solid rgba(255,255,255,0.07)' }}>
+                {filteredEmployees.map(emp => (
+                  <button
+                    key={emp.emp_no}
+                    type="button"
+                    onClick={() => { setSelectedEmpNo(emp.emp_no); setError(''); }}
+                    style={empBtnStyle(selectedEmpNo === emp.emp_no)}
+                  >
+                    {emp.name}
+                    <span style={{ fontSize: '11px', marginLeft: '6px', color: selectedEmpNo === emp.emp_no ? 'rgba(147,197,253,0.8)' : '#64748b' }}>
+                      {emp.team} · {emp.role}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-          {/* Step 3: 비밀번호 (전화번호 뒤 4자리) */}
-          <div>
-            <label style={labelStyle}>③ 비밀번호 (전화번호 뒤 4자리)</label>
-            <input
-              type="password"
-              inputMode="numeric"
-              maxLength={4}
-              placeholder="전화번호 뒤 4자리"
-              value={password}
-              onChange={(e) => { setPassword(e.target.value.replace(/\D/g, '')); setError(''); }}
-              required
-              className="login-pw-input"
-            />
-          </div>
+          {/* ③ 비밀번호 */}
+          {selectedEmpNo && (
+            <div>
+              <label style={labelStyle}>③ 비밀번호 (전화번호 뒤 4자리)</label>
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                placeholder="전화번호 뒤 4자리"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value.replace(/\D/g, '')); setError(''); }}
+                required
+                className="login-pw-input"
+                autoFocus
+              />
+            </div>
+          )}
 
-          {/* 에러 메시지 */}
           {error && <div className="login-error">{error}</div>}
 
-          <button type="submit" className="btn-bold-enter">
+          <button type="submit" className="btn-bold-enter" disabled={!selectedEmpNo}>
             로그인
           </button>
         </form>
