@@ -86,12 +86,21 @@ const TEAM_BADGE_MAP: Record<string, Partial<Record<Disaster, string>>> = {
 
   // ── 건축 ────────────────────────────────────────────────
   '건축파트장': {
-    // 통제 역할 없음 → 파트 배지와 동일
-    화재: '복구', 정전: '대응', 누수: '복구B', '태풍/홍수': '대응',
+    // 통제 역할 없음 → 건축사무와 동일 배지
+    화재: '유도',  // 건축사무 유도조와 동일
+    정전: '대응', 누수: '복구B', '태풍/홍수': '대응',
     폭설: '대응1', 지진: '대응2', 가스누출: '대피', 테러: '대피',
   },
-  '건축파트': {
-    화재: '복구', 정전: '대응', 누수: '복구B', '태풍/홍수': '대응',
+  '건축파트': {   // 미분류 건축 인원 (기존 호환)
+    화재: '유도', 정전: '대응', 누수: '복구B', '태풍/홍수': '대응',
+    폭설: '대응1', 지진: '대응2', 가스누출: '대피', 테러: '대피',
+  },
+  '건축사무': {   // 사무직 (유도조)
+    화재: '유도', 정전: '대응', 누수: '복구B', '태풍/홍수': '대응',
+    폭설: '대응1', 지진: '대응2', 가스누출: '대피', 테러: '대피',
+  },
+  '건축현장': {   // 현장직 (방호조)
+    화재: '방호', 정전: '대응', 누수: '복구B', '태풍/홍수': '대응',
     폭설: '대응1', 지진: '대응2', 가스누출: '대피', 테러: '대피',
   },
 
@@ -207,16 +216,18 @@ const EMPLOYEES: {
   { emp_no: 'E-4007', name: '박범수', team: '상황실',     role: '교대원(B조·방재)',   is_commander: true,  email: 'Pray_bs@sni.co.kr',   phone: '010-9437-1985' },
   { emp_no: 'E-4008', name: '김상백', team: '상황실',     role: '교대원(A조·방재)',   is_commander: true,  email: 'ksb408@sni.co.kr',    phone: '010-2503-7305' },
 
-  // ── 건축 ───────────────────────────────────────────────
-  { emp_no: 'E-5001', name: '이수용', team: '건축파트장', role: '파트장',      is_commander: false, email: 'suyong@sni.co.kr',    phone: '010-2966-0477' },
-  { emp_no: 'E-5002', name: '최낙철', team: '건축파트',   role: '파트원',      is_commander: false, email: 'narkcholchoi@sni.co.kr',phone: '010-9229-4949' },
-  { emp_no: 'E-5003', name: '염혜진', team: '건축파트',   role: '파트원',      is_commander: false, email: 'hejing@sni.co.kr',    phone: '010-6305-1131' },
-  { emp_no: 'E-5004', name: '김규영', team: '건축파트',   role: '파트원',      is_commander: false, email: 'xgplus@sni.co.kr',    phone: '010-7514-9713' },
-  { emp_no: 'E-5005', name: '최인규', team: '건축파트',   role: '파트원',      is_commander: false, email: 'inkyutj@sni.co.kr',   phone: '010-7130-5219' },
-  { emp_no: 'E-5006', name: '서영진', team: '건축파트',   role: '파트원',      is_commander: false, email: 'syjin19@sni.co.kr',   phone: '010-3633-7850' },
-  { emp_no: 'E-5007', name: '김정훈', team: '건축파트',   role: '파트원',      is_commander: false, email: 'kjhsj0707@sni.co.kr', phone: '010-3936-2530' },
-  { emp_no: 'E-5008', name: '박진범', team: '건축파트',   role: '파트원',      is_commander: false, email: 'rkausantk@sni.co.kr', phone: '010-5954-4893' },
-  { emp_no: 'E-5009', name: '윤희진', team: '건축파트',   role: '파트원',      is_commander: false, email: 'yhjyhj@sni.co.kr',    phone: '010-7180-6471' },
+  // ── 건축 — 파트장 ─────────────────────────────────────
+  { emp_no: 'E-5001', name: '이수용', team: '건축파트장', role: '파트장',      is_commander: false, email: 'suyong@sni.co.kr',       phone: '010-2966-0477' },
+  // ── 건축사무 (유도조) ──────────────────────────────────
+  { emp_no: 'E-5002', name: '최낙철', team: '건축사무',   role: '파트원',      is_commander: false, email: 'narkcholchoi@sni.co.kr', phone: '010-9229-4949' },
+  { emp_no: 'E-5003', name: '염혜진', team: '건축사무',   role: '파트원',      is_commander: false, email: 'hejing@sni.co.kr',       phone: '010-6305-1131' },
+  { emp_no: 'E-5004', name: '김규영', team: '건축사무',   role: '파트원',      is_commander: false, email: 'xgplus@sni.co.kr',       phone: '010-7514-9713' },
+  { emp_no: 'E-5005', name: '최인규', team: '건축사무',   role: '파트원',      is_commander: false, email: 'inkyutj@sni.co.kr',      phone: '010-7130-5219' },
+  { emp_no: 'E-5009', name: '윤희진', team: '건축사무',   role: '파트원',      is_commander: false, email: 'yhjyhj@sni.co.kr',       phone: '010-7180-6471' },
+  // ── 건축현장 (방호조) ──────────────────────────────────
+  { emp_no: 'E-5006', name: '서영진', team: '건축현장',   role: '파트원',      is_commander: false, email: 'syjin19@sni.co.kr',      phone: '010-3633-7850' },
+  { emp_no: 'E-5007', name: '김정훈', team: '건축현장',   role: '파트원',      is_commander: false, email: 'kjhsj0707@sni.co.kr',    phone: '010-3936-2530' },
+  { emp_no: 'E-5008', name: '박진범', team: '건축현장',   role: '파트원',      is_commander: false, email: 'rkausantk@sni.co.kr',    phone: '010-5954-4893' },
 
   // ── 품질/안전 ──────────────────────────────────────────
   { emp_no: 'E-6001', name: '안상오', team: '품질/안전파트', role: '파트장',   is_commander: false, email: 'ASO82@sni.co.kr',     phone: '010-7557-3009' },
