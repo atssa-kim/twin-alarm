@@ -15,17 +15,30 @@ const ALL_TEAMS = [
   '주차파트', '미화파트',
 ];
 
-// ── 카테고리별 팀 그룹핑 ──────────────────────────────────
+// ── 카테고리(부서)별 팀 그룹핑 — 좌측 세로 메뉴 순서: 전체/운영/소방/전기/기계/건축/안전/보안/주차/미화
+// 각 부서는 파트장·파트원 팀을 모두 포함한다.
 const TEAM_CATEGORIES: { label: string; teams: string[] | null }[] = [
   { label: '전체', teams: null },
   { label: '운영', teams: ['센터장', '상황실', '운영파트장', '운영파트'] },
-  { label: '건축', teams: ['건축파트장', '건축사무', '건축현장', '건축파트'] },
-  { label: '기계', teams: ['기계파트장', '기계파트'] },
-  { label: '전기', teams: ['전기파트장', '전기파트'] },
   { label: '소방', teams: ['소방파트장', '소방파트'] },
+  { label: '전기', teams: ['전기파트장', '전기파트'] },
+  { label: '기계', teams: ['기계파트장', '기계파트'] },
+  { label: '건축', teams: ['건축파트장', '건축사무', '건축현장', '건축파트'] },
   { label: '안전', teams: ['품질/안전파트'] },
-  { label: '협력', teams: ['보안1', '보안2', '보안3', '주차파트', '미화파트'] },
+  { label: '보안', teams: ['보안1', '보안2', '보안3'] },
+  { label: '주차', teams: ['주차파트'] },
+  { label: '미화', teams: ['미화파트'] },
 ];
+
+const isDeptLeader = (e: EmployeeDB) => e.team.endsWith('파트장') || e.team === '센터장';
+
+// ── 재난 편제표: 좌측 세로 메뉴 순서 및 표시 라벨 ──────────────
+const ORG_DISASTER_ORDER: Disaster[] = ['화재', '누수', '정전', '지진', '태풍/홍수', '가스누출', '폭설', '승강기', '테러'];
+const DISASTER_LABELS: Record<Disaster, string> = {
+  '화재': '화재', '누수': '누수', '정전': '정전', '지진': '지진',
+  '태풍/홍수': '풍수', '가스누출': '가스누출', '폭설': '폭설',
+  '승강기': '승강기갇힘', '테러': '테러',
+};
 
 // ── 팀 → 재난 배지 자동매핑 (seed-employees.ts 동일) ────────
 type Disaster = '화재'|'정전'|'누수'|'태풍/홍수'|'폭설'|'지진'|'가스누출'|'승강기'|'테러';
@@ -138,7 +151,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [editEmpNo, setEditEmpNo] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+  const [expandedDept, setExpandedDept] = useState<string | null>(null);
+  const [expandedOrgGroup, setExpandedOrgGroup] = useState<OrgGroup | null>(null);
   const [rlsError, setRlsError] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -161,11 +175,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
     );
   }, [employees, categoryTeams, search]);
 
-  const grouped = useMemo(() => {
-    const map: Record<string, EmployeeDB[]> = {};
-    for (const e of filtered) (map[e.team] ??= []).push(e);
-    return map;
-  }, [filtered]);
+  // 부서(카테고리)별로 파트장·파트원을 한데 묶은 아코디언 그룹
+  const departmentGroups = useMemo(() => {
+    const depts = filterCategory === '전체'
+      ? TEAM_CATEGORIES.filter(c => c.teams !== null)
+      : TEAM_CATEGORIES.filter(c => c.label === filterCategory);
+    return depts
+      .map(dept => ({
+        label: dept.label,
+        emps: filtered
+          .filter(e => dept.teams!.includes(e.team))
+          .sort((a, b) => {
+            const lead = Number(isDeptLeader(b)) - Number(isDeptLeader(a));
+            return lead || a.name.localeCompare(b.name, 'ko');
+          }),
+      }))
+      .filter(d => d.emps.length > 0);
+  }, [filtered, filterCategory]);
 
   // 현재 팀의 자동 배지 미리보기
   const autoBadgePreview = useMemo(() => {
@@ -285,8 +311,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
     display: 'block', marginBottom: '5px',
   };
 
-  const teamGroups = Object.entries(grouped);
-
   return (
     <div className="content" style={{ gap: '12px' }}>
 
@@ -381,112 +405,134 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
         ))}
       </div>
 
-      {/* ── 편제표 탭 ── */}
+      {/* ── 편제표 탭: 좌측 재난 세로 메뉴 + 우측 서브메뉴 아코디언 ── */}
       {adminTab === 'org' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <select value={orgDisaster} onChange={ev => setOrgDisaster(ev.target.value as Disaster)}
-            style={{ height: '42px', background: 'rgba(10,15,30,0.8)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', padding: '0 14px', color: '#e2e8f0', fontSize: '14px', fontWeight: 700 }}>
-            {ALL_DISASTERS.map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
-
-          {ORG_GROUPS.map(({ key: grp, color }) => {
-            const grpEmps = orgGroups[grp];
-            const teamMap: Record<string, EmployeeDB[]> = {};
-            for (const emp of grpEmps) (teamMap[emp.team] ??= []).push(emp);
-
-            return (
-              <div key={grp} style={{ border: `1px solid ${color}33`, borderRadius: '10px', overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', background: `${color}10`, borderBottom: `1px solid ${color}22` }}>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, flexShrink: 0 }} />
-                  <span style={{ fontSize: '13px', fontWeight: 800, color, flex: 1 }}>{grp}</span>
-                  <span style={{ fontSize: '11px', color: color + 'aa', fontWeight: 600 }}>{grpEmps.length}명</span>
-                </div>
-                {grpEmps.length === 0 ? (
-                  <div style={{ padding: '10px 14px', fontSize: '12px', color: '#475569', textAlign: 'center' }}>해당 없음</div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    {Object.entries(teamMap).map(([team, teamEmps]) => {
-                      const badge = TEAM_BADGE_MAP[team]?.[orgDisaster];
-                      return (
-                        <div key={team} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 12px 4px', background: 'rgba(255,255,255,0.02)' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', flex: 1 }}>{team}</span>
-                            {badge && (
-                              <span style={{ fontSize: '10px', padding: '1px 7px', borderRadius: '4px', background: color + '22', color, fontWeight: 700, border: `1px solid ${color}44` }}>
-                                {badge}
-                              </span>
-                            )}
-                          </div>
-                          {teamEmps.map(emp => (
-                            <div key={emp.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 12px 4px 20px' }}>
-                              <span style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0', flex: 1 }}>{emp.name}</span>
-                              <span style={{ fontSize: '11px', color: '#64748b' }}>{emp.role}</span>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── 직원 목록 탭 ── */}
-      {adminTab === 'list' && (
-      <>
-      {/* 검색 */}
-      <input
-        type="text" placeholder="이름 · 역할 검색" value={search}
-        onChange={e => setSearch(e.target.value)}
-        style={{ ...inputStyle, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)' }}
-      />
-
-      {/* 카테고리 필터 */}
-      <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
-        {TEAM_CATEGORIES.map(cat => (
-          <button key={cat.label} onClick={() => { setFilterCategory(cat.label); setExpandedTeam(null); }} style={{
-            flexShrink: 0, padding: '5px 12px', borderRadius: '20px', cursor: 'pointer',
-            fontSize: '12px', fontWeight: 700,
-            background: filterCategory === cat.label ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-            border: `1px solid ${filterCategory === cat.label ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.1)'}`,
-            color: filterCategory === cat.label ? '#60a5fa' : 'var(--text-muted)',
-          }}>
-            {cat.label}
-          </button>
-        ))}
-      </div>
-
-      {/* 직원 목록 */}
-      {filtered.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: '13px' }}>
-          {search ? '검색 결과가 없습니다.' : '등록된 직원이 없습니다.'}
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {teamGroups.map(([team, emps]) => (
-            <div key={team} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div className="accordion-header" onClick={() => setExpandedTeam(expandedTeam === team ? null : team)} style={{
-                display: 'flex', alignItems: 'center', gap: '8px', padding: '11px 14px',
-                borderBottom: expandedTeam === team ? '1px solid rgba(255,255,255,0.06)' : 'none',
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+          {/* 좌측 세로 메뉴 */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '76px', flexShrink: 0 }}>
+            {ORG_DISASTER_ORDER.map(d => (
+              <button key={d} type="button" onClick={() => { setOrgDisaster(d); setExpandedOrgGroup(null); }} style={{
+                padding: '10px 4px', borderRadius: '8px', cursor: 'pointer',
+                fontSize: '12px', fontWeight: 700, textAlign: 'center',
+                background: orgDisaster === d ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${orgDisaster === d ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                color: orgDisaster === d ? '#60a5fa' : 'var(--text-muted)',
               }}>
-                <span style={{ fontSize: '13px', fontWeight: 800, flex: 1 }}>{team}</span>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{emps.length}명</span>
-                <ChevronDown size={14} color="var(--text-muted)"
-                  style={{ transform: expandedTeam === team ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-              </div>
-              {expandedTeam === team && (
-                <div>
-                  {emps.map(emp => <EmpRow key={emp.emp_no} emp={emp} onEdit={openEdit} onDelete={handleDelete} />)}
+                {DISASTER_LABELS[d]}
+              </button>
+            ))}
+          </div>
+
+          {/* 우측 서브메뉴바 (아코디언) */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {ORG_GROUPS.map(({ key: grp, color }) => {
+              const grpEmps = orgGroups[grp];
+              const teamMap: Record<string, EmployeeDB[]> = {};
+              for (const emp of grpEmps) (teamMap[emp.team] ??= []).push(emp);
+              const isOpen = expandedOrgGroup === grp;
+
+              return (
+                <div key={grp} style={{ border: `1px solid ${color}33`, borderRadius: '10px', overflow: 'hidden' }}>
+                  <div onClick={() => setExpandedOrgGroup(isOpen ? null : grp)} style={{
+                    display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', cursor: 'pointer',
+                    background: `${color}10`, borderBottom: isOpen ? `1px solid ${color}22` : 'none',
+                  }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, flexShrink: 0 }} />
+                    <span style={{ fontSize: '13px', fontWeight: 800, color, flex: 1 }}>{grp}</span>
+                    <span style={{ fontSize: '11px', color: color + 'aa', fontWeight: 600 }}>{grpEmps.length}명</span>
+                    <ChevronDown size={14} color={color}
+                      style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                  </div>
+                  {isOpen && (
+                    grpEmps.length === 0 ? (
+                      <div style={{ padding: '10px 14px', fontSize: '12px', color: '#475569', textAlign: 'center' }}>해당 없음</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        {Object.entries(teamMap).map(([team, teamEmps]) => {
+                          const badge = TEAM_BADGE_MAP[team]?.[orgDisaster];
+                          return (
+                            <div key={team} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 12px 4px', background: 'rgba(255,255,255,0.02)' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', flex: 1 }}>{team}</span>
+                                {badge && (
+                                  <span style={{ fontSize: '10px', padding: '1px 7px', borderRadius: '4px', background: color + '22', color, fontWeight: 700, border: `1px solid ${color}44` }}>
+                                    {badge}
+                                  </span>
+                                )}
+                              </div>
+                              {teamEmps.map(emp => (
+                                <div key={emp.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 12px 4px 20px' }}>
+                                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0', flex: 1 }}>{emp.name}</span>
+                                  <span style={{ fontSize: '11px', color: '#64748b' }}>{emp.role}</span>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
+              );
+            })}
+          </div>
         </div>
       )}
-      </>
+
+      {/* ── 직원 목록 탭: 좌측 부서 세로 메뉴 + 우측 검색/아코디언 ── */}
+      {adminTab === 'list' && (
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+          {/* 좌측 세로 메뉴 */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '76px', flexShrink: 0 }}>
+            {TEAM_CATEGORIES.map(cat => (
+              <button key={cat.label} type="button" onClick={() => { setFilterCategory(cat.label); setExpandedDept(null); }} style={{
+                padding: '10px 4px', borderRadius: '8px', cursor: 'pointer',
+                fontSize: '12px', fontWeight: 700, textAlign: 'center',
+                background: filterCategory === cat.label ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${filterCategory === cat.label ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                color: filterCategory === cat.label ? '#60a5fa' : 'var(--text-muted)',
+              }}>
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* 우측 검색 + 부서별 아코디언 (파트장·파트원 통합) */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <input
+              type="text" placeholder="이름 · 역할 검색" value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ ...inputStyle, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)' }}
+            />
+
+            {departmentGroups.length === 0 ? (
+              <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                {search ? '검색 결과가 없습니다.' : '등록된 직원이 없습니다.'}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {departmentGroups.map(dept => (
+                  <div key={dept.label} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                    <div className="accordion-header" onClick={() => setExpandedDept(expandedDept === dept.label ? null : dept.label)} style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', padding: '11px 14px',
+                      borderBottom: expandedDept === dept.label ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                    }}>
+                      <span style={{ fontSize: '13px', fontWeight: 800, flex: 1 }}>{dept.label}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{dept.emps.length}명</span>
+                      <ChevronDown size={14} color="var(--text-muted)"
+                        style={{ transform: expandedDept === dept.label ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                    </div>
+                    {expandedDept === dept.label && (
+                      <div>
+                        {dept.emps.map(emp => <EmpRow key={emp.emp_no} emp={emp} onEdit={openEdit} onDelete={handleDelete} />)}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* ── 추가/편집 모달 ── */}
