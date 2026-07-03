@@ -485,7 +485,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
           {/* 좌측 세로 메뉴 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '76px', flexShrink: 0 }}>
             {TEAM_CATEGORIES.map(cat => (
-              <button key={cat.label} type="button" onClick={() => { setFilterCategory(cat.label); setExpandedDept(null); }} style={{
+              <button key={cat.label} type="button" onClick={() => { setFilterCategory(cat.label); setExpandedDept(cat.label === '전체' ? null : cat.label); }} style={{
                 padding: '10px 4px', borderRadius: '8px', cursor: 'pointer',
                 fontSize: '12px', fontWeight: 700, textAlign: 'center',
                 background: filterCategory === cat.label ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
