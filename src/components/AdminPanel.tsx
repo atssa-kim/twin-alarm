@@ -15,9 +15,9 @@ const ALL_TEAMS = [
   '주차파트', '미화파트',
 ];
 
-// ── 카테고리(부서)별 팀 그룹핑 — 좌측 세로 메뉴 순서: 전체/운영/소방/전기/기계/건축/안전/보안/주차/미화
-// 각 부서는 파트장·파트원 팀을 모두 포함한다.
-const TEAM_CATEGORIES: { label: string; teams: string[] | null }[] = [
+// ── 카테고리(부서)별 팀 그룹핑 — 좌측 세로 메뉴 순서: 전체/운영/소방/전기/기계/건축/안전/보안/주차/미화/교대
+// 각 부서는 파트장·파트원 팀을 모두 포함한다. 교대 근무자는 소속 부서에서 빼서 "교대" 카테고리로 별도 구성.
+const TEAM_CATEGORIES: { label: string; teams: string[] | null; shiftOnly?: boolean }[] = [
   { label: '전체', teams: null },
   { label: '운영', teams: ['센터장', '상황실', '운영파트장', '운영파트'] },
   { label: '소방', teams: ['소방파트장', '소방파트'] },
@@ -28,9 +28,16 @@ const TEAM_CATEGORIES: { label: string; teams: string[] | null }[] = [
   { label: '보안', teams: ['보안1', '보안2', '보안3'] },
   { label: '주차', teams: ['주차파트'] },
   { label: '미화', teams: ['미화파트'] },
+  { label: '교대', teams: null, shiftOnly: true },
 ];
 
 const isDeptLeader = (e: EmployeeDB) => e.team.endsWith('파트장') || e.team === '센터장';
+
+// ── 교대 근무자: role에서 A/B/C/D조 및 조장 여부 추출 ──────────
+const SHIFT_ORDER = ['A', 'B', 'C', 'D', '기타'];
+const isShiftEmp = (e: EmployeeDB) => e.role.includes('교대');
+const isShiftLeader = (e: EmployeeDB) => e.role.includes('조장');
+const getShiftLetter = (role: string) => role.match(/([A-D])조/)?.[1] ?? '기타';
 
 // ── 재난 편제표: 좌측 세로 메뉴 순서 및 표시 라벨 ──────────────
 const ORG_DISASTER_ORDER: Disaster[] = ['화재', '누수', '정전', '지진', '태풍/홍수', '가스누출', '폭설', '승강기', '테러'];
@@ -175,21 +182,40 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
     );
   }, [employees, categoryTeams, search]);
 
-  // 부서(카테고리)별로 파트장·파트원을 한데 묶은 아코디언 그룹
+  // 부서(카테고리)별로 파트장·파트원을 한데 묶은 아코디언 그룹. 교대 근무자는 소속 부서에서 빼서
+  // "교대" 카테고리로 모으고, 그 안에서 다시 A/B/C/D조로 나눠 조장을 조원보다 앞에 배치한다.
   const departmentGroups = useMemo(() => {
     const depts = filterCategory === '전체'
-      ? TEAM_CATEGORIES.filter(c => c.teams !== null)
+      ? TEAM_CATEGORIES.filter(c => c.label !== '전체')
       : TEAM_CATEGORIES.filter(c => c.label === filterCategory);
     return depts
-      .map(dept => ({
-        label: dept.label,
-        emps: filtered
-          .filter(e => dept.teams!.includes(e.team))
-          .sort((a, b) => {
-            const lead = Number(isDeptLeader(b)) - Number(isDeptLeader(a));
-            return lead || a.name.localeCompare(b.name, 'ko');
-          }),
-      }))
+      .map(dept => {
+        if (dept.shiftOnly) {
+          const shiftEmps = filtered.filter(isShiftEmp);
+          const buckets: Record<string, EmployeeDB[]> = {};
+          for (const e of shiftEmps) (buckets[getShiftLetter(e.role)] ??= []).push(e);
+          const shiftGroups = SHIFT_ORDER
+            .filter(s => buckets[s]?.length)
+            .map(s => ({
+              shift: s,
+              emps: buckets[s].sort((a, b) => {
+                const lead = Number(isShiftLeader(b)) - Number(isShiftLeader(a));
+                return lead || a.name.localeCompare(b.name, 'ko');
+              }),
+            }));
+          return { label: dept.label, emps: shiftEmps, shiftGroups };
+        }
+        return {
+          label: dept.label,
+          emps: filtered
+            .filter(e => dept.teams!.includes(e.team) && !isShiftEmp(e))
+            .sort((a, b) => {
+              const lead = Number(isDeptLeader(b)) - Number(isDeptLeader(a));
+              return lead || a.name.localeCompare(b.name, 'ko');
+            }),
+          shiftGroups: undefined as { shift: string; emps: EmployeeDB[] }[] | undefined,
+        };
+      })
       .filter(d => d.emps.length > 0);
   }, [filtered, filterCategory]);
 
@@ -524,7 +550,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                     </div>
                     {expandedDept === dept.label && (
                       <div>
-                        {dept.emps.map(emp => <EmpRow key={emp.emp_no} emp={emp} onEdit={openEdit} onDelete={handleDelete} />)}
+                        {dept.shiftGroups ? (
+                          dept.shiftGroups.map(sg => (
+                            <div key={sg.shift}>
+                              <div style={{ padding: '6px 14px 5px', fontSize: '11px', fontWeight: 800, color: '#94a3b8', background: 'rgba(255,255,255,0.03)' }}>
+                                {sg.shift === '기타' ? '기타' : `${sg.shift}조`} · {sg.emps.length}명
+                              </div>
+                              {sg.emps.map(emp => <EmpRow key={emp.emp_no} emp={emp} onEdit={openEdit} onDelete={handleDelete} />)}
+                            </div>
+                          ))
+                        ) : (
+                          dept.emps.map(emp => <EmpRow key={emp.emp_no} emp={emp} onEdit={openEdit} onDelete={handleDelete} />)
+                        )}
                       </div>
                     )}
                   </div>
@@ -698,6 +735,9 @@ const EmpRow: React.FC<{
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ fontSize: '14px', fontWeight: 700 }}>{emp.name}</span>
+          {emp.role.includes('조장') && (
+            <span style={{ fontSize: '9px', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>조장</span>
+          )}
           {emp.is_commander && (
             <span style={{ fontSize: '9px', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', background: 'rgba(59,130,246,0.2)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}>지휘관</span>
           )}
