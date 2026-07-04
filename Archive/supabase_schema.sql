@@ -158,6 +158,14 @@ ALTER TABLE public.disaster_roles ADD COLUMN IF NOT EXISTS shift TEXT NOT NULL D
 ALTER TABLE public.disaster_roles DROP CONSTRAINT IF EXISTS disaster_roles_disaster_badge_key;
 ALTER TABLE public.disaster_roles ADD CONSTRAINT disaster_roles_disaster_shift_badge_key UNIQUE (disaster, shift, badge);
 
+-- 12. incidents 에 shift(근무구분) 컬럼 추가 (2026-07-05)
+--     화재만 주간/야간 임무가 다르므로(11번 항목), 실제 발령 시 어느 shift의 disaster_roles를
+--     쓸지 알아야 합니다. 자동 시각판정 대신 지휘관이 발령 화면에서 주간/야간을 직접 선택하도록
+--     함(휴일 판정 등 부정확한 자동화를 피하기 위한 의도적 선택 — 2026-07-05 결정).
+--     기존 행은 전부 shift='day'로 채워지며, 화재 외 재난은 항상 'day' 고정이라
+--     이 마이그레이션 자체만으로는 기존 발령 동작이 바뀌지 않습니다.
+ALTER TABLE public.incidents ADD COLUMN IF NOT EXISTS shift TEXT NOT NULL DEFAULT 'day';
+
 -- 10. FCM 알람 트리거 (pg_net 확장 필요 — Dashboard → Database → Extensions → pg_net 활성화)
 --     [PROJECT_REF] 와 [ANON_KEY] 를 실제 값으로 교체 후 실행
 -- CREATE OR REPLACE FUNCTION notify_incident_fcm()

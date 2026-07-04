@@ -17,6 +17,7 @@ export interface Incident {
   mode: string; // '훈련' | '감지기' | '실제'
   scope: string; // 'drill' | 'confirm' | 'all'
   drill_emp_nos?: string | null; // 훈련 승격 시 선택 대원 emp_no (콤마 구분)
+  shift?: string; // 'day' | 'night' — 화재만 지휘관이 발령 시 수동 선택, 나머지 재난은 항상 'day'
 }
 
 export interface Responder {
@@ -85,7 +86,7 @@ export interface DutyMatrixRow {
 // Database helper functions
 export const db = {
   // 1. Declare active incident
-  async declareIncident(disaster: string, mode: string, location: string, scope: string, declaredBy: string, drillEmpNos: string | null = null) {
+  async declareIncident(disaster: string, mode: string, location: string, scope: string, declaredBy: string, drillEmpNos: string | null = null, shift: string = 'day') {
     const incidentId = `inc_${Date.now()}`;
     const incident: Incident = {
       id: incidentId,
@@ -97,6 +98,7 @@ export const db = {
       mode,
       scope,
       drill_emp_nos: drillEmpNos,
+      shift,
     };
 
     // Close any previous incidents just in case
@@ -186,12 +188,13 @@ export const db = {
   },
 
   // 7. Fetch disaster roles + tasks from DB (replaces local disasters.ts members)
-  async getDisasterRolesWithTasks(disasterKey: string) {
+  // shift: 화재만 지휘관이 발령 시 'day'/'night' 선택 가능, 나머지 재난은 항상 'day' 고정
+  async getDisasterRolesWithTasks(disasterKey: string, shift: string = 'day') {
     const { data, error } = await supabase
       .from('disaster_roles')
       .select('*, disaster_tasks(*)')
       .eq('disaster', disasterKey)
-      .eq('shift', 'day') // 실제 발령 로직은 주간 역할만 사용 (야간·상황실은 disa_app 참고용)
+      .eq('shift', shift)
       .order('id');
     if (error) throw error;
     return (data ?? []) as (DisasterRole & { disaster_tasks: DisasterTask[] })[];

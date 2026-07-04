@@ -5,7 +5,7 @@ import { stopAllAlerts } from '../utils/audio';
 import { Play, Square, ShieldAlert, Users, Mic, UserCheck, BarChart2, Monitor, History, X, ChevronDown } from 'lucide-react';
 
 // 화재 초기출동조 배지 (감지기동작 시 1차 소집)
-const FIRE_INITIAL_BADGES = new Set(['총괄', '상황실', '통제', '출동']);
+const FIRE_INITIAL_BADGES = new Set(['총괄', '상황', '통제', '출동']);
 
 // 전광판 표시용 상태 라벨 — 데이터값(Responder.status)은 그대로 '현장'을 쓰되,
 // 화면에는 "현장 임무수행중"으로 보여줌(출동체크 후 임무 체크 시 자동으로 이 상태가 됨)
@@ -100,6 +100,8 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const [selectedMode, setSelectedMode] = useState<'훈련' | '실제'>('훈련');
   // 화재 전용 서브모드: 'initial'=감지기동작, 'full'=전체
   const [fireSubMode, setFireSubMode] = useState<'initial' | 'full'>('initial');
+  // 화재 전용 주간/야간 — 지휘관이 발령 시 직접 선택 (다른 재난은 항상 'day')
+  const [fireShift, setFireShift] = useState<'day' | 'night'>('day');
   const [location, setLocation] = useState('');
   const [loading, setLoading] = useState(false);
   const [showVoicePicker, setShowVoicePicker] = useState(false);
@@ -283,8 +285,10 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
           : (fireSubMode === 'initial' ? '실제/감지기' : '실제/화재'))
       : selectedMode;
     const subLabel = isFireDisaster && fireSubMode === 'initial' ? '초기출동조만 소집' : '전체 대원 소집';
+    const shift = isFireDisaster ? fireShift : 'day';
+    const shiftLabel = isFireDisaster ? (fireShift === 'night' ? ' · 야간' : ' · 주간') : '';
 
-    if (!window.confirm(`[${modeLabel}] ${selectedDisasterKey} 발령하시겠습니까?\n위치: ${location}\n소집: ${subLabel}`)) return;
+    if (!window.confirm(`[${modeLabel}${shiftLabel}] ${selectedDisasterKey} 발령하시겠습니까?\n위치: ${location}\n소집: ${subLabel}`)) return;
 
     setLoading(true);
     try {
@@ -293,7 +297,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
       const drillEmpNos = selectedMode === '훈련' && selectedEmps.size > 0
         ? [...selectedEmps].join(',')
         : null;
-      const allRoles = await db.getDisasterRolesWithTasks(selectedDisasterKey);
+      const allRoles = await db.getDisasterRolesWithTasks(selectedDisasterKey, shift);
       if (!allRoles.length) throw new Error('임무 데이터가 없습니다. npm run seed 를 먼저 실행하세요.');
 
       // 감지기동작이면 초기출동조 역할만 발령
@@ -302,7 +306,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
         : allRoles;
 
       const incident = await db.declareIncident(
-        selectedDisasterKey, modeLabel, location.trim(), scope, currentUser.empNo, drillEmpNos
+        selectedDisasterKey, modeLabel, location.trim(), scope, currentUser.empNo, drillEmpNos, shift
       );
 
       const bulkTasks: Omit<MemberTask, 'updated_at' | 'done_by'>[] = [];
@@ -375,7 +379,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
       }
 
       // 아직 생성되지 않은 역할의 임무만 추가
-      const allRoles = await db.getDisasterRolesWithTasks(activeIncident.disaster);
+      const allRoles = await db.getDisasterRolesWithTasks(activeIncident.disaster, activeIncident.shift ?? 'day');
       const existingRoles = new Set(tasks.map(t => t.role));
       const newRoles = allRoles.filter(r => !existingRoles.has(r.role));
 
@@ -631,6 +635,30 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                   background: fireSubMode === opt.key ? color + '22' : 'rgba(255,255,255,0.04)',
                                   border: `1px solid ${fireSubMode === opt.key ? color + '66' : 'rgba(255,255,255,0.07)'}`,
                                   color: fireSubMode === opt.key ? color : '#64748b',
+                                  transition: 'all 0.15s',
+                                }}
+                              >
+                                {opt.icon} {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {isSel && isFireDisaster && (
+                          <div style={{
+                            display: 'flex', gap: '6px', padding: '0 12px 10px',
+                            background: 'rgba(0,0,0,0.18)',
+                          }}>
+                            {([{ key: 'day' as const, icon: '☀️', label: '주간' }, { key: 'night' as const, icon: '🌙', label: '야간' }]).map(opt => (
+                              <button
+                                key={opt.key}
+                                type="button"
+                                onClick={e => { e.stopPropagation(); setFireShift(opt.key); }}
+                                style={{
+                                  flex: 1, padding: '8px 0', borderRadius: '8px', cursor: 'pointer',
+                                  fontSize: '12px', fontWeight: 700,
+                                  background: fireShift === opt.key ? color + '22' : 'rgba(255,255,255,0.04)',
+                                  border: `1px solid ${fireShift === opt.key ? color + '66' : 'rgba(255,255,255,0.07)'}`,
+                                  color: fireShift === opt.key ? color : '#64748b',
                                   transition: 'all 0.15s',
                                 }}
                               >

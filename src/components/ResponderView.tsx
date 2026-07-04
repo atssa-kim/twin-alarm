@@ -170,14 +170,9 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     ? (disasterRoles.find(r => r.badge === myBadge) ?? null)
     : null;
 
-  // 상황실은 감지기·화재 두 역할 임무를 모두 표시
-  const situationRoleNames = (myBadge === '상황실' || myBadge === '상황실/화재')
-    ? new Set(disasterRoles.filter(r => r.badge === '상황실' || r.badge === '상황실/화재').map(r => r.role))
-    : null;
-
   const rawTasks = myRole
     ? tasks
-        .filter(t => situationRoleNames ? situationRoleNames.has(t.role) : t.role === myRole.role)
+        .filter(t => t.role === myRole.role)
         .sort((a, b) => a.task_idx - b.task_idx)
     : [];
 
@@ -209,7 +204,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     showReturn: boolean;
   };
 
-  const isSituationRoomForStep = myBadge === '상황실' || myBadge === '상황실/화재';
+  const isSituationRoomForStep = myBadge === '상황';
 
   const stepFlow = useMemo<StepFlowItem[]>(() => {
     if (isSituationRoomForStep) {
@@ -558,11 +553,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
 
   const previewTasks: MemberTask[] = useMemo(() => {
     if (!previewMyRole) return [];
-    const isSituation = previewBadge === '상황실' || previewBadge === '상황실/화재';
-    const matchingRoles = isSituation
-      ? previewRoles.filter(r => r.badge === '상황실' || r.badge === '상황실/화재')
-      : [previewMyRole];
-    return matchingRoles.flatMap(r =>
+    return [previewMyRole].flatMap(r =>
       (r.disaster_tasks ?? [])
         .sort((a, b) => a.task_idx - b.task_idx)
         .map(dt => ({
@@ -601,11 +592,11 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     .replace('파트장', '파트')
     .replace(/^보안[123]$/, '보안파트');
 
-  const isSituationRoom = myBadge === '상황실' || myBadge === '상황실/화재';
+  const isSituationRoom = myBadge === '상황';
   const roleColor = isSituationRoom ? '#facc15' : (myRole?.bc ?? undefined);
 
   // 화재 감지기동작 시 초기출동조 여부 판단
-  const FIRE_INITIAL_BADGES = new Set(['총괄', '상황실', '통제', '출동']);
+  const FIRE_INITIAL_BADGES = new Set(['총괄', '상황', '통제', '출동']);
   const isFireInitial = activeIncident?.disaster === '화재' && activeIncident?.scope === 'fire_initial';
   const isWaitingForEscalation = isFireInitial && myBadge !== null && !FIRE_INITIAL_BADGES.has(myBadge ?? '');
 
