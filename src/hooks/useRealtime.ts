@@ -64,7 +64,7 @@ export function useRealtime() {
       const [respRes, tasksRes, rolesRes] = await Promise.all([
         supabase.from('responders').select('*').eq('incident_id', activeIncident.id),
         supabase.from('member_tasks').select('*').eq('incident_id', activeIncident.id).order('task_idx'),
-        supabase.from('disaster_roles').select('*').eq('disaster', activeIncident.disaster).order('id'),
+        supabase.from('disaster_roles').select('*').eq('disaster', activeIncident.disaster).eq('shift', 'day').order('id'),
       ]);
       if (respRes.data) setResponders(respRes.data as Responder[]);
       if (tasksRes.data) setTasks(tasksRes.data as MemberTask[]);

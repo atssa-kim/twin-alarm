@@ -357,7 +357,7 @@ async function seedSituationRoomRoles() {
       .from('disaster_roles')
       .upsert(
         { disaster, group_name: '상황실', role: '📻 상황실', badge: '상황실', bc: '#312e81' },
-        { onConflict: 'disaster,badge' }
+        { onConflict: 'disaster,shift,badge' }
       )
       .select()
       .single();
@@ -382,7 +382,7 @@ async function seedSituationRoomRoles() {
         .from('disaster_roles')
         .upsert(
           { disaster: '화재', group_name: '상황실', role: '📻 상황실/화재', badge: '상황실/화재', bc: '#1e40af' },
-          { onConflict: 'disaster,badge' }
+          { onConflict: 'disaster,shift,badge' }
         )
         .select()
         .single();

@@ -143,6 +143,21 @@ ALTER TABLE public.duty_matrix DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS dept_code TEXT;
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS shift_group TEXT;
 
+-- 11. disaster_roles 에 shift(근무구분) 컬럼 추가 (2026-07-05)
+--     배경: disa_app은 화재만 주간/야간/상황실(BMS) 3개 화면을 갖고 있는데, 기존엔
+--     UNIQUE(disaster, badge) 제약 때문에 야간·BMS 화면의 badge(예: '통제')가 주간의
+--     같은 이름 badge와 DB에서 같은 행을 가리켜서, disa_app이 야간/BMS 임무를 편집해도
+--     twin-alarm에 자동 반영되도록 두면 주간 데이터를 덮어쓸 위험이 있었음 — 그래서
+--     disa_app 쪽에서 야간/BMS 저장을 의도적으로 막아뒀었고, 이게 "disa_app 수정이
+--     twin-alarm에 반영 안 되는" 원인이었습니다.
+--     조치: shift 컬럼(day|night|bms)을 추가해 같은 이름의 badge라도 근무별로 다른 행으로
+--     분리 저장. 기존 행은 전부 shift='day'로 채워지고, twin-alarm 실행 로직
+--     (getDisasterRolesWithTasks 등)은 shift='day' 행만 조회하도록 코드도 함께 수정했으므로
+--     이 마이그레이션 자체만으로는 기존 발령·임무배정 동작이 바뀌지 않습니다.
+ALTER TABLE public.disaster_roles ADD COLUMN IF NOT EXISTS shift TEXT NOT NULL DEFAULT 'day';
+ALTER TABLE public.disaster_roles DROP CONSTRAINT IF EXISTS disaster_roles_disaster_badge_key;
+ALTER TABLE public.disaster_roles ADD CONSTRAINT disaster_roles_disaster_shift_badge_key UNIQUE (disaster, shift, badge);
+
 -- 10. FCM 알람 트리거 (pg_net 확장 필요 — Dashboard → Database → Extensions → pg_net 활성화)
 --     [PROJECT_REF] 와 [ANON_KEY] 를 실제 값으로 교체 후 실행
 -- CREATE OR REPLACE FUNCTION notify_incident_fcm()

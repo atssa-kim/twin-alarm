@@ -44,6 +44,7 @@ export interface MemberTask {
 export interface DisasterRole {
   id: number;
   disaster: string;
+  shift: string; // 'day' | 'night' | 'bms' — disa_app 화재 야간·상황실 데이터와 배지 충돌 방지용 구분자
   group_name: string | null;
   role: string;
   badge: string;
@@ -190,6 +191,7 @@ export const db = {
       .from('disaster_roles')
       .select('*, disaster_tasks(*)')
       .eq('disaster', disasterKey)
+      .eq('shift', 'day') // 실제 발령 로직은 주간 역할만 사용 (야간·상황실은 disa_app 참고용)
       .order('id');
     if (error) throw error;
     return (data ?? []) as (DisasterRole & { disaster_tasks: DisasterTask[] })[];
@@ -383,6 +385,7 @@ export const db = {
     const { data, error } = await supabase
       .from('disaster_roles')
       .select('disaster, badge')
+      .eq('shift', 'day')
       .order('id');
     if (error) throw error;
     const map: Record<string, string[]> = {};

@@ -57,7 +57,7 @@ async function seed() {
             badge: member.badge,
             bc: member.bc,
           },
-          { onConflict: 'disaster,badge' }
+          { onConflict: 'disaster,shift,badge' }
         )
         .select()
         .single();

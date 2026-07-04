@@ -42,7 +42,7 @@ async function seed() {
     .from('disaster_roles')
     .upsert(
       { disaster: BANGHO.disaster, group_name: BANGHO.group_name, role: BANGHO.role, badge: BANGHO.badge, bc: BANGHO.bc },
-      { onConflict: 'disaster,badge' }
+      { onConflict: 'disaster,shift,badge' }
     )
     .select()
     .single();
