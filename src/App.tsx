@@ -10,12 +10,28 @@ import { requestNotificationPermission, onForegroundMessage } from './services/n
 import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Bell, BellOff, Megaphone, Settings } from 'lucide-react';
 import { AdminPanel } from './components/AdminPanel';
 
+// 알람 중복 방지 Set을 localStorage에 영구 저장 — 앱 재생성(재로딩)해도 이미 경보한
+// 재난은 다시 울리지 않도록 함 (기존엔 useRef뿐이라 재생성 시 항상 초기화되어 재발화됨)
+const loadPersistedSet = (key: string): Set<string> => {
+  try { return new Set(JSON.parse(localStorage.getItem(key) || '[]')); } catch { return new Set(); }
+};
+const savePersistedSet = (key: string, set: Set<string>) => {
+  try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* 저장 공간 없음 등 무시 */ }
+};
+const ALERTED_INCIDENT_KEY = 'tt_alerted_incident_ids';
+const ALERTED_MODE_KEY = 'tt_alerted_mode_keys';
+const SOUND_ENABLED_KEY = 'tt_sound_enabled';
+const CURRENT_VIEW_KEY = 'tt_current_view';
+
 const App: React.FC = () => {
   const { activeIncident, responders, tasks, loading, disasterRoles } = useRealtime();
   const [currentUser, setCurrentUser] = useState<Employee | null>(null);
   const [employees, setEmployees] = useState<EmployeeDB[]>([]);
   const [currentView, setCurrentView] = useState<'cmd' | 'responder' | 'cop' | 'admin'>('responder');
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    const saved = localStorage.getItem(SOUND_ENABLED_KEY);
+    return saved === null ? true : saved === 'true';
+  });
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>(
     'Notification' in window ? Notification.permission : 'denied'
   );
@@ -23,9 +39,9 @@ const App: React.FC = () => {
   const [selectedVoiceName, setSelectedVoiceName] = useState<string>(() => {
     return localStorage.getItem('tt_selected_voice') || '';
   });
-  // 경보 중복 방지 — Set 기반 (탭 전환 후 복귀해도 재발령 없음)
-  const alertedIncidentIds = useRef<Set<string>>(new Set());
-  const alertedModeKeys = useRef<Set<string>>(new Set());
+  // 경보 중복 방지 — localStorage에 영구 저장 (앱 재생성해도 이미 경보한 재난은 재발화 안 함)
+  const alertedIncidentIds = useRef<Set<string>>(loadPersistedSet(ALERTED_INCIDENT_KEY));
+  const alertedModeKeys = useRef<Set<string>>(loadPersistedSet(ALERTED_MODE_KEY));
   // SW postMessage 중복 방지 — disaster|location|mode 조합으로 중복 차단 (dedup Set 클리어 안 함)
   const swAlertedKeys = useRef<Set<string>>(new Set());
   // 알림 탭으로 앱 재진입 시 TTS 강제 재생 플래그
@@ -121,6 +137,8 @@ const App: React.FC = () => {
       alertedIncidentIds.current.clear();
       alertedModeKeys.current.clear();
       swAlertedKeys.current.clear();
+      savePersistedSet(ALERTED_INCIDENT_KEY, alertedIncidentIds.current);
+      savePersistedSet(ALERTED_MODE_KEY, alertedModeKeys.current);
       pendingAlertRef.current = true;   // activeIncident 로드 후 TTS 즉시 재생
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -152,18 +170,33 @@ const App: React.FC = () => {
   }, [activeIncident?.id]);
 
   // 1. Session persistence for login
+  // 재생성(재로딩) 시 마지막으로 보고 있던 화면을 유지 — 없거나 이 사용자 권한에 안 맞으면
+  // 기존처럼 역할 기본값(지휘관→지휘본부, 대원→나의 임무)으로 되돌아감
   useEffect(() => {
     const savedUser = localStorage.getItem('tt_user_session');
     if (savedUser) {
       try {
         const parsedUser = JSON.parse(savedUser) as Employee;
         setCurrentUser(parsedUser);
-        setCurrentView(parsedUser.isCommander ? 'cmd' : 'responder' as 'cmd' | 'responder' | 'cop' | 'admin');
+        const savedView = localStorage.getItem(CURRENT_VIEW_KEY);
+        const validViews: ('cmd' | 'responder' | 'cop' | 'admin')[] = parsedUser.isCommander
+          ? ['cmd', 'responder', 'cop', 'admin']
+          : ['responder'];
+        if (savedView && (validViews as string[]).includes(savedView)) {
+          setCurrentView(savedView as 'cmd' | 'responder' | 'cop' | 'admin');
+        } else {
+          setCurrentView(parsedUser.isCommander ? 'cmd' : 'responder');
+        }
       } catch (e) {
         localStorage.removeItem('tt_user_session');
       }
     }
   }, []);
+
+  // currentView가 바뀔 때마다 저장 — 다음 재생성 시 그대로 복원
+  useEffect(() => {
+    localStorage.setItem(CURRENT_VIEW_KEY, currentView);
+  }, [currentView]);
 
   const handleLogin = async (user: Employee) => {
     setCurrentUser(user);
@@ -267,6 +300,8 @@ const App: React.FC = () => {
       if (activeIncident) {
         alertedIncidentIds.current.add(activeIncident.id);
         alertedModeKeys.current.add(`${activeIncident.id}__${activeIncident.mode}`);
+        savePersistedSet(ALERTED_INCIDENT_KEY, alertedIncidentIds.current);
+        savePersistedSet(ALERTED_MODE_KEY, alertedModeKeys.current);
       }
       triggerEmergencyAlert(disaster || '재난', location || '', mode || '실제');
       vibrateAlert();
@@ -283,6 +318,8 @@ const App: React.FC = () => {
     alertedIncidentIds.current.add(activeIncident.id);
     // 초기 mode도 Set에 등록해 effect 3의 중복 방지
     alertedModeKeys.current.add(`${activeIncident.id}__${activeIncident.mode}`);
+    savePersistedSet(ALERTED_INCIDENT_KEY, alertedIncidentIds.current);
+    savePersistedSet(ALERTED_MODE_KEY, alertedModeKeys.current);
 
     if (soundEnabled) {
       triggerEmergencyAlert(activeIncident.disaster, activeIncident.location, activeIncident.mode);
@@ -297,6 +334,7 @@ const App: React.FC = () => {
     if (alertedModeKeys.current.has(key)) return;
 
     alertedModeKeys.current.add(key);
+    savePersistedSet(ALERTED_MODE_KEY, alertedModeKeys.current);
     if (soundEnabled) {
       triggerEmergencyAlert(activeIncident.disaster, activeIncident.location, activeIncident.mode);
       vibrateAlert();
@@ -395,6 +433,7 @@ const App: React.FC = () => {
             onClick={() => {
               const next = !soundEnabled;
               setSoundEnabled(next);
+              localStorage.setItem(SOUND_ENABLED_KEY, String(next));
               unlockAudio();
               if (!next) stopAllAlerts();
             }}

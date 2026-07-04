@@ -126,7 +126,7 @@ export const DISASTERS: Disaster[] = [
       {
         "group": "대응반",
         "role": "🧯 소화조 (기계파트)",
-        "badge": "조치",
+        "badge": "대응",
         "bc": "#ef4444",
         "tasks": [
           "비상장비_방화복Set·공기호흡기·무전기·헤드랜턴",

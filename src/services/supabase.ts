@@ -273,6 +273,17 @@ export const db = {
     }
   },
 
+  // 재난·배지로 emp_no 목록 조회 (조장 자동 카운트 등 같은 배지 팀원 찾기용)
+  async getEmployeeNosByBadge(disaster: string, badge: string): Promise<string[]> {
+    const { data, error } = await supabase
+      .from('employee_disaster_badges')
+      .select('emp_no')
+      .eq('disaster', disaster)
+      .eq('badge', badge);
+    if (error) throw error;
+    return (data ?? []).map(row => row.emp_no as string);
+  },
+
   // 10. Fetch an employee's badge for a specific disaster
   async getEmployeeBadge(empNo: string, disaster: string): Promise<string | null> {
     const { data, error } = await supabase

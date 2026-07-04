@@ -7,6 +7,10 @@ import { Play, Square, ShieldAlert, Users, Mic, UserCheck, BarChart2, Monitor, H
 // 화재 초기출동조 배지 (감지기동작 시 1차 소집)
 const FIRE_INITIAL_BADGES = new Set(['총괄', '상황실', '통제', '출동']);
 
+// 전광판 표시용 상태 라벨 — 데이터값(Responder.status)은 그대로 '현장'을 쓰되,
+// 화면에는 "현장 임무수행중"으로 보여줌(출동체크 후 임무 체크 시 자동으로 이 상태가 됨)
+const responderStatusLabel = (status: string) => status === '현장' ? '현장 임무수행중' : status;
+
 // 참여인원 모달: 파트장 → 파트로, 교대 직원 → 상황실로 통합
 const normalizeParticipantTeam = (team: string, role: string) =>
   isShiftEmployee(role) ? '상황실'
@@ -1112,7 +1116,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <span className="status-dot" style={{ backgroundColor: dotColor }}></span>
-                                <span style={{ fontSize: '13px', fontWeight: 700 }}>{resp.status}</span>
+                                <span style={{ fontSize: '13px', fontWeight: 700 }}>{responderStatusLabel(resp.status)}</span>
                               </div>
                             </div>
                           );
