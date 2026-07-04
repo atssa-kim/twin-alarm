@@ -23,7 +23,9 @@ SUPABASE_SERVICE_ROLE_KEY=...       # seed 스크립트 전용 — 절대 공개
 npm install
 npm run dev              # http://localhost:5173/
 npm run seed             # disaster_roles/tasks → Supabase seed
-npm run seed-employees   # employees + employee_disaster_badges → Supabase seed
+npm run seed-employees   # employees + employee_disaster_badges → Supabase seed (dept_code/shift_group 포함)
+npm run seed-duty-matrix # duty_matrix → Supabase seed (2026-07-04~, 조회 전용, PDF 값 재적재)
+npm run fix-badges-260704 # disaster_roles 배지명 정합 패치 (화재 소화→조치, 가스누출 지휘→총괄) — 1회 실행 후 seed-employees 재실행 필요
 npm run build
 npm run deploy           # GitHub Pages 배포
 ```
@@ -34,10 +36,11 @@ npm run deploy           # GitHub Pages 배포
 | `incidents` | 활성 재난 정보 |
 | `responders` | 대원 출동 상태 |
 | `member_tasks` | 발령 시 생성되는 실시간 임무 체크 |
-| `disaster_roles` | 재난별 역할·badge 마스터 (seed로 관리) |
-| `disaster_tasks` | 역할별 임무 항목 마스터 (seed로 관리) |
-| `employees` | 직원 명부 (emp_no, name, team, role, is_commander, email, phone) |
-| `employee_disaster_badges` | 직원별 재난 배지 매핑 (emp_no + disaster → badge) |
+| `disaster_roles` | 재난별 역할·badge 마스터 (seed로 관리, disa_app이 편집) |
+| `disaster_tasks` | 역할별 임무 항목 마스터 (seed로 관리, disa_app이 편집) |
+| `employees` | 직원 명부 (emp_no, name, team, role, is_commander, email, phone, **dept_code, shift_group** ← 2026-07-04 추가) |
+| `employee_disaster_badges` | 직원별 재난 배지 매핑 (emp_no + disaster → badge). **아직 근무(주간/야간) 구분 없음** — PK가 (emp_no, disaster)라 재난당 배지 1개뿐 |
+| `duty_matrix` | **(신규, 2026-07-04)** 재난×근무×반×배지×부서 임무 매트릭스. 아직 조회 전용 — 위 두 테이블과 자동 연동 안 됨. 상세는 아래 "재난 임무 매트릭스" 절 참고 |
 
 ## 재난 유형 키 목록 (disasters.ts key 값)
 | key | label |
@@ -73,7 +76,84 @@ npm run deploy           # GitHub Pages 배포
 ```
 disa_app (편집) → Supabase disaster_roles/tasks → twin-alarm (실행)
 seed-employees.ts → Supabase employees/employee_disaster_badges → Login 직원목록/나의임무
+seed-duty-matrix.ts → Supabase duty_matrix → (아직 조회 전용, 실행 흐름에 미연결)
 ```
+
+## 재난 임무 매트릭스 (duty_matrix) — 2026-07-04 신설, Phase 1만 완료
+
+### 배경
+기존에는 팀→재난→배지 매핑표(`TEAM_BADGE_MAP`)가 **세 군데에 따로 하드코딩**돼 있었음
+(`scripts/seed-employees.ts`, `src/components/AdminPanel.tsx`, 그리고 참여인원 그룹핑용
+`CMD_TEAMS`/`EVAC_TEAMS`가 `AdminPanel.tsx`·`CommanderDashboard.tsx` 두 군데 중복). 또한
+근무(주간/야간) 구분이 스키마 어디에도 없어서, 같은 직원이 교대로 야간 근무를 해도 재난 배지는
+하나만 가질 수 있었음. 회사에서 받은 "트윈타워_재난대응_조직도_일원화_260703.pdf"를 기준으로
+이 구조를 통합하기 시작한 것이 `duty_matrix` 테이블.
+
+### 현재 상태 (Phase 1 — 데이터만 존재, 아직 앱에 미연결)
+- `duty_matrix` 테이블: 재난(9종) × 근무(주간/야간) × 반(division) × 배지(badge) × 부서(dept_code)
+  37+행 마스터. `scripts/seed-duty-matrix.ts` 실행 시 델리트 후 전체 재적재(idempotent).
+- 지휘연락반(주간+야간, 9개 재난 전체 통일된 명칭, 가운뎃점 없음)은 3개 배지로 확정:
+  | 배지 | 대상 | dept_code |
+  |---|---|---|
+  | 총괄 | 센터장 | `총괄` |
+  | 통제 | 그 재난의 담당 파트장(화재·지진→소방, 정전·승강기→전기, 누수·태풍/홍수·가스누출→기계, 폭설·테러→운영) | 해당 부서 코드 |
+  | 상황 | 상황실 | `상황` |
+- `employees`에 `dept_code`(부서, team보다 세분화 — 건축사무→건축2, 건축현장→건축1, 교대
+  상황실 인원→야전기/야BMS/야운전/야소방 등)와 `shift_group`(NULL|A|B|C|D) 컬럼 추가,
+  `seed-employees.ts`의 기존 60명 데이터에 값 백필 완료.
+- **`employee_disaster_badges`, `AdminPanel.tsx`, `CommanderDashboard.tsx`, `ResponderView.tsx`는
+  아직 하나도 안 바뀜.** 즉 지금 앱을 실제로 써도 동작은 이전과 100% 동일함 — duty_matrix는
+  아직 "참고용 마스터 데이터"일 뿐 실시간 임무 배정에 영향 없음.
+
+### 배지 정합 패치 완료 — 화재·가스누출 (2026-07-04, `scripts/fix-badges-260704.ts`)
+Phase 1 데이터와 기존 라이브 시스템(`disaster_roles`/`TEAM_BADGE_MAP`)을 대조해보니 duty_matrix
+연결 이전에도 이미 깨져 있던 부분들이 있어서, 두 재난만 우선 정합했습니다:
+- **화재**: 기계파트 `소화`→`조치`로 통일(disaster_roles 쪽 이름 변경), 보안1 `응급`→`구조`로 통일,
+  보안2 `경계`→`유도`로 통일, **보안3의 화재 임무 자체를 삭제**(기존엔 소방파트장과 임무가
+  뒤섞이는 버그였음).
+- **가스누출**: 센터장 `지휘`→`총괄`로 통일 — 기존엔 disaster_roles에 `총괄` 역할이 없어서
+  **센터장이 가스누출 발령 시 임무를 아예 못 보고 있었음**(duty_matrix 연동과 무관한 기존 버그).
+  전기/운영/주차파트는 무엇을 해야 할지 정해진 게 없는데 그럴듯한 배지(지원/유도)를 억지로
+  쓰고 있어서 오히려 없는 역할과 매칭돼 빈 화면이 뜨고 있었음 → 배지 자체를 제거.
+- **확정된 원칙 2가지** (앞으로 다른 재난에도 적용):
+  1. "통제(그 재난 담당 파트장)가 아닌 파트장은 파트원과 동일 배지" — 전기·운영·건축은 이미
+     이 원칙대로였고, 각 재난에서 담당 파트장(=통제)만 예외.
+  2. **"배지없으면 임무없음"** — 부서-배지 매핑이 불확실하면 비슷한 배지를 억지로 끌어쓰지 않고
+     아예 배지를 안 준다. (근거: 잘못된 배지는 "임무 있음"처럼 보이지만 실제로는 엉뚱하거나
+     빈 임무를 보여줘서 오히려 더 위험함 — 안 보이는 게 차라리 안전)
+- **주의**: `disaster_roles`의 badge를 UPDATE했으므로 (a) Supabase에서
+  `npx tsx scripts/fix-badges-260704.ts` 실행, (b) 이어서 `npm run seed-employees` 재실행해서
+  `employee_disaster_badges`의 실제 값도 새 매핑으로 갱신해야 반영됩니다. 둘 다 아직 실제
+  Supabase에 적용 안 됐다면(로컬 코드만 수정) 반드시 실행하세요.
+- 태풍/홍수·폭설·지진·테러 4개 재난에도 가스누출과 동일한 "지휘"/"총괄" 불일치가 있으나
+  이번 지시 범위는 화재·가스누출뿐이라 손대지 않음.
+
+### 확실하지 않아서 임의로 채우지 않은 부분
+- **보안3**: 화재는 임무를 삭제했지만, 다른 재난에서의 보안3 역할은 여전히 PDF 매트릭스에
+  정의가 없음. `employees.dept_code='보안3'`으로만 남겨둠.
+- **건축파트장**: PDF에 파트장 전용 행이 없어 건축사무(건축2)와 동일하게 임시 처리.
+- **PDF 자체가 화재·지진만 부서구분(dept_code)이 채워져 있고, 나머지 7개 재난(정전·누수·
+  태풍/홍수·폭설·가스누출·승강기·테러)의 현장대응반/대피유도반/지원반은 배지만 있고 부서
+  매핑이 비어있음.** 회사 쪽에서 부서를 확정해줘야 채울 수 있는 부분(가스누출의 전기/운영/
+  주차파트가 배지 없는 상태로 남아있는 이유).
+
+### Phase 2 — 다음에 해야 할 것 (아직 시작 안 함)
+1. **회사에 확인**: 위 "확실하지 않은 부분"(보안3 나머지 재난, 건축파트장, 7개 재난 부서 매핑)
+   답 받기 — 이게 없으면 Phase 2를 정확히 진행할 수 없음.
+2. **`disa_app` 정합**: duty_matrix의 배지 체계(특히 지휘연락반 총괄/통제/상황)가
+   `disaster_roles.badge`(disa_app이 관리)와 일치하는지 맞추는 작업. disa_app 쪽 수정이
+   필요할 수 있음.
+3. **`employee_disaster_badges`에 근무(shift) 축 추가**: 현재 PK가 `(emp_no, disaster)`라
+   재난당 배지 1개뿐 → `(emp_no, disaster, shift)`로 변경해서 교대 직원이 주간/야간 배지를
+   동시에 가질 수 있게. (스키마 변경 + 기존 데이터 마이그레이션 필요)
+4. **`AdminPanel.tsx`의 `TEAM_BADGE_MAP` 자동배정 로직을 `duty_matrix` 조회로 교체**:
+   직원 저장 시 `dept_code`+`shift_group` 기준으로 duty_matrix를 찾아 배지를 자동 upsert.
+5. **`CommanderDashboard.tsx`/`AdminPanel.tsx`의 `CMD_TEAMS`/`EVAC_TEAMS`/`getOrgGroup()`
+   중복 제거**: duty_matrix의 division(반) 값을 단일 소스로 참여인원 그룹핑에 사용.
+6. **발령 시 주간/야간 판정 로직 추가**: `incidents` 테이블에 `shift` 컬럼 추가,
+   `CommanderDashboard.tsx`의 `handleDeclare()`에서 발령 시각 기준(예: 06~18시=주간) 자동
+   판정 후 저장. `ResponderView.tsx`의 `getEmployeeBadge()` 호출도 `incident.shift`를
+   같이 넘기도록 확장.
 
 ## 핵심 파일
 - `src/main.tsx` — 앱 진입점, SW 조기 등록 (PWA 설치 보장)
@@ -83,8 +163,12 @@ seed-employees.ts → Supabase employees/employee_disaster_badges → Login 직�
 - `src/data/disasters.ts` — 재난 유형 목록 (key/label/color/icon만 관리)
 - `src/components/CommanderDashboard.tsx` — 지휘관 화면 (참여인원 그룹화: 지휘연락/현장대응/대피지원/교대)
 - `scripts/seed-disasters.ts` — disaster_roles/tasks DB 적재
-- `scripts/seed-employees.ts` — employees + employee_disaster_badges DB 적재 (팀→배지 매핑표 포함)
-- `supabase_schema.sql` — 전체 테이블 DDL (Supabase SQL Editor에서 실행)
+- `scripts/seed-employees.ts` — employees + employee_disaster_badges DB 적재 (팀→배지 매핑표 포함, dept_code/shift_group 포함)
+- `scripts/seed-duty-matrix.ts` — **(2026-07-04 신규)** duty_matrix DB 적재. PDF 원본 데이터를
+  코드로 들고 있는 유일한 곳 — 매트릭스 수정은 이 파일의 `ROWS` 배열을 고쳐서 재실행
+- `scripts/fix-badges-260704.ts` — **(2026-07-04 신규)** disaster_roles 배지명 1회성 정합 패치
+  (화재 소화→조치, 가스누출 지휘→총괄). 재실행해도 안전(idempotent).
+- `supabase_schema.sql` — 전체 테이블 DDL (Supabase SQL Editor에서 실행, 10-1/10-2절이 duty_matrix 관련)
 - `public/manifest.json` — PWA 매니페스트 (icon-192.png / icon-512.png 참조)
 - `public/firebase-messaging-sw.js` — FCM 백그라운드 메시지 처리 서비스워커
 
@@ -118,3 +202,21 @@ seed-employees.ts → Supabase employees/employee_disaster_badges → Login 직�
 ```sql
 NOTIFY pgrst, 'reload schema';
 ```
+
+## duty_matrix 관리 방법 (2026-07-04~)
+
+**원본은 `scripts/seed-duty-matrix.ts`의 `ROWS` 배열이지, Supabase 대시보드가 아닙니다.**
+- 매트릭스를 고칠 땐 항상 이 파일의 `ROWS`를 수정 → `npm run seed-duty-matrix` 실행.
+  이 스크립트는 매번 테이블을 **통째로 지우고 다시 채우는 방식**이라(idempotent 재적재),
+  Supabase SQL Editor나 Table Editor에서 직접 행을 추가/수정해도 다음 재실행 시 사라집니다.
+- 행 하나는 `[재난, 통제자, 근무(주간|야간), 반, 배지, 부서코드|null]` 튜플입니다. 부서가
+  2개 걸치던 PDF 원본 행은 이미 부서별로 쪼개 놨으니, 새 부서를 추가할 땐 같은 배지로
+  한 줄 더 추가하면 됩니다.
+- 재난명은 twin-alarm 기존 key(화재/정전/누수/태풍·홍수/폭설/지진/가스누출/승강기/테러)
+  그대로 써야 합니다 — PDF 원문 표기(누수/침수, 풍수해, 승강기 갇힘)를 그대로 쓰면 안 됨.
+- 고칠 때마다 파일 상단 docblock 주석(배지 체계, division 통일 이력)도 같이 업데이트해서,
+  다음에 열어보는 사람(또는 다음 세션의 나)이 "왜 이렇게 돼 있는지" 바로 알 수 있게 유지하세요.
+- **아직 실제 임무 배정에는 영향이 없는 참고 데이터**라는 점을 잊지 마세요. 여기를 고쳤다고
+  해서 앱에서 보이는 임무 체크리스트가 바뀌지는 않습니다 (Phase 2 연동 전까지는).
+- Phase 2로 넘어가 `employee_disaster_badges`/`AdminPanel.tsx`와 실제로 연동한 뒤에는,
+  이 파일이 곧 "재난 임무 배정 규정"이 되므로 수정 시 반드시 관련자 확인을 받고 바꿀 것.

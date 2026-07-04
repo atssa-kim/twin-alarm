@@ -66,6 +66,19 @@ export interface EmployeeDB {
   is_commander: boolean;
   email?: string;
   phone?: string;
+  // duty_matrix(재난 임무 매트릭스) 연동용 필드 — 아직 자동배정 엔진과는 연결되지 않은 조회 전용 데이터.
+  dept_code?: string | null;
+  shift_group?: 'A' | 'B' | 'C' | 'D' | null;
+}
+
+export interface DutyMatrixRow {
+  id: number;
+  disaster: string;
+  controller: string | null;
+  shift: '주간' | '야간';
+  division: string;
+  badge: string;
+  dept_code: string | null;
 }
 
 // Database helper functions
@@ -343,6 +356,16 @@ export const db = {
       .eq('incident_id', incidentId);
     if (error) throw error;
     return (data ?? []) as MemberTask[];
+  },
+
+  // ── 재난 임무 매트릭스(duty_matrix) — 조회 전용, 아직 자동배정 엔진과 미연동 ──
+  async getDutyMatrix(): Promise<DutyMatrixRow[]> {
+    const { data, error } = await supabase
+      .from('duty_matrix')
+      .select('*')
+      .order('id');
+    if (error) throw error;
+    return (data ?? []) as DutyMatrixRow[];
   },
 
   async getAllDisasterBadgeOptions(): Promise<Record<string, string[]>> {

@@ -126,7 +126,7 @@ export const DISASTERS: Disaster[] = [
       {
         "group": "대응반",
         "role": "🧯 소화조 (기계파트)",
-        "badge": "소화",
+        "badge": "조치",
         "bc": "#ef4444",
         "tasks": [
           "비상장비_방화복Set·공기호흡기·무전기·헤드랜턴",
@@ -682,7 +682,7 @@ export const DISASTERS: Disaster[] = [
       {
         "group": "지휘",
         "role": "🏢 총괄자 (센터장)",
-        "badge": "지휘",
+        "badge": "총괄",
         "bc": "#3f6212",
         "tasks": [
           "가스누출 확인 후 상황파악 및 상황판단",

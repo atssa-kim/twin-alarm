@@ -36,7 +36,10 @@ type Disaster = typeof DISASTERS[number];
 // ── 팀(team) → 재난 → 배지 매핑표 ────────────────────────
 // team 값은 employees.team 컬럼 값과 반드시 일치해야 합니다.
 // 파트장은 '통제' 역할인 재난에서만 별도 항목, 나머지는 파트 배지를 공유합니다.
-// — 표시(미기재) 재난에서는 해당 직원에게 배지가 없으므로 임무 카드가 표시되지 않습니다.
+// — 미기재 재난에서는 해당 직원에게 배지가 없으므로 임무 카드가 표시되지 않습니다.
+//   (2026-07-04 원칙 확정: 부서-배지 매핑이 불확실하면 비슷해 보이는 배지를 억지로 끌어쓰지
+//    않고 미기재로 둔다 — "배지없으면 임무없음". 가스누출의 전기/운영/주차파트가 이 원칙으로
+//    배지를 뺀 사례.)
 const TEAM_BADGE_MAP: Record<string, Partial<Record<Disaster, string>>> = {
   '센터장': {
     화재: '총괄', 정전: '총괄', 누수: '총괄', '태풍/홍수': '총괄',
@@ -64,23 +67,25 @@ const TEAM_BADGE_MAP: Record<string, Partial<Record<Disaster, string>>> = {
   '전기파트장': {
     정전: '통제',                               // 통제자 (이길호)
     화재: '출동', 누수: '복구E', '태풍/홍수': '대응',
-    폭설: '대응2', 지진: '대응2', 가스누출: '지원', 승강기: '대응',
+    폭설: '대응2', 지진: '대응2', 승강기: '대응',
+    // 가스누출: 통제(기계파트장) 외 부서 미확정 — 배지없음(임무없음)
     // 테러: 해당없음
   },
   '전기파트': {
     화재: '출동', 정전: '대응', 누수: '복구E', '태풍/홍수': '대응',
-    폭설: '대응2', 지진: '대응2', 가스누출: '지원', 승강기: '대응',
+    폭설: '대응2', 지진: '대응2', 승강기: '대응',
+    // 가스누출: 부서 미확정 — 배지없음(임무없음)
   },
 
   // ── 기계 ────────────────────────────────────────────────
   '기계파트장': {
     '태풍/홍수': '통제', 가스누출: '통제',      // 통제자
-    화재: '소화', 정전: '대응', 누수: '응급',
+    화재: '조치', 정전: '대응', 누수: '응급',
     폭설: '대응2', 지진: '대응1',
     // 승강기, 테러: 해당없음
   },
   '기계파트': {
-    화재: '소화', 정전: '대응', 누수: '응급', '태풍/홍수': '대응',
+    화재: '조치', 정전: '대응', 누수: '응급', '태풍/홍수': '대응',
     폭설: '대응2', 지진: '대응1', 가스누출: '대응',
   },
 
@@ -108,11 +113,13 @@ const TEAM_BADGE_MAP: Record<string, Partial<Record<Disaster, string>>> = {
   '운영파트장': {
     // 통제 역할 없음 → 파트 배지와 동일
     화재: '유도', 정전: '지원', 누수: '관리', '태풍/홍수': '지원',
-    폭설: '대응1', 지진: '지원', 가스누출: '지원', 테러: '지원',
+    폭설: '대응1', 지진: '지원', 테러: '지원',
+    // 가스누출: 부서 미확정 — 배지없음(임무없음)
   },
   '운영파트': {
     화재: '유도', 정전: '지원', 누수: '관리', '태풍/홍수': '지원',
-    폭설: '대응1', 지진: '지원', 가스누출: '지원', 테러: '지원',
+    폭설: '대응1', 지진: '지원', 테러: '지원',
+    // 가스누출: 부서 미확정 — 배지없음(임무없음)
   },
 
   // ── 보안 (화재 시 3개 조로 분리) ─────────────────────────
@@ -127,7 +134,7 @@ const TEAM_BADGE_MAP: Record<string, Partial<Record<Disaster, string>>> = {
     폭설: '지원2', 지진: '대피', 가스누출: '대피', 승강기: '통제', 테러: '통제',
   },
   '보안3': { // 경계/통제조
-    화재: '통제',
+    // 화재: '통제'는 소방파트장 임무와 뒤섞이는 버그라 삭제 — 배지없음(임무없음)
     정전: '지원', 누수: '유도', '태풍/홍수': '지원',
     폭설: '지원2', 지진: '대피', 가스누출: '대피', 승강기: '통제', 테러: '통제',
   },
@@ -143,7 +150,8 @@ const TEAM_BADGE_MAP: Record<string, Partial<Record<Disaster, string>>> = {
   '주차파트': {
     화재: '유도', 정전: '유도', 누수: '유도',
     '태풍/홍수': '지원', 폭설: '지원3',
-    지진: '유도', 가스누출: '유도', 테러: '유도',
+    지진: '유도', 테러: '유도',
+    // 가스누출: 부서 미확정 — 배지없음(임무없음)
     // 승강기: 해당없음
   },
 
@@ -158,6 +166,14 @@ const TEAM_BADGE_MAP: Record<string, Partial<Record<Disaster, string>>> = {
 // team 값은 반드시 TEAM_BADGE_MAP 의 키와 일치해야 합니다.
 // 교대 직원은 본 파트와 동일한 team 으로 처리 (배지 동일)
 // 보안파트는 화재시 역할에 따라 보안1/보안2/보안3 으로 구분 필요
+//
+// dept_code / shift_group : duty_matrix(재난 임무 매트릭스, 2026-07-03 PDF) 연동용 필드.
+//   dept_code   duty_matrix.dept_code 와 매칭되는 부서 코드. team보다 세분화(건축사무→건축2,
+//               건축현장→건축1 등)되며, 교대 상황실 인원은 하위 전문분야 기준 야OO 코드를 씀.
+//               ※ 보안3 은 PDF 매트릭스에 아직 정의가 없어 team 값을 그대로 씀(추후 확정 필요).
+//               ※ 건축파트장의 '건축2'는 건축사무(유도조)와 동일하게 취급한 추정치(구 TEAM_BADGE_MAP
+//                 기준 — 화재 시 유도 배지 공유). PDF에 파트장 전용 행이 없어 확정은 아님.
+//   shift_group role 텍스트의 "(A조·...)" 패턴을 정식 컬럼화. 상시주간 근무자는 undefined.
 const EMPLOYEES: {
   emp_no: string;
   name: string;
@@ -166,90 +182,92 @@ const EMPLOYEES: {
   is_commander: boolean;
   email?: string;
   phone?: string;
+  dept_code?: string;
+  shift_group?: 'A' | 'B' | 'C' | 'D';
 }[] = [
   // ── 센터장 / 상황실 ────────────────────────────────────
-  { emp_no: 'E-0001', name: '김기창', team: '센터장',  role: '센터장', is_commander: true, email: 'xgplus@sni.co.kr',  phone: '010-3240-8177' },
-  { emp_no: 'E-0002', name: '상황실', team: '상황실',  role: '상황실', is_commander: true, email: 'fire@sni.co.kr',    phone: '02-3773-1119'  },
+  { emp_no: 'E-0001', name: '김기창', team: '센터장',  role: '센터장', is_commander: true, email: 'xgplus@sni.co.kr',  phone: '010-3240-8177', dept_code: '총괄' },
+  { emp_no: 'E-0002', name: '상황실', team: '상황실',  role: '상황실', is_commander: true, email: 'fire@sni.co.kr',    phone: '02-3773-1119',  dept_code: '상황' },
 
   // ── 운영 ───────────────────────────────────────────────
-  { emp_no: 'E-1001', name: '곽우람', team: '운영파트장', role: '파트장',      is_commander: false, email: 'mprokmc@sni.co.kr',  phone: '010-6251-9466' },
-  { emp_no: 'E-1002', name: '엄성철', team: '운영파트',   role: '파트원',      is_commander: false, email: 'sceom@sni.co.kr',    phone: '010-3384-0248' },
-  { emp_no: 'E-1003', name: '박세훈', team: '운영파트',   role: '파트원',      is_commander: false, email: 'sehunpark@sni.co.kr',phone: '010-4776-7305' },
-  { emp_no: 'E-1004', name: '김기복', team: '운영파트',   role: '파트원',      is_commander: false, email: 'Igmbkkb@sni.co.kr',  phone: '010-5682-8498' },
-  { emp_no: 'E-1005', name: '김기환', team: '운영파트',   role: '파트원',      is_commander: false, email: 'kgh90400@sni.co.kr', phone: '010-8593-9040' },
+  { emp_no: 'E-1001', name: '곽우람', team: '운영파트장', role: '파트장',      is_commander: false, email: 'mprokmc@sni.co.kr',  phone: '010-6251-9466', dept_code: '운영' },
+  { emp_no: 'E-1002', name: '엄성철', team: '운영파트',   role: '파트원',      is_commander: false, email: 'sceom@sni.co.kr',    phone: '010-3384-0248', dept_code: '운영' },
+  { emp_no: 'E-1003', name: '박세훈', team: '운영파트',   role: '파트원',      is_commander: false, email: 'sehunpark@sni.co.kr',phone: '010-4776-7305', dept_code: '운영' },
+  { emp_no: 'E-1004', name: '김기복', team: '운영파트',   role: '파트원',      is_commander: false, email: 'Igmbkkb@sni.co.kr',  phone: '010-5682-8498', dept_code: '운영' },
+  { emp_no: 'E-1005', name: '김기환', team: '운영파트',   role: '파트원',      is_commander: false, email: 'kgh90400@sni.co.kr', phone: '010-8593-9040', dept_code: '운영' },
 
   // ── 기계 (교대 포함, 배지 동일) ───────────────────────
-  { emp_no: 'E-2001', name: '손남열', team: '기계파트장', role: '파트장',      is_commander: false, email: 'k43414268@sni.co.kr',phone: '010-4341-4268' },
-  { emp_no: 'E-2002', name: '이영민', team: '기계파트',   role: '파트원',      is_commander: false, email: 'dldudzh@sni.co.kr',  phone: '010-8003-6154' },
-  { emp_no: 'E-2003', name: '이한승', team: '기계파트',   role: '파트원',      is_commander: false, email: 'lgmblhs2@sni.co.kr', phone: '010-7722-1247' },
-  { emp_no: 'E-2004', name: '홍진표', team: '기계파트',   role: '파트원',      is_commander: false, email: 'hjpas1@sni.co.kr',   phone: '010-5157-2185' },
-  { emp_no: 'E-2005', name: '장태선', team: '기계파트',   role: '파트원',      is_commander: false, email: 'zelgadis7391@sni.co.kr',phone: '010-6324-9939' },
-  { emp_no: 'E-2006', name: '박동선', team: '기계파트',   role: '파트원',      is_commander: false, email: 'P93071077@sni.co.kr', phone: '010-9258-8010' },
-  { emp_no: 'E-2007', name: '김범재', team: '상황실',     role: '교대원(A조·운전)', is_commander: false, email: 'sneeze@sni.co.kr',   phone: '010-9016-0123' },
-  { emp_no: 'E-2008', name: '윤창현', team: '상황실',     role: '교대원(B조·운전)', is_commander: false, email: 'bulpaesino@sni.co.kr',phone: '010-6794-2700' },
-  { emp_no: 'E-2009', name: '김성',   team: '상황실',     role: '교대원(C조·운전)', is_commander: false, email: 'gobani@sni.co.kr',   phone: '010-8967-6164' },
-  { emp_no: 'E-2010', name: '유지원', team: '상황실',     role: '교대원(D조·운전)', is_commander: false, email: 'ues2967@sni.co.kr',  phone: '010-5687-2967' },
-  { emp_no: 'E-2011', name: '강석중', team: '상황실',     role: '교대조장(A조·BMS)', is_commander: false, email: 'kangsj72@sni.co.kr', phone: '010-7645-3388' },
-  { emp_no: 'E-2012', name: '석경민', team: '상황실',     role: '교대조장(B조·BMS)', is_commander: false, email: 'csq3309@sni.co.kr',  phone: '010-9498-8201' },
-  { emp_no: 'E-2013', name: '손경배', team: '상황실',     role: '교대원(D조·BMS)',  is_commander: false, email: 'sonkb@sni.co.kr',    phone: '010-2707-4712' },
-  { emp_no: 'E-2014', name: '김예찬', team: '상황실',     role: '교대원(C조·BMS)',  is_commander: false, email: 'zkzldhgk@sni.co.kr', phone: '010-5443-8917' },
+  { emp_no: 'E-2001', name: '손남열', team: '기계파트장', role: '파트장',      is_commander: false, email: 'k43414268@sni.co.kr',phone: '010-4341-4268', dept_code: '기계' },
+  { emp_no: 'E-2002', name: '이영민', team: '기계파트',   role: '파트원',      is_commander: false, email: 'dldudzh@sni.co.kr',  phone: '010-8003-6154', dept_code: '기계' },
+  { emp_no: 'E-2003', name: '이한승', team: '기계파트',   role: '파트원',      is_commander: false, email: 'lgmblhs2@sni.co.kr', phone: '010-7722-1247', dept_code: '기계' },
+  { emp_no: 'E-2004', name: '홍진표', team: '기계파트',   role: '파트원',      is_commander: false, email: 'hjpas1@sni.co.kr',   phone: '010-5157-2185', dept_code: '기계' },
+  { emp_no: 'E-2005', name: '장태선', team: '기계파트',   role: '파트원',      is_commander: false, email: 'zelgadis7391@sni.co.kr',phone: '010-6324-9939', dept_code: '기계' },
+  { emp_no: 'E-2006', name: '박동선', team: '기계파트',   role: '파트원',      is_commander: false, email: 'P93071077@sni.co.kr', phone: '010-9258-8010', dept_code: '기계' },
+  { emp_no: 'E-2007', name: '김범재', team: '상황실',     role: '교대원(A조·운전)', is_commander: false, email: 'sneeze@sni.co.kr',   phone: '010-9016-0123', dept_code: '야운전', shift_group: 'A' },
+  { emp_no: 'E-2008', name: '윤창현', team: '상황실',     role: '교대원(B조·운전)', is_commander: false, email: 'bulpaesino@sni.co.kr',phone: '010-6794-2700', dept_code: '야운전', shift_group: 'B' },
+  { emp_no: 'E-2009', name: '김성',   team: '상황실',     role: '교대원(C조·운전)', is_commander: false, email: 'gobani@sni.co.kr',   phone: '010-8967-6164', dept_code: '야운전', shift_group: 'C' },
+  { emp_no: 'E-2010', name: '유지원', team: '상황실',     role: '교대원(D조·운전)', is_commander: false, email: 'ues2967@sni.co.kr',  phone: '010-5687-2967', dept_code: '야운전', shift_group: 'D' },
+  { emp_no: 'E-2011', name: '강석중', team: '상황실',     role: '교대조장(A조·BMS)', is_commander: false, email: 'kangsj72@sni.co.kr', phone: '010-7645-3388', dept_code: '야BMS', shift_group: 'A' },
+  { emp_no: 'E-2012', name: '석경민', team: '상황실',     role: '교대조장(B조·BMS)', is_commander: false, email: 'csq3309@sni.co.kr',  phone: '010-9498-8201', dept_code: '야BMS', shift_group: 'B' },
+  { emp_no: 'E-2013', name: '손경배', team: '상황실',     role: '교대원(D조·BMS)',  is_commander: false, email: 'sonkb@sni.co.kr',    phone: '010-2707-4712', dept_code: '야BMS', shift_group: 'D' },
+  { emp_no: 'E-2014', name: '김예찬', team: '상황실',     role: '교대원(C조·BMS)',  is_commander: false, email: 'zkzldhgk@sni.co.kr', phone: '010-5443-8917', dept_code: '야BMS', shift_group: 'C' },
 
   // ── 전기 (교대 포함, 배지 동일) ───────────────────────
-  { emp_no: 'E-3001', name: '이길호', team: '전기파트장', role: '파트장',      is_commander: false, email: 'kannylord@sni.co.kr', phone: '010-5654-0564' },
-  { emp_no: 'E-3002', name: '장현철', team: '전기파트',   role: '파트원',      is_commander: false, email: 'jhc1006@sni.co.kr',   phone: '010-5595-8285' },
-  { emp_no: 'E-3003', name: '김태경', team: '전기파트',   role: '파트원',      is_commander: false, email: 'kimgyuchol@sni.co.kr',phone: '010-4211-8049' },
-  { emp_no: 'E-3004', name: '이환수', team: '전기파트',   role: '파트원',      is_commander: false, email: 'Ihs0318@sni.co.kr',   phone: '010-3387-8910' },
-  { emp_no: 'E-3005', name: '김상훈', team: '전기파트',   role: '파트원',      is_commander: false, email: 'guswlr4@sni.co.kr',   phone: '010-5046-1866' },
-  { emp_no: 'E-3006', name: '김현직', team: '전기파트',   role: '파트원',      is_commander: false, email: 'ksh1866@sni.co.kr',   phone: '010-2328-2474' },
-  { emp_no: 'E-3007', name: '이찬희', team: '전기파트',   role: '파트원(교대)',is_commander: false, email: 'chunww1@sni.co.kr',   phone: '010-4809-5710' },
-  { emp_no: 'E-3008', name: '심현보', team: '상황실',     role: '교대원(A조·전기)', is_commander: false, email: 'shb4561@sni.co.kr',   phone: '010-4004-4561' },
-  { emp_no: 'E-3009', name: '김성환', team: '상황실',     role: '교대원(B조·전기)', is_commander: false, email: 'manager100@sni.co.kr',phone: '010-4141-8945' },
-  { emp_no: 'E-3010', name: '이태경', team: '상황실',     role: '교대원(C조·전기)', is_commander: false, email: 'leetae8171@sni.co.kr',phone: '010-6255-8171' },
+  { emp_no: 'E-3001', name: '이길호', team: '전기파트장', role: '파트장',      is_commander: false, email: 'kannylord@sni.co.kr', phone: '010-5654-0564', dept_code: '전기' },
+  { emp_no: 'E-3002', name: '장현철', team: '전기파트',   role: '파트원',      is_commander: false, email: 'jhc1006@sni.co.kr',   phone: '010-5595-8285', dept_code: '전기' },
+  { emp_no: 'E-3003', name: '김태경', team: '전기파트',   role: '파트원',      is_commander: false, email: 'kimgyuchol@sni.co.kr',phone: '010-4211-8049', dept_code: '전기' },
+  { emp_no: 'E-3004', name: '이환수', team: '전기파트',   role: '파트원',      is_commander: false, email: 'Ihs0318@sni.co.kr',   phone: '010-3387-8910', dept_code: '전기' },
+  { emp_no: 'E-3005', name: '김상훈', team: '전기파트',   role: '파트원',      is_commander: false, email: 'guswlr4@sni.co.kr',   phone: '010-5046-1866', dept_code: '전기' },
+  { emp_no: 'E-3006', name: '김현직', team: '전기파트',   role: '파트원',      is_commander: false, email: 'ksh1866@sni.co.kr',   phone: '010-2328-2474', dept_code: '전기' },
+  { emp_no: 'E-3007', name: '이찬희', team: '전기파트',   role: '파트원(교대)',is_commander: false, email: 'chunww1@sni.co.kr',   phone: '010-4809-5710', dept_code: '교대전기' },
+  { emp_no: 'E-3008', name: '심현보', team: '상황실',     role: '교대원(A조·전기)', is_commander: false, email: 'shb4561@sni.co.kr',   phone: '010-4004-4561', dept_code: '야전기', shift_group: 'A' },
+  { emp_no: 'E-3009', name: '김성환', team: '상황실',     role: '교대원(B조·전기)', is_commander: false, email: 'manager100@sni.co.kr',phone: '010-4141-8945', dept_code: '야전기', shift_group: 'B' },
+  { emp_no: 'E-3010', name: '이태경', team: '상황실',     role: '교대원(C조·전기)', is_commander: false, email: 'leetae8171@sni.co.kr',phone: '010-6255-8171', dept_code: '야전기', shift_group: 'C' },
 
   // ── 소방 (교대 포함, 배지 동일) ───────────────────────
-  { emp_no: 'E-4001', name: '김견수', team: '소방파트장', role: '파트장(안전관리자)', is_commander: true,  email: 'kyensu_kim@sni.co.kr',phone: '010-9071-3061' },
-  { emp_no: 'E-4002', name: '송치선', team: '소방파트',   role: '파트원',      is_commander: false, email: 'song5059@sni.co.kr',  phone: '010-4659-5059' },
-  { emp_no: 'E-4003', name: '이동건', team: '소방파트',   role: '파트원',      is_commander: false, email: 'DongKun_Lee@sni.co.kr',phone: '010-2575-2806' },
-  { emp_no: 'E-4004', name: '정민석', team: '소방파트',   role: '파트원',      is_commander: false, email: 'mins_jeong@sni.co.kr',phone: '010-8752-8967' },
-  { emp_no: 'E-4005', name: '안준혁', team: '상황실',     role: '교대조장(C조·방재)', is_commander: true,  email: 'AJH90@sni.co.kr',     phone: '010-3449-3784' },
-  { emp_no: 'E-4006', name: '김병기', team: '상황실',     role: '교대조장(D조·방재)', is_commander: true,  email: 'KBG82@sni.co.kr',     phone: '010-9248-3016' },
-  { emp_no: 'E-4007', name: '박범수', team: '상황실',     role: '교대원(B조·방재)',   is_commander: true,  email: 'Pray_bs@sni.co.kr',   phone: '010-9437-1985' },
-  { emp_no: 'E-4008', name: '김상백', team: '상황실',     role: '교대원(A조·방재)',   is_commander: true,  email: 'ksb408@sni.co.kr',    phone: '010-2503-7305' },
+  { emp_no: 'E-4001', name: '김견수', team: '소방파트장', role: '파트장(안전관리자)', is_commander: true,  email: 'kyensu_kim@sni.co.kr',phone: '010-9071-3061', dept_code: '소방' },
+  { emp_no: 'E-4002', name: '송치선', team: '소방파트',   role: '파트원',      is_commander: false, email: 'song5059@sni.co.kr',  phone: '010-4659-5059', dept_code: '소방' },
+  { emp_no: 'E-4003', name: '이동건', team: '소방파트',   role: '파트원',      is_commander: false, email: 'DongKun_Lee@sni.co.kr',phone: '010-2575-2806', dept_code: '소방' },
+  { emp_no: 'E-4004', name: '정민석', team: '소방파트',   role: '파트원',      is_commander: false, email: 'mins_jeong@sni.co.kr',phone: '010-8752-8967', dept_code: '소방' },
+  { emp_no: 'E-4005', name: '안준혁', team: '상황실',     role: '교대조장(C조·방재)', is_commander: true,  email: 'AJH90@sni.co.kr',     phone: '010-3449-3784', dept_code: '야소방', shift_group: 'C' },
+  { emp_no: 'E-4006', name: '김병기', team: '상황실',     role: '교대조장(D조·방재)', is_commander: true,  email: 'KBG82@sni.co.kr',     phone: '010-9248-3016', dept_code: '야소방', shift_group: 'D' },
+  { emp_no: 'E-4007', name: '박범수', team: '상황실',     role: '교대원(B조·방재)',   is_commander: true,  email: 'Pray_bs@sni.co.kr',   phone: '010-9437-1985', dept_code: '야소방', shift_group: 'B' },
+  { emp_no: 'E-4008', name: '김상백', team: '상황실',     role: '교대원(A조·방재)',   is_commander: true,  email: 'ksb408@sni.co.kr',    phone: '010-2503-7305', dept_code: '야소방', shift_group: 'A' },
 
   // ── 건축 — 파트장 ─────────────────────────────────────
-  { emp_no: 'E-5001', name: '이수용', team: '건축파트장', role: '파트장',      is_commander: false, email: 'suyong@sni.co.kr',       phone: '010-2966-0477' },
+  { emp_no: 'E-5001', name: '이수용', team: '건축파트장', role: '파트장',      is_commander: false, email: 'suyong@sni.co.kr',       phone: '010-2966-0477', dept_code: '건축2' },
   // ── 건축사무 (유도조) ──────────────────────────────────
-  { emp_no: 'E-5002', name: '최낙철', team: '건축사무',   role: '파트원',      is_commander: false, email: 'narkcholchoi@sni.co.kr', phone: '010-9229-4949' },
-  { emp_no: 'E-5003', name: '염혜진', team: '건축사무',   role: '파트원',      is_commander: false, email: 'hejing@sni.co.kr',       phone: '010-6305-1131' },
-  { emp_no: 'E-5004', name: '김규영', team: '건축사무',   role: '파트원',      is_commander: false, email: 'xgplus@sni.co.kr',       phone: '010-7514-9713' },
-  { emp_no: 'E-5005', name: '최인규', team: '건축사무',   role: '파트원',      is_commander: false, email: 'inkyutj@sni.co.kr',      phone: '010-7130-5219' },
-  { emp_no: 'E-5009', name: '윤희진', team: '건축사무',   role: '파트원',      is_commander: false, email: 'yhjyhj@sni.co.kr',       phone: '010-7180-6471' },
+  { emp_no: 'E-5002', name: '최낙철', team: '건축사무',   role: '파트원',      is_commander: false, email: 'narkcholchoi@sni.co.kr', phone: '010-9229-4949', dept_code: '건축2' },
+  { emp_no: 'E-5003', name: '염혜진', team: '건축사무',   role: '파트원',      is_commander: false, email: 'hejing@sni.co.kr',       phone: '010-6305-1131', dept_code: '건축2' },
+  { emp_no: 'E-5004', name: '김규영', team: '건축사무',   role: '파트원',      is_commander: false, email: 'xgplus@sni.co.kr',       phone: '010-7514-9713', dept_code: '건축2' },
+  { emp_no: 'E-5005', name: '최인규', team: '건축사무',   role: '파트원',      is_commander: false, email: 'inkyutj@sni.co.kr',      phone: '010-7130-5219', dept_code: '건축2' },
+  { emp_no: 'E-5009', name: '윤희진', team: '건축사무',   role: '파트원',      is_commander: false, email: 'yhjyhj@sni.co.kr',       phone: '010-7180-6471', dept_code: '건축2' },
   // ── 건축현장 (방호조) ──────────────────────────────────
-  { emp_no: 'E-5006', name: '서영진', team: '건축현장',   role: '파트원',      is_commander: false, email: 'syjin19@sni.co.kr',      phone: '010-3633-7850' },
-  { emp_no: 'E-5007', name: '김정훈', team: '건축현장',   role: '파트원',      is_commander: false, email: 'kjhsj0707@sni.co.kr',    phone: '010-3936-2530' },
-  { emp_no: 'E-5008', name: '박진범', team: '건축현장',   role: '파트원',      is_commander: false, email: 'rkausantk@sni.co.kr',    phone: '010-5954-4893' },
+  { emp_no: 'E-5006', name: '서영진', team: '건축현장',   role: '파트원',      is_commander: false, email: 'syjin19@sni.co.kr',      phone: '010-3633-7850', dept_code: '건축1' },
+  { emp_no: 'E-5007', name: '김정훈', team: '건축현장',   role: '파트원',      is_commander: false, email: 'kjhsj0707@sni.co.kr',    phone: '010-3936-2530', dept_code: '건축1' },
+  { emp_no: 'E-5008', name: '박진범', team: '건축현장',   role: '파트원',      is_commander: false, email: 'rkausantk@sni.co.kr',    phone: '010-5954-4893', dept_code: '건축1' },
 
   // ── 품질/안전 ──────────────────────────────────────────
-  { emp_no: 'E-6001', name: '안상오', team: '품질/안전파트', role: '파트장',   is_commander: false, email: 'ASO82@sni.co.kr',     phone: '010-7557-3009' },
-  { emp_no: 'E-6002', name: '김홍신', team: '품질/안전파트', role: '파트원',   is_commander: false, email: 'wlsqja846@sni.co.kr', phone: '010-8596-8299' },
+  { emp_no: 'E-6001', name: '안상오', team: '품질/안전파트', role: '파트장',   is_commander: false, email: 'ASO82@sni.co.kr',     phone: '010-7557-3009', dept_code: '안전' },
+  { emp_no: 'E-6002', name: '김홍신', team: '품질/안전파트', role: '파트원',   is_commander: false, email: 'wlsqja846@sni.co.kr', phone: '010-8596-8299', dept_code: '안전' },
 
   // ── 보안 (화재시 보안1/2/3 구분) ─────────────────────
-  { emp_no: 'E-7001', name: '김우현', team: '보안1', role: '파트원', is_commander: false, email: 'kwh12@snipartner.co.kr',             phone: '010-9396-7173' },
-  { emp_no: 'E-7002', name: '김정수', team: '보안2', role: '파트원', is_commander: false, email: 'agito2001@snipartner.co.kr',         phone: '010-9201-0039' },
-  { emp_no: 'E-7003', name: '김병찬', team: '보안2', role: '파트원', is_commander: false, email: 'greenday@snipartner.co.kr',          phone: '010-7750-9488' },
-  { emp_no: 'E-7004', name: '길성용', team: '보안3', role: '파트원', is_commander: false, email: 'ksy84@snipartner.co.kr',             phone: '010-7199-5276' },
-  { emp_no: 'E-7005', name: '김성진', team: '보안3', role: '파트원', is_commander: false, email: 'sungjin1116.kim@lgepartner.com',     phone: '010-6579-1116' },
-  { emp_no: 'E-7006', name: '문상균', team: '보안3', role: '파트원', is_commander: false, email: 'sanggyun.moon@snipartner.co.kr',     phone: '010-6625-2621' },
+  { emp_no: 'E-7001', name: '김우현', team: '보안1', role: '파트원', is_commander: false, email: 'kwh12@snipartner.co.kr',             phone: '010-9396-7173', dept_code: '보안1' },
+  { emp_no: 'E-7002', name: '김정수', team: '보안2', role: '파트원', is_commander: false, email: 'agito2001@snipartner.co.kr',         phone: '010-9201-0039', dept_code: '보안2' },
+  { emp_no: 'E-7003', name: '김병찬', team: '보안2', role: '파트원', is_commander: false, email: 'greenday@snipartner.co.kr',          phone: '010-7750-9488', dept_code: '보안2' },
+  { emp_no: 'E-7004', name: '길성용', team: '보안3', role: '파트원', is_commander: false, email: 'ksy84@snipartner.co.kr',             phone: '010-7199-5276', dept_code: '보안3' },
+  { emp_no: 'E-7005', name: '김성진', team: '보안3', role: '파트원', is_commander: false, email: 'sungjin1116.kim@lgepartner.com',     phone: '010-6579-1116', dept_code: '보안3' },
+  { emp_no: 'E-7006', name: '문상균', team: '보안3', role: '파트원', is_commander: false, email: 'sanggyun.moon@snipartner.co.kr',     phone: '010-6625-2621', dept_code: '보안3' },
 
   // ── 주차 ───────────────────────────────────────────────
-  { emp_no: 'E-9001', name: '김재석', team: '주차파트', role: '파트원', is_commander: false, email: 'ooollpp@snipartner.co.kr',        phone: '010-5618-3369' },
+  { emp_no: 'E-9001', name: '김재석', team: '주차파트', role: '파트원', is_commander: false, email: 'ooollpp@snipartner.co.kr',        phone: '010-5618-3369', dept_code: '주차' },
 
   // ── 미화 ───────────────────────────────────────────────
-  { emp_no: 'E-8001', name: '지정운', team: '미화파트', role: '파트원', is_commander: false, email: 'jjw082300@snipartner.co.kr',      phone: '010-3653-1016' },
+  { emp_no: 'E-8001', name: '지정운', team: '미화파트', role: '파트원', is_commander: false, email: 'jjw082300@snipartner.co.kr',      phone: '010-3653-1016', dept_code: '미화' },
 
   // ── 상황실 교대 공석 (채용 예정) ─────────────────────────
   // D조 전기 근무자 — 채용 후 emp_no/name 추가
-  // { emp_no: 'SS-D03', name: '채용예정', team: '상황실', role: '교대원(D조)', is_commander: false },
+  // { emp_no: 'SS-D03', name: '채용예정', team: '상황실', role: '교대원(D조)', is_commander: false, dept_code: '야전기', shift_group: 'D' },
 ];
 
 // ── 상황실 전용 역할/임무 시드 ────────────────────────────

@@ -117,6 +117,32 @@ ALTER TABLE public.push_subscriptions DISABLE ROW LEVEL SECURITY;
 -- Supabase SQL Editor 에서 한 번 실행하세요.
 ALTER TABLE public.incidents ADD COLUMN IF NOT EXISTS drill_emp_nos TEXT DEFAULT NULL;
 
+-- 10-1. duty_matrix (재난×근무×반×배지×부서 임무 매트릭스 — "일원화" 마스터, 2026-07-03)
+--     원본: 트윈타워_재난대응_조직도_일원화_260703.pdf 를 그대로 옮긴 표 (scripts/seed-duty-matrix.ts 로 적재)
+--     주의: 아직 employees/employee_disaster_badges 와 자동 연동되지 않은 조회 전용 마스터입니다.
+--           지휘연락반(주간, 9개 재난 전체 통일) 배지는 총괄=센터장/통제=재난별 파트장/상황=상황실 3분류로 확정(2026-07-04).
+--           그 외 배지 체계가 기존 disaster_roles.badge 와 다를 수 있어, 실시간 임무 배정
+--           (ResponderView/CommanderDashboard)에 연결하려면 disa_app 쪽 정합 작업이 별도로 필요합니다.
+CREATE TABLE IF NOT EXISTS public.duty_matrix (
+    id         SERIAL PRIMARY KEY,
+    disaster   TEXT NOT NULL,        -- incidents.disaster / employee_disaster_badges.disaster 와 동일 key 체계
+    controller TEXT,                 -- 통제자(주간) 직책명, 예: '소방파트장'
+    shift      TEXT NOT NULL CHECK (shift IN ('주간', '야간')),
+    division   TEXT NOT NULL,        -- 반: 지휘연락반(9개 재난×주간/야간 통일, 가운뎃점 없음) /
+                                      --     현장대응반 / 대피유도반 / 대피·지원반 / 지원반
+    badge      TEXT NOT NULL,        -- 조(Badge): 상황 / 조치 / 복구 / 유도 / 응급 / 경계 / 출동 / 방호 / 관리 등
+    dept_code  TEXT                  -- 부서구분: 소방/전기/기계/건축1/건축2/보안1/보안2/야전기/교대전기 등 (PDF 미기재 시 NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_duty_matrix_lookup ON public.duty_matrix(disaster, shift, dept_code);
+ALTER TABLE public.duty_matrix DISABLE ROW LEVEL SECURITY;
+
+-- 10-2. employees 세분화 컬럼 — 부서구분(dept_code)·교대조(shift_group)
+--     dept_code: duty_matrix.dept_code 매칭용, team보다 세분화 (예: 건축파트→건축현장/건축사무 구분,
+--                교대 상황실 인원→야전기/교대전기 등). 아직 값이 채워지지 않았다면 team으로 대체 사용.
+--     shift_group: NULL(상시주간) | 'A' | 'B' | 'C' | 'D' — role 텍스트의 "(A조·...)" 패턴을 정식 컬럼화
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS dept_code TEXT;
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS shift_group TEXT;
+
 -- 10. FCM 알람 트리거 (pg_net 확장 필요 — Dashboard → Database → Extensions → pg_net 활성화)
 --     [PROJECT_REF] 와 [ANON_KEY] 를 실제 값으로 교체 후 실행
 -- CREATE OR REPLACE FUNCTION notify_incident_fcm()
