@@ -830,11 +830,11 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
               </div>
               )}
 
-              {/* 하이브리드 보기 — 출동 → 현장도착 → 임무 1개씩 진행 */}
+              {/* 하이브리드 보기 — 출동 → 현장도착 → 임무 1개씩 진행. 나의 임무 카드 아래 남은 화면을 꽉 채움 */}
               {viewMode === 'hybrid' && (
-                <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div className="card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '18px', padding: '22px 20px' }}>
                   {/* 진행 칩 */}
-                  <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+                  <div style={{ display: 'flex', gap: '7px', overflowX: 'auto', paddingBottom: '2px', flexShrink: 0 }}>
                     {hybridSteps.map((step, i) => {
                       const done = step.kind === 'dispatch'
                         ? (responderStatus === '출동중' || responderStatus === '현장' || responderStatus === '복귀')
@@ -848,26 +848,27 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                           type="button"
                           onClick={() => setHybridIndex(i)}
                           style={{
-                            flexShrink: 0, width: '30px', height: '30px', borderRadius: '9px',
-                            fontSize: '11px', fontWeight: 800, border: '1px solid', cursor: 'pointer',
+                            flexShrink: 0, width: '38px', height: '38px', borderRadius: '11px',
+                            fontSize: '13px', fontWeight: 800, border: '1px solid', cursor: 'pointer',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             background: done ? 'rgba(16,185,129,0.16)' : isCurrent ? 'rgba(59,130,246,0.16)' : 'rgba(255,255,255,0.05)',
                             borderColor: done ? 'rgba(16,185,129,0.35)' : isCurrent ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.1)',
                             color: done ? '#34d399' : isCurrent ? '#60a5fa' : 'var(--text-muted)',
                           }}
                         >
-                          {done ? <Check size={13} strokeWidth={3} /> : (i + 1)}
+                          {done ? <Check size={16} strokeWidth={3} /> : (i + 1)}
                         </button>
                       );
                     })}
                   </div>
 
-                  {/* 현재 단계 */}
+                  {/* 현재 단계 — 남은 공간을 채우고 세로 가운데 정렬해서 크게 보이도록 */}
+                  <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', overflowY: 'auto' }}>
                   {hybridIndex >= hybridSteps.length ? (
                     <div style={{ textAlign: 'center', padding: '20px 8px' }}>
-                      <div style={{ fontSize: '32px', marginBottom: '8px' }}>🎉</div>
-                      <div style={{ fontWeight: 800, fontSize: '15px', marginBottom: '4px' }}>모든 단계를 완료했습니다</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>상황실에 완료 상황을 보고하세요.</div>
+                      <div style={{ fontSize: '52px', marginBottom: '14px' }}>🎉</div>
+                      <div style={{ fontWeight: 800, fontSize: '22px', marginBottom: '8px' }}>모든 단계를 완료했습니다</div>
+                      <div style={{ fontSize: '15px', color: 'var(--text-muted)' }}>상황실에 완료 상황을 보고하세요.</div>
                     </div>
                   ) : (() => {
                     const step = hybridSteps[hybridIndex];
@@ -875,34 +876,34 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                     if (step.kind === 'dispatch' || step.kind === 'onsite') {
                       const isDispatch = step.kind === 'dispatch';
                       return (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             {isDispatch
-                              ? <Truck size={20} color="var(--color-power)" />
-                              : <MapPin size={20} color="var(--color-water)" />}
-                            <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              ? <Truck size={26} color="var(--color-power)" />
+                              : <MapPin size={26} color="var(--color-water)" />}
+                            <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                               단계 {hybridIndex + 1} / {hybridSteps.length}
                             </span>
                           </div>
-                          <div style={{ fontSize: '16px', fontWeight: 700 }}>
+                          <div style={{ fontSize: '25px', fontWeight: 800, lineHeight: 1.4, textWrap: 'balance' }}>
                             {isDispatch ? '현장으로 출동하세요' : '현장에 도착했나요?'}
                           </div>
-                          <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                          <div style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
                             {isDispatch
                               ? '비상장비를 갖추고 출동을 시작하면 아래 버튼을 눌러 체크하세요.'
                               : '현장 도착을 체크해야 세부 임무 단계가 시작됩니다.'}
                           </div>
-                          <div style={{ display: 'flex', gap: '8px' }}>
+                          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
                             {hybridIndex > 0 && (
                               <button
-                                type="button" className="btn btn-secondary" style={{ width: 'auto', padding: '13px 16px' }}
+                                type="button" className="btn btn-secondary" style={{ width: 'auto', padding: '17px 20px', fontSize: '16px' }}
                                 onClick={() => setHybridIndex(i => i - 1)}
                               >
-                                <ChevronLeft size={16} /> 이전
+                                <ChevronLeft size={20} /> 이전
                               </button>
                             )}
                             <button
-                              type="button" className="btn btn-primary" style={{ flex: 1 }}
+                              type="button" className="btn btn-primary" style={{ flex: 1, padding: '17px', fontSize: '17px' }}
                               disabled={statusLoading}
                               onClick={() => (isDispatch ? completeDispatch() : completeOnsite())}
                             >
@@ -918,41 +919,42 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                     const done = isGroupDone(group);
 
                     return (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <CheckSquare size={20} color="var(--color-green)" />
-                          <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <CheckSquare size={26} color="var(--color-green)" />
+                          <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                             단계 {hybridIndex + 1} / {hybridSteps.length}
                           </span>
                         </div>
-                        <div style={{ fontSize: '16px', fontWeight: 700, lineHeight: 1.5 }}>
+                        <div style={{ fontSize: '23px', fontWeight: 800, lineHeight: 1.45, textWrap: 'balance' }}>
                           {stripPrefix(header.label)}
                         </div>
                         {group.type === 'group' && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             {group.children.map(child => (
                               <div
                                 key={child.id}
                                 className={`task-item ${child.done ? 'done' : ''}`}
                                 onClick={() => handleTaskToggle(child)}
+                                style={{ padding: '14px 14px' }}
                               >
-                                <div className="checkbox-visual"><Check size={14} strokeWidth={3} /></div>
-                                <div className="task-label">{stripPrefix(child.label)}</div>
+                                <div className="checkbox-visual" style={{ width: '24px', height: '24px' }}><Check size={16} strokeWidth={3} /></div>
+                                <div className="task-label" style={{ fontSize: '16px' }}>{stripPrefix(child.label)}</div>
                               </div>
                             ))}
                           </div>
                         )}
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
                           {hybridIndex > 0 && (
                             <button
-                              type="button" className="btn btn-secondary" style={{ width: 'auto', padding: '13px 16px' }}
+                              type="button" className="btn btn-secondary" style={{ width: 'auto', padding: '17px 20px', fontSize: '16px' }}
                               onClick={() => setHybridIndex(i => i - 1)}
                             >
-                              <ChevronLeft size={16} /> 이전
+                              <ChevronLeft size={20} /> 이전
                             </button>
                           )}
                           <button
-                            type="button" className="btn btn-primary" style={{ flex: 1 }}
+                            type="button" className="btn btn-primary" style={{ flex: 1, padding: '17px', fontSize: '17px' }}
                             onClick={() => completeTaskStep(group)}
                           >
                             {done ? '다음 임무로' : '완료하고 다음 임무로'}
@@ -961,6 +963,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                       </div>
                     );
                   })()}
+                  </div>
                 </div>
               )}
             </>
