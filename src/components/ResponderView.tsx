@@ -40,6 +40,14 @@ function groupTasks(tasks: MemberTask[]): TaskGroup[] {
 
 const stripPrefix = (label: string) => label.replace(/^[◇◆┖└]\s*/, '');
 
+// "행동)... / 무전)..." 패턴을 행동요령 / 무전 예시로 분리 (없으면 radio는 null)
+function splitRadio(label: string): { instruction: string; radio: string | null } {
+  const clean = stripPrefix(label);
+  const m = clean.match(/^(?:행동\))?(.*?)\s*\/\s*무전\)\s*(.*)$/);
+  if (m && m[2]) return { instruction: m[1].trim(), radio: m[2].trim() };
+  return { instruction: clean.replace(/^행동\)\s*/, ''), radio: null };
+}
+
 // disa_app 과 동일한 번호 계산 (task_idx 순서 기준)
 function computeTaskNumMap(tasks: MemberTask[]): Record<string, string> {
   const map: Record<string, string> = {};
@@ -69,7 +77,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   const [optimisticDone, setOptimisticDone] = useState<Record<string, boolean>>({});
   const [optimisticStatus, setOptimisticStatus] = useState<Responder['status'] | null>(null);
   const [showChecklist, setShowChecklist] = useState(true);
-  const [viewMode, setViewMode] = useState<'list' | 'hybrid'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'step' | 'hybrid'>('list');
   const [hybridIndex, setHybridIndex] = useState(0);
   const incidentIdRef = useRef<string | null>(null);
 
@@ -611,22 +619,57 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
             </div>
           )}
 
+          {/* 대원 신원 카드 — 아바타 · 이름 · 파트/역할 · 배지 */}
+          {myRole && (
+            <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px' }}>
+              <div style={{
+                width: '42px', height: '42px', borderRadius: '50%', flexShrink: 0,
+                background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '14px', fontWeight: 800, color: '#fff',
+              }}>
+                {currentUser.name.slice(-2)}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '15px', fontWeight: 800 }}>{currentUser.name}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {displayTeam} · {myRole.role}
+                </div>
+              </div>
+              {myBadge && (
+                <span style={{
+                  fontSize: '11.5px', fontWeight: 800, padding: '5px 10px', borderRadius: '8px', flexShrink: 0,
+                  background: 'rgba(96,165,250,0.12)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)',
+                }}>
+                  배지: {myBadge}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* 보기 방식 전환 — 상황실은 출동/현장 개념이 없어 숨김 */}
           {!isSituationRoom && myRole && (
             <div className="segmented-control">
               <button
                 type="button"
-                className={`segmented-btn ${viewMode === 'list' ? 'active' : ''}`}
-                onClick={() => setViewMode('list')}
+                className={`segmented-btn ${viewMode === 'step' ? 'active' : ''}`}
+                onClick={() => setViewMode('step')}
               >
-                📋 전체목록
+                ① 단계별
               </button>
               <button
                 type="button"
                 className={`segmented-btn ${viewMode === 'hybrid' ? 'active' : ''}`}
                 onClick={() => setViewMode('hybrid')}
               >
-                🎯 하이브리드
+                ② 하이브리드
+              </button>
+              <button
+                type="button"
+                className={`segmented-btn ${viewMode === 'list' ? 'active' : ''}`}
+                onClick={() => setViewMode('list')}
+              >
+                ③ 전체목록(현행)
               </button>
             </div>
           )}
@@ -830,10 +873,11 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
               </div>
               )}
 
-              {/* 하이브리드 보기 — 출동 → 현장도착 → 임무 1개씩 진행. 나의 임무 카드 아래 남은 화면을 꽉 채움 */}
-              {viewMode === 'hybrid' && (
+              {/* 단계별/하이브리드 보기 — 출동 → 현장도착 → 임무 1개씩 진행. 나의 임무 카드 아래 남은 화면을 꽉 채움 */}
+              {(viewMode === 'step' || viewMode === 'hybrid') && (
                 <div className="card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '18px', padding: '22px 20px' }}>
-                  {/* 진행 칩 */}
+                  {/* 진행 칩 — 하이브리드에서만 (단계별은 순차 진행만 허용) */}
+                  {viewMode === 'hybrid' && (
                   <div style={{ display: 'flex', gap: '7px', overflowX: 'auto', paddingBottom: '2px', flexShrink: 0 }}>
                     {hybridSteps.map((step, i) => {
                       const done = step.kind === 'dispatch'
@@ -861,6 +905,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                       );
                     })}
                   </div>
+                  )}
 
                   {/* 현재 단계 — 남은 공간을 채우고 세로 가운데 정렬해서 크게 보이도록 */}
                   <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', overflowY: 'auto' }}>
@@ -917,6 +962,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                     const group = step.group;
                     const header = group.type === 'standalone' ? group.task : group.header;
                     const done = isGroupDone(group);
+                    const { instruction, radio } = splitRadio(header.label);
 
                     return (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
@@ -927,8 +973,27 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                           </span>
                         </div>
                         <div style={{ fontSize: '23px', fontWeight: 800, lineHeight: 1.45, textWrap: 'balance' }}>
-                          {stripPrefix(header.label)}
+                          {instruction}
                         </div>
+                        {radio && (
+                          <div>
+                            <div style={{
+                              fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)',
+                              textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px',
+                              display: 'flex', alignItems: 'center', gap: '5px',
+                            }}>
+                              📻 무전 예시
+                            </div>
+                            <div style={{
+                              background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)',
+                              borderRadius: '12px', padding: '13px 15px',
+                            }}>
+                              <div style={{ fontSize: '15px', lineHeight: 1.55, fontStyle: 'italic', color: 'var(--text-main)' }}>
+                                &ldquo;{radio}&rdquo;
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         {group.type === 'group' && (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             {group.children.map(child => (
