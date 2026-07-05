@@ -199,7 +199,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
     }
   };
 
-  const handleUnassignBadge = async (empNo: string) => {
+  const handleUnassignBadge = async (empNo: string, empName: string) => {
+    if (!window.confirm(`${empName}님을 이 배지에서 제거할까요?`)) return;
     setBadgeBusy(true);
     try {
       await db.deleteEmployeeBadge(empNo, orgDisaster, orgShift);
@@ -492,7 +493,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                           <div key={emp.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px' }}>
                             <span style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0', flex: 1 }}>{emp.name}</span>
                             <span style={{ fontSize: '11px', color: '#64748b' }}>{emp.team} · {emp.role}</span>
-                            <button type="button" disabled={badgeBusy} onClick={() => handleUnassignBadge(emp.emp_no)} style={{
+                            <button type="button" disabled={badgeBusy} onClick={() => handleUnassignBadge(emp.emp_no, emp.name)} style={{
                               background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
                               borderRadius: '5px', color: '#ef4444', cursor: 'pointer', padding: '2px 7px', fontSize: '10px',
                             }}>
