@@ -120,7 +120,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
 
   useEffect(() => {
     if (!activeIncident) { setMyBadge(null); return; }
-    db.getEmployeeBadge(currentUser.empNo, activeIncident.disaster)
+    db.getEmployeeBadge(currentUser.empNo, activeIncident.disaster, activeIncident.shift ?? 'day')
       .then(badge => setMyBadge(badge))
       .catch(() => setMyBadge(null));
   }, [activeIncident?.id, currentUser.empNo]);
@@ -501,7 +501,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   const promoteDispatchedTeammates = async (badge: string) => {
     if (!activeIncident) return;
     try {
-      const empNos = await db.getEmployeeNosByBadge(activeIncident.disaster, badge);
+      const empNos = await db.getEmployeeNosByBadge(activeIncident.disaster, badge, activeIncident.shift ?? 'day');
       const teammates = responders.filter(r =>
         empNos.includes(r.emp_no) && r.emp_no !== currentUser.empNo && r.status === '출동중'
       );

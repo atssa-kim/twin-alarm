@@ -166,6 +166,19 @@ ALTER TABLE public.disaster_roles ADD CONSTRAINT disaster_roles_disaster_shift_b
 --     이 마이그레이션 자체만으로는 기존 발령 동작이 바뀌지 않습니다.
 ALTER TABLE public.incidents ADD COLUMN IF NOT EXISTS shift TEXT NOT NULL DEFAULT 'day';
 
+-- 13. employee_disaster_badges 에 shift(근무구분) 축 추가 (2026-07-08)
+--     모든 재난에 주간/야간 배지 배정을 구분해서 관리하기 위한 확장. 기존엔 PK가
+--     (emp_no, disaster)라 재난당 배지 1개뿐이었는데, 이제 (emp_no, disaster, shift)로
+--     바뀌어 같은 사람이 같은 재난에서 주간/야간 배지를 각각 가질 수 있습니다.
+--     기존 행은 전부 shift='day'로 채워지며, twin-alarm AdminPanel의 재난 편제표 탭에
+--     주/야 토글이 추가되어 근무별로 배지·인원을 따로 배정/조회합니다.
+--     주의: 화재를 제외한 8개 재난은 disaster_roles에 아직 야간 역할 자체가 없으므로,
+--     야간 탭에서 배지를 배정해도 disaster_roles에 해당 역할이 없으면 임무가 비어 보입니다
+--     (재난대응메뉴얼=disa_app에서 그 재난의 야간 역할을 먼저 만들어야 함).
+ALTER TABLE public.employee_disaster_badges ADD COLUMN IF NOT EXISTS shift TEXT NOT NULL DEFAULT 'day';
+ALTER TABLE public.employee_disaster_badges DROP CONSTRAINT IF EXISTS employee_disaster_badges_pkey;
+ALTER TABLE public.employee_disaster_badges ADD PRIMARY KEY (emp_no, disaster, shift);
+
 -- 10. FCM 알람 트리거 (pg_net 확장 필요 — Dashboard → Database → Extensions → pg_net 활성화)
 --     [PROJECT_REF] 와 [ANON_KEY] 를 실제 값으로 교체 후 실행
 -- CREATE OR REPLACE FUNCTION notify_incident_fcm()

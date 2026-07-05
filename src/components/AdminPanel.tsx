@@ -103,6 +103,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
   // 재난편제표: 배지별 임무 미리보기 (임무 "내용"은 disa_app이 관리 — 여기선 동기화된 값을 조회만 함)
   const [orgRoles, setOrgRoles] = useState<(DisasterRole & { disaster_tasks: DisasterTask[] })[]>([]);
   const [previewBadge, setPreviewBadge] = useState<string | null>(null);
+  // 재난편제표: 주/야 구분 — 2026-07-08부터 모든 재난에 적용 (배지·임무·배정 인원 모두 근무별로 다름)
+  const [orgShift, setOrgShift] = useState<'day' | 'night'>('day');
   // 재난편제표: 배지별 배정 인원(emp_no) — 2026-07-05부터 여기서 직접 배정/해제
   const [badgeAssignments, setBadgeAssignments] = useState<Record<string, string[]>>({});
   const [addPickerBadge, setAddPickerBadge] = useState<string | null>(null);
@@ -174,21 +176,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       .filter(d => d.emps.length > 0);
   }, [filtered, filterCategory]);
 
-  // 재난 선택 바뀌면 해당 재난의 역할·임무 + 배지별 배정 인원을 새로 조회
+  // 재난·주야 선택 바뀌면 해당 근무의 역할·임무 + 배지별 배정 인원을 새로 조회
   const refreshBadgeAssignments = () => {
-    db.getEmployeeBadgesByDisaster(orgDisaster).then(setBadgeAssignments).catch(() => setBadgeAssignments({}));
+    db.getEmployeeBadgesByDisaster(orgDisaster, orgShift).then(setBadgeAssignments).catch(() => setBadgeAssignments({}));
   };
   useEffect(() => {
     setPreviewBadge(null);
     setAddPickerBadge(null);
-    db.getDisasterRolesWithTasks(orgDisaster).then(setOrgRoles).catch(() => setOrgRoles([]));
+    db.getDisasterRolesWithTasks(orgDisaster, orgShift).then(setOrgRoles).catch(() => setOrgRoles([]));
     refreshBadgeAssignments();
-  }, [orgDisaster]);
+  }, [orgDisaster, orgShift]);
 
   const handleAssignBadge = async (empNo: string, badge: string) => {
     setBadgeBusy(true);
     try {
-      await db.upsertEmployeeBadge(empNo, orgDisaster, badge);
+      await db.upsertEmployeeBadge(empNo, orgDisaster, badge, orgShift);
       refreshBadgeAssignments();
       refreshAllEmployeeBadges();
       setAddSearch('');
@@ -200,7 +202,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
   const handleUnassignBadge = async (empNo: string) => {
     setBadgeBusy(true);
     try {
-      await db.deleteEmployeeBadge(empNo, orgDisaster);
+      await db.deleteEmployeeBadge(empNo, orgDisaster, orgShift);
       refreshBadgeAssignments();
       refreshAllEmployeeBadges();
     } finally {
@@ -213,7 +215,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
     setBadgeBusy(true);
     try {
       const teamEmps = employees.filter(e => e.team === team);
-      for (const e of teamEmps) await db.upsertEmployeeBadge(e.emp_no, orgDisaster, badge);
+      for (const e of teamEmps) await db.upsertEmployeeBadge(e.emp_no, orgDisaster, badge, orgShift);
       refreshBadgeAssignments();
       refreshAllEmployeeBadges();
       setBulkTeam('');
@@ -411,7 +413,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
 
       {/* ── 편제표 탭: 좌측 재난 세로 메뉴 + 우측 배지별 인원배정 아코디언 ── */}
       {adminTab === 'org' && (
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* 주간/야간 토글 */}
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {(['day', 'night'] as const).map(s => (
+              <button key={s} type="button" onClick={() => setOrgShift(s)} style={{
+                flex: 1, padding: '9px 0', borderRadius: '8px', cursor: 'pointer',
+                fontSize: '13px', fontWeight: 700,
+                background: orgShift === s ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${orgShift === s ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                color: orgShift === s ? '#60a5fa' : 'var(--text-muted)',
+              }}>
+                {s === 'day' ? '☀️ 주간' : '🌙 야간'}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
           {/* 좌측 세로 메뉴 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '76px', flexShrink: 0 }}>
             {ORG_DISASTER_ORDER.map(d => (
@@ -431,7 +448,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {orgRoles.length === 0 && (
               <div style={{ padding: '16px', fontSize: '12px', color: '#475569', textAlign: 'center' }}>
-                이 재난에 등록된 배지가 없습니다 (재난대응메뉴얼에서 역할을 먼저 만들어야 합니다).
+                이 재난·{orgShift === 'day' ? '주간' : '야간'}에 등록된 배지가 없습니다
+                {orgShift === 'night' ? ' (야간 임무는 아직 화재만 있습니다 — 재난대응메뉴얼에서 다른 재난 야간 역할도 만들 수 있습니다).' : ' (재난대응메뉴얼에서 역할을 먼저 만들어야 합니다).'}
               </div>
             )}
             {orgRoles.map(role => {
@@ -565,6 +583,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                 </div>
               );
             })}
+          </div>
           </div>
         </div>
       )}
@@ -775,8 +794,9 @@ const EmpRow: React.FC<{
   onDelete: (emp: EmployeeDB) => void;
 }> = ({ emp, badgeMap, onEdit, onDelete }) => {
   const lastFour = emp.phone?.replace(/\D/g, '').slice(-4) ?? '—';
+  // 직원목록은 주간 배지만 표시 (야간 배정은 재난편제표 탭에서 확인)
   const badges = useMemo(
-    () => ALL_DISASTERS.filter(d => badgeMap[d]).map(d => ({ disaster: d, badge: badgeMap[d] })),
+    () => ALL_DISASTERS.filter(d => badgeMap[`${d}|day`]).map(d => ({ disaster: d, badge: badgeMap[`${d}|day`] })),
     [badgeMap]
   );
   return (

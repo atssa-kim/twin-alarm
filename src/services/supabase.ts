@@ -279,23 +279,25 @@ export const db = {
   },
 
   // 재난·배지로 emp_no 목록 조회 (조장 자동 카운트 등 같은 배지 팀원 찾기용)
-  async getEmployeeNosByBadge(disaster: string, badge: string): Promise<string[]> {
+  async getEmployeeNosByBadge(disaster: string, badge: string, shift: string = 'day'): Promise<string[]> {
     const { data, error } = await supabase
       .from('employee_disaster_badges')
       .select('emp_no')
       .eq('disaster', disaster)
-      .eq('badge', badge);
+      .eq('badge', badge)
+      .eq('shift', shift);
     if (error) throw error;
     return (data ?? []).map(row => row.emp_no as string);
   },
 
-  // 10. Fetch an employee's badge for a specific disaster
-  async getEmployeeBadge(empNo: string, disaster: string): Promise<string | null> {
+  // 10. Fetch an employee's badge for a specific disaster (+shift, 기본 주간)
+  async getEmployeeBadge(empNo: string, disaster: string, shift: string = 'day'): Promise<string | null> {
     const { data, error } = await supabase
       .from('employee_disaster_badges')
       .select('badge')
       .eq('emp_no', empNo)
       .eq('disaster', disaster)
+      .eq('shift', shift)
       .maybeSingle();
     if (error) throw error;
     return data?.badge ?? null;
@@ -320,49 +322,52 @@ export const db = {
   async getEmployeeAllBadges(empNo: string): Promise<Record<string, string>> {
     const { data, error } = await supabase
       .from('employee_disaster_badges')
-      .select('disaster, badge')
+      .select('disaster, shift, badge')
       .eq('emp_no', empNo);
     if (error) throw error;
     const map: Record<string, string> = {};
-    for (const row of data ?? []) map[row.disaster] = row.badge;
+    for (const row of data ?? []) map[`${row.disaster}|${row.shift}`] = row.badge;
     return map;
   },
 
-  async upsertEmployeeBadge(empNo: string, disaster: string, badge: string): Promise<void> {
+  // shift: 'day' | 'night' — 2026-07-08부터 모든 재난에 주/야 구분 배정 지원
+  async upsertEmployeeBadge(empNo: string, disaster: string, badge: string, shift: string = 'day'): Promise<void> {
     const { error } = await supabase
       .from('employee_disaster_badges')
-      .upsert({ emp_no: empNo, disaster, badge }, { onConflict: 'emp_no,disaster' });
+      .upsert({ emp_no: empNo, disaster, shift, badge }, { onConflict: 'emp_no,disaster,shift' });
     if (error) throw error;
   },
 
-  async deleteEmployeeBadge(empNo: string, disaster: string): Promise<void> {
+  async deleteEmployeeBadge(empNo: string, disaster: string, shift: string = 'day'): Promise<void> {
     const { error } = await supabase
       .from('employee_disaster_badges')
       .delete()
       .eq('emp_no', empNo)
-      .eq('disaster', disaster);
+      .eq('disaster', disaster)
+      .eq('shift', shift);
     if (error) throw error;
   },
 
-  // 직원목록 탭: 전 직원 × 전 재난 배지 배정 현황 일괄 조회 (emp_no -> disaster -> badge)
+  // 직원목록 탭: 전 직원 × 전 재난 × 주/야 배지 배정 현황 일괄 조회 (emp_no -> "disaster|shift" -> badge)
   async getAllEmployeeBadges(): Promise<Record<string, Record<string, string>>> {
     const { data, error } = await supabase
       .from('employee_disaster_badges')
-      .select('emp_no, disaster, badge');
+      .select('emp_no, disaster, shift, badge');
     if (error) throw error;
     const map: Record<string, Record<string, string>> = {};
     for (const row of data ?? []) {
-      (map[row.emp_no] ??= {})[row.disaster] = row.badge;
+      (map[row.emp_no] ??= {})[`${row.disaster}|${row.shift}`] = row.badge;
     }
     return map;
   },
 
-  // 재난편제표: 특정 재난의 배지별 배정 인원(emp_no) 전체 조회 — 배지 관리 화면 전용
-  async getEmployeeBadgesByDisaster(disaster: string): Promise<Record<string, string[]>> {
+  // 재난편제표: 특정 재난·근무의 배지별 배정 인원(emp_no) 전체 조회 — 배지 관리 화면 전용
+  async getEmployeeBadgesByDisaster(disaster: string, shift: string = 'day'): Promise<Record<string, string[]>> {
     const { data, error } = await supabase
       .from('employee_disaster_badges')
       .select('emp_no, badge')
-      .eq('disaster', disaster);
+      .eq('disaster', disaster)
+      .eq('shift', shift);
     if (error) throw error;
     const map: Record<string, string[]> = {};
     for (const row of data ?? []) (map[row.badge] ??= []).push(row.emp_no);
