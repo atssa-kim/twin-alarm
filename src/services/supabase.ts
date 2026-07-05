@@ -21,9 +21,11 @@ export interface Incident {
 }
 
 // 훈련 발령 시 참여인원을 특정 대원으로 제한한 경우(drill_emp_nos), 그 인원만 알람·임무 대상.
-// 실제 상황(mode !== '훈련')이거나 선택 인원 제한이 없으면(drill_emp_nos 없음) 전원 대상.
+// 실제 상황(훈련이 아님)이거나 선택 인원 제한이 없으면(drill_emp_nos 없음) 전원 대상.
+// 화재는 mode가 "훈련/감지기"·"훈련/전체"처럼 복합 문자열이라 startsWith로 판정
+// (notify-incident 엣지함수의 isTraining 판정 방식과 동일하게 맞춤).
 export function isIncidentParticipant(incident: Pick<Incident, 'mode' | 'drill_emp_nos'>, empNo: string): boolean {
-  if (incident.mode !== '훈련') return true;
+  if (!incident.mode.startsWith('훈련')) return true;
   if (!incident.drill_emp_nos) return true;
   return incident.drill_emp_nos.split(',').includes(empNo);
 }
