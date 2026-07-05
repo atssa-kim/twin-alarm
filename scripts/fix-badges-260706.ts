@@ -6,8 +6,8 @@
  * 표준 배지: 총괄·통제·상황·출동·대응·유도·응급·방호·경계·복구·지원
  *   (대응·유도·지원 3개만 필요시 대응1/대응2, 유도1/유도2, 지원1/지원2 로 세분화 허용)
  *
- * 매핑 결정 (2026-07-06 확정):
- *   대피 → 유도 / 구조 → 응급 / 의료 → 응급 / 보안 → 통제 / 관리 → 지원
+ * 매핑 결정 (2026-07-06 확정, 보안 매핑은 2026-07-07에 통제→지원으로 정정):
+ *   대피 → 유도 / 구조 → 응급 / 의료 → 응급 / 보안 → 지원 / 관리 → 지원
  *   복구E·복구B → 복구로 통합
  *   테러의 '대응2'는 짝인 '대응1'이 없어 그냥 '대응'으로 정규화
  *
@@ -37,9 +37,9 @@ if (!env['SUPABASE_SERVICE_ROLE_KEY']) {
 const supabase = createClient(env['VITE_SUPABASE_URL'], supabaseKey);
 
 // 충돌 없는 단순 리네임 (같은 재난에 목표 배지가 이미 없음을 사전 확인함)
+// 주의: '관리'→'지원'이 먼저 처리되어야 아래 MERGES에서 '보안'을 '지원'에 합칠 수 있음
 const SIMPLE_RENAMES: { disaster: string; from: string; to: string }[] = [
   { disaster: '화재', from: '구조', to: '응급' },
-  { disaster: '누수', from: '보안', to: '통제' },
   { disaster: '누수', from: '관리', to: '지원' },
   { disaster: '태풍/홍수', from: '구조', to: '응급' },
   { disaster: '지진', from: '대피', to: '유도' },
@@ -53,6 +53,7 @@ const SIMPLE_RENAMES: { disaster: string; from: string; to: string }[] = [
 const MERGES: { disaster: string; keep: string; mergeFrom: string[] }[] = [
   { disaster: '누수', keep: '응급', mergeFrom: ['의료'] },
   { disaster: '누수', keep: '복구E', mergeFrom: ['복구B'] }, // keep을 임시로 '복구'로 리네임 후 병합
+  { disaster: '누수', keep: '지원', mergeFrom: ['보안'] }, // 2026-07-07 정정: 보안조를 통제 대신 지원에 병합
 ];
 
 type RoleRow = {
@@ -136,7 +137,7 @@ async function run() {
     { disaster: '테러', from: '대피', to: '유도' },
     { disaster: '테러', from: '대응2', to: '대응' },
     { disaster: '누수', from: '관리', to: '지원' },
-    { disaster: '누수', from: '보안', to: '통제' },
+    { disaster: '누수', from: '보안', to: '지원' },
     { disaster: '누수', from: '복구E', to: '복구' },
     { disaster: '누수', from: '복구B', to: '복구' },
   ];
