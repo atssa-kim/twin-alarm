@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { db, type EmployeeDB } from '../services/supabase';
+import React, { useState, useMemo, useEffect } from 'react';
+import { db, type EmployeeDB, type DisasterRole, type DisasterTask } from '../services/supabase';
 import { UserPlus, Pencil, Trash2, X, Save, Users, ChevronDown, Copy, ExternalLink } from 'lucide-react';
 
 // ── 팀 목록 (seed-employees.ts team 값과 일치) ──────────────
@@ -47,34 +47,11 @@ const DISASTER_LABELS: Record<Disaster, string> = {
   '승강기': '승강기갇힘', '테러': '테러',
 };
 
-// ── 팀 → 재난 배지 자동매핑 (seed-employees.ts 동일) ────────
-// 2026-07-04: 부서-배지 매핑이 불확실하면 미기재로 둔다 ("배지없으면 임무없음").
-// 가스누출의 전기/운영/주차파트, 화재의 보안3이 이 원칙으로 배지를 뺀 사례.
+// ── 재난 배지 ────────────────────────────────────────────
+// 2026-07-05: 팀 기준 자동계산(TEAM_BADGE_MAP)을 폐지하고, "재난 편제표" 탭에서
+// 배지별로 인원을 직접 배정/해제하는 방식(employee_disaster_badges 직접 관리)으로 전환.
 type Disaster = '화재'|'정전'|'누수'|'태풍/홍수'|'폭설'|'지진'|'가스누출'|'승강기'|'테러';
 const ALL_DISASTERS: Disaster[] = ['화재','정전','누수','태풍/홍수','폭설','지진','가스누출','승강기','테러'];
-
-const TEAM_BADGE_MAP: Record<string, Partial<Record<Disaster, string>>> = {
-  '센터장':  { 화재:'총괄', 정전:'총괄', 누수:'총괄', '태풍/홍수':'총괄', 폭설:'총괄', 지진:'총괄', 가스누출:'총괄', 승강기:'총괄', 테러:'총괄' },
-  '상황실':  { 화재:'상황', 정전:'상황', 누수:'상황', '태풍/홍수':'상황', 폭설:'상황', 지진:'상황', 가스누출:'상황', 승강기:'상황', 테러:'상황' },
-  '소방파트장': { 화재:'통제', 정전:'상황', 누수:'응급', '태풍/홍수':'상황', 폭설:'대응1', 지진:'상황', 가스누출:'대응', 승강기:'대응', 테러:'상황' },
-  '소방파트':   { 화재:'출동', 정전:'상황', 누수:'응급', '태풍/홍수':'상황', 폭설:'대응1', 지진:'상황', 가스누출:'대응', 승강기:'대응', 테러:'상황' },
-  '전기파트장': { 화재:'출동', 정전:'통제', 누수:'복구E', '태풍/홍수':'대응', 폭설:'대응2', 지진:'대응2', 승강기:'대응' },
-  '전기파트':   { 화재:'출동', 정전:'대응', 누수:'복구E', '태풍/홍수':'대응', 폭설:'대응2', 지진:'대응2', 승강기:'대응' },
-  '기계파트장': { 화재:'대응', 정전:'대응', 누수:'응급', '태풍/홍수':'통제', 폭설:'대응2', 지진:'대응1', 가스누출:'통제' },
-  '기계파트':   { 화재:'대응', 정전:'대응', 누수:'응급', '태풍/홍수':'대응', 폭설:'대응2', 지진:'대응1', 가스누출:'대응' },
-  '건축파트장': { 화재:'유도', 정전:'대응', 누수:'복구B', '태풍/홍수':'대응', 폭설:'대응1', 지진:'대응2', 가스누출:'대피' },
-  '건축사무':   { 화재:'유도', 정전:'대응', 누수:'복구B', '태풍/홍수':'대응', 폭설:'대응1', 지진:'대응2', 가스누출:'대피' },
-  '건축현장':   { 화재:'방호', 정전:'대응', 누수:'복구B', '태풍/홍수':'대응', 폭설:'대응1', 지진:'대응2', 가스누출:'대피' },
-  '건축파트':   { 화재:'유도', 정전:'대응', 누수:'복구B', '태풍/홍수':'대응', 폭설:'대응1', 지진:'대응2', 가스누출:'대피' },
-  '운영파트장': { 화재:'유도', 정전:'지원', 누수:'관리', '태풍/홍수':'지원', 폭설:'대응1' },
-  '운영파트':   { 화재:'유도', 정전:'지원', 누수:'관리', '태풍/홍수':'지원', 폭설:'대응1' },
-  '보안1': { 화재:'구조', 정전:'지원', 누수:'유도', '태풍/홍수':'지원', 폭설:'지원2', 지진:'대피', 가스누출:'대피', 승강기:'통제', 테러:'통제' },
-  '보안2': { 화재:'유도', 정전:'지원', 누수:'유도', '태풍/홍수':'지원', 폭설:'지원2', 지진:'대피', 가스누출:'대피', 승강기:'통제', 테러:'통제' },
-  '보안3': { 정전:'지원', 누수:'유도', '태풍/홍수':'지원', 폭설:'지원2', 지진:'대피', 가스누출:'대피', 승강기:'통제', 테러:'통제' },
-  '미화파트': { 화재:'복구', 정전:'대응', 누수:'복구B', '태풍/홍수':'통제', 폭설:'지원1', 지진:'대응1', 가스누출:'대피' },
-  '주차파트': { 화재:'유도', 누수:'유도', 테러:'유도' },
-  '품질/안전파트': { 화재:'유도', 폭설:'대응2' },
-};
 
 const RLS_FIX_SQL =
   `ALTER TABLE employees DISABLE ROW LEVEL SECURITY;\nALTER TABLE employee_disaster_badges DISABLE ROW LEVEL SECURITY;`;
@@ -113,44 +90,6 @@ interface AdminPanelProps {
   onRefresh: () => void;
 }
 
-// ── 편제표: 재난별 그룹 분류 ────────────────────────────────
-const CMD_TEAMS: Record<string, string[]> = {
-  '화재':     ['소방파트장'],
-  '정전':     ['전기파트장'],
-  '누수':     ['기계파트장'],
-  '태풍/홍수': ['소방파트장'],
-  '폭설':     ['운영파트장'],
-  '지진':     ['소방파트장'],
-  '가스누출':  ['기계파트장'],
-  '승강기':   [],
-  '테러':     [],
-};
-const EVAC_TEAMS: Record<string, string[]> = {
-  '화재':     ['보안1','보안2','보안3','운영파트장','운영파트','주차파트','품질/안전파트','미화파트'],
-  '정전':     ['보안1','보안2','보안3','운영파트장','운영파트','미화파트','주차파트'],
-  '누수':     ['보안1','보안2','보안3','운영파트장','운영파트'],
-  '태풍/홍수': ['보안1','보안2','보안3','소방파트장','소방파트','운영파트장','운영파트'],
-  '폭설':     ['미화파트','보안1','보안2','보안3','주차파트'],
-  '지진':     ['보안1','보안2','보안3','운영파트장','운영파트'],
-  '가스누출':  ['건축파트장','건축파트','보안1','보안2','보안3','미화파트'],
-  '승강기':   ['보안1','보안2','보안3','미화파트'],
-  '테러':     ['운영파트장','운영파트','건축파트장','건축파트'],
-};
-type OrgGroup = '지휘연락' | '현장대응' | '대피지원' | '교대';
-const getOrgGroup = (team: string, role: string, disaster: string): OrgGroup => {
-  if (role.includes('교대')) return '교대';
-  if (team === '상황실' || team === '센터장') return '지휘연락';
-  if ((CMD_TEAMS[disaster] ?? []).includes(team)) return '지휘연락';
-  if ((EVAC_TEAMS[disaster] ?? []).includes(team)) return '대피지원';
-  return '현장대응';
-};
-const ORG_GROUPS: { key: OrgGroup; color: string }[] = [
-  { key: '지휘연락', color: '#f59e0b' },
-  { key: '현장대응', color: '#ef4444' },
-  { key: '대피지원', color: '#60a5fa' },
-  { key: '교대',    color: '#c084fc' },
-];
-
 export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) => {
   const [adminTab, setAdminTab] = useState<'list' | 'org'>('list');
   const [orgDisaster, setOrgDisaster] = useState<Disaster>('화재');
@@ -161,7 +100,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
   const [editEmpNo, setEditEmpNo] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [expandedDept, setExpandedDept] = useState<string | null>(null);
-  const [expandedOrgGroup, setExpandedOrgGroup] = useState<OrgGroup | null>(null);
+  // 재난편제표: 배지별 임무 미리보기 (임무 "내용"은 disa_app이 관리 — 여기선 동기화된 값을 조회만 함)
+  const [orgRoles, setOrgRoles] = useState<(DisasterRole & { disaster_tasks: DisasterTask[] })[]>([]);
+  const [previewBadge, setPreviewBadge] = useState<string | null>(null);
+  // 재난편제표: 배지별 배정 인원(emp_no) — 2026-07-05부터 여기서 직접 배정/해제
+  const [badgeAssignments, setBadgeAssignments] = useState<Record<string, string[]>>({});
+  const [addPickerBadge, setAddPickerBadge] = useState<string | null>(null);
+  const [addSearch, setAddSearch] = useState('');
+  const [bulkTeam, setBulkTeam] = useState('');
+  const [badgeBusy, setBadgeBusy] = useState(false);
+  // 직원목록 탭: 전 직원의 배지 배정 현황 (읽기전용 표시용)
+  const [allEmployeeBadges, setAllEmployeeBadges] = useState<Record<string, Record<string, string>>>({});
+  const refreshAllEmployeeBadges = () => {
+    db.getAllEmployeeBadges().then(setAllEmployeeBadges).catch(() => setAllEmployeeBadges({}));
+  };
+  useEffect(() => { refreshAllEmployeeBadges(); }, []);
   const [rlsError, setRlsError] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -221,21 +174,53 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       .filter(d => d.emps.length > 0);
   }, [filtered, filterCategory]);
 
-  // 현재 팀의 자동 배지 미리보기
-  const autoBadgePreview = useMemo(() => {
-    const map = TEAM_BADGE_MAP[form.team];
-    if (!map) return [];
-    return ALL_DISASTERS.filter(d => map[d]).map(d => ({ disaster: d, badge: map[d]! }));
-  }, [form.team]);
+  // 재난 선택 바뀌면 해당 재난의 역할·임무 + 배지별 배정 인원을 새로 조회
+  const refreshBadgeAssignments = () => {
+    db.getEmployeeBadgesByDisaster(orgDisaster).then(setBadgeAssignments).catch(() => setBadgeAssignments({}));
+  };
+  useEffect(() => {
+    setPreviewBadge(null);
+    setAddPickerBadge(null);
+    db.getDisasterRolesWithTasks(orgDisaster).then(setOrgRoles).catch(() => setOrgRoles([]));
+    refreshBadgeAssignments();
+  }, [orgDisaster]);
 
-  // 편제표: 재난별 그룹 계산
-  const orgGroups = useMemo(() => {
-    const groups: Record<OrgGroup, EmployeeDB[]> = { '지휘연락': [], '현장대응': [], '대피지원': [], '교대': [] };
-    for (const e of employees) {
-      groups[getOrgGroup(e.team, e.role, orgDisaster)].push(e);
+  const handleAssignBadge = async (empNo: string, badge: string) => {
+    setBadgeBusy(true);
+    try {
+      await db.upsertEmployeeBadge(empNo, orgDisaster, badge);
+      refreshBadgeAssignments();
+      refreshAllEmployeeBadges();
+      setAddSearch('');
+    } finally {
+      setBadgeBusy(false);
     }
-    return groups;
-  }, [employees, orgDisaster]);
+  };
+
+  const handleUnassignBadge = async (empNo: string) => {
+    setBadgeBusy(true);
+    try {
+      await db.deleteEmployeeBadge(empNo, orgDisaster);
+      refreshBadgeAssignments();
+      refreshAllEmployeeBadges();
+    } finally {
+      setBadgeBusy(false);
+    }
+  };
+
+  const handleBulkAssignTeam = async (team: string, badge: string) => {
+    if (!team) return;
+    setBadgeBusy(true);
+    try {
+      const teamEmps = employees.filter(e => e.team === team);
+      for (const e of teamEmps) await db.upsertEmployeeBadge(e.emp_no, orgDisaster, badge);
+      refreshBadgeAssignments();
+      refreshAllEmployeeBadges();
+      setBulkTeam('');
+    } finally {
+      setBadgeBusy(false);
+    }
+  };
 
   const openAdd = () => {
     setForm({ ...EMPTY_FORM, emp_no: generateEmpNo() });
@@ -278,18 +263,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       } else if (modalMode === 'edit' && editEmpNo) {
         await db.updateEmployee(editEmpNo, empData);
       }
-
-      // 팀 기반 재난 배지 자동 적용
-      const targetEmpNo = modalMode === 'edit' ? (editEmpNo ?? empNo) : empNo;
-      const badgeMap = TEAM_BADGE_MAP[form.team] ?? {};
-      for (const disaster of ALL_DISASTERS) {
-        const badge = badgeMap[disaster];
-        if (badge) {
-          await db.upsertEmployeeBadge(targetEmpNo, disaster, badge);
-        } else {
-          try { await db.deleteEmployeeBadge(targetEmpNo, disaster); } catch { /* 없으면 무시 */ }
-        }
-      }
+      // 재난 배지는 더 이상 팀 기준으로 자동 적용하지 않음 — "재난 편제표" 탭에서 배지별로
+      // 인원을 직접 배정/해제하는 방식으로 전환(2026-07-05). 새 직원도 여기서 저장 후
+      // 편제표 탭에서 배지를 배정해야 임무를 받습니다.
 
       setModalMode(null);
       onRefresh();
@@ -433,13 +409,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
         ))}
       </div>
 
-      {/* ── 편제표 탭: 좌측 재난 세로 메뉴 + 우측 서브메뉴 아코디언 ── */}
+      {/* ── 편제표 탭: 좌측 재난 세로 메뉴 + 우측 배지별 인원배정 아코디언 ── */}
       {adminTab === 'org' && (
         <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
           {/* 좌측 세로 메뉴 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '76px', flexShrink: 0 }}>
             {ORG_DISASTER_ORDER.map(d => (
-              <button key={d} type="button" onClick={() => { setOrgDisaster(d); setExpandedOrgGroup(null); }} style={{
+              <button key={d} type="button" onClick={() => setOrgDisaster(d)} style={{
                 padding: '10px 4px', borderRadius: '8px', cursor: 'pointer',
                 fontSize: '12px', fontWeight: 700, textAlign: 'center',
                 background: orgDisaster === d ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
@@ -451,54 +427,140 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
             ))}
           </div>
 
-          {/* 우측 서브메뉴바 (아코디언) */}
+          {/* 우측: 배지 목록 (클릭 → 배정 인원 + 인원추가 + 임무 미리보기) */}
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {ORG_GROUPS.map(({ key: grp, color }) => {
-              const grpEmps = orgGroups[grp];
-              const teamMap: Record<string, EmployeeDB[]> = {};
-              for (const emp of grpEmps) (teamMap[emp.team] ??= []).push(emp);
-              const isOpen = expandedOrgGroup === grp;
+            {orgRoles.length === 0 && (
+              <div style={{ padding: '16px', fontSize: '12px', color: '#475569', textAlign: 'center' }}>
+                이 재난에 등록된 배지가 없습니다 (재난대응메뉴얼에서 역할을 먼저 만들어야 합니다).
+              </div>
+            )}
+            {orgRoles.map(role => {
+              const color = role.bc || '#60a5fa';
+              const badge = role.badge;
+              const assignedNos = badgeAssignments[badge] ?? [];
+              const assignedEmps = assignedNos
+                .map(no => employees.find(e => e.emp_no === no))
+                .filter((e): e is EmployeeDB => !!e)
+                .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+              const isOpen = previewBadge === badge;
+              const isPicking = addPickerBadge === badge;
+              const searchMatches = addSearch.trim()
+                ? employees.filter(e =>
+                    !assignedNos.includes(e.emp_no) &&
+                    (e.name.includes(addSearch.trim()) || e.team.includes(addSearch.trim()))
+                  ).slice(0, 8)
+                : [];
 
               return (
-                <div key={grp} style={{ border: `1px solid ${color}33`, borderRadius: '10px', overflow: 'hidden' }}>
-                  <div onClick={() => setExpandedOrgGroup(isOpen ? null : grp)} style={{
+                <div key={badge} style={{ border: `1px solid ${color}33`, borderRadius: '10px', overflow: 'hidden' }}>
+                  <div onClick={() => setPreviewBadge(isOpen ? null : badge)} style={{
                     display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', cursor: 'pointer',
                     background: `${color}10`, borderBottom: isOpen ? `1px solid ${color}22` : 'none',
                   }}>
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, flexShrink: 0 }} />
-                    <span style={{ fontSize: '13px', fontWeight: 800, color, flex: 1 }}>{grp}</span>
-                    <span style={{ fontSize: '11px', color: color + 'aa', fontWeight: 600 }}>{grpEmps.length}명</span>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color, flex: 1 }}>{badge}</span>
+                    <span style={{ fontSize: '10px', color: '#64748b' }}>{role.role}</span>
+                    <span style={{ fontSize: '11px', color: color + 'aa', fontWeight: 600 }}>{assignedEmps.length}명</span>
                     <ChevronDown size={14} color={color}
                       style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                   </div>
                   {isOpen && (
-                    grpEmps.length === 0 ? (
-                      <div style={{ padding: '10px 14px', fontSize: '12px', color: '#475569', textAlign: 'center' }}>해당 없음</div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        {Object.entries(teamMap).map(([team, teamEmps]) => {
-                          const badge = TEAM_BADGE_MAP[team]?.[orgDisaster];
-                          return (
-                            <div key={team} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 12px 4px', background: 'rgba(255,255,255,0.02)' }}>
-                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', flex: 1 }}>{team}</span>
-                                {badge && (
-                                  <span style={{ fontSize: '10px', padding: '1px 7px', borderRadius: '4px', background: color + '22', color, fontWeight: 700, border: `1px solid ${color}44` }}>
-                                    {badge}
-                                  </span>
-                                )}
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {/* 배정 인원 */}
+                      {assignedEmps.length === 0 ? (
+                        <div style={{ padding: '10px 14px', fontSize: '12px', color: '#475569' }}>배정된 인원이 없습니다.</div>
+                      ) : (
+                        assignedEmps.map(emp => (
+                          <div key={emp.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0', flex: 1 }}>{emp.name}</span>
+                            <span style={{ fontSize: '11px', color: '#64748b' }}>{emp.team} · {emp.role}</span>
+                            <button type="button" disabled={badgeBusy} onClick={() => handleUnassignBadge(emp.emp_no)} style={{
+                              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+                              borderRadius: '5px', color: '#ef4444', cursor: 'pointer', padding: '2px 7px', fontSize: '10px',
+                            }}>
+                              제거
+                            </button>
+                          </div>
+                        ))
+                      )}
+
+                      {/* 인원 추가 */}
+                      <div style={{ padding: '8px 14px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                        {!isPicking ? (
+                          <button type="button" onClick={() => { setAddPickerBadge(badge); setAddSearch(''); }} style={{
+                            fontSize: '11px', color: '#60a5fa', background: 'rgba(59,130,246,0.08)',
+                            border: '1px solid rgba(59,130,246,0.25)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer',
+                          }}>
+                            + 인원 추가
+                          </button>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input
+                              autoFocus type="text" placeholder="이름 또는 팀으로 검색"
+                              value={addSearch} onChange={e => setAddSearch(e.target.value)}
+                              style={{ ...inputStyle, padding: '6px 10px', fontSize: '12px' }}
+                            />
+                            {searchMatches.length > 0 && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxHeight: '160px', overflowY: 'auto' }}>
+                                {searchMatches.map(e => (
+                                  <div key={e.emp_no} onClick={() => !badgeBusy && handleAssignBadge(e.emp_no, badge)} style={{
+                                    display: 'flex', gap: '8px', padding: '5px 8px', borderRadius: '5px', cursor: 'pointer',
+                                    background: 'rgba(255,255,255,0.03)',
+                                  }}>
+                                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#e2e8f0', flex: 1 }}>{e.name}</span>
+                                    <span style={{ fontSize: '11px', color: '#64748b' }}>{e.team}</span>
+                                  </div>
+                                ))}
                               </div>
-                              {teamEmps.map(emp => (
-                                <div key={emp.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 12px 4px 20px' }}>
-                                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0', flex: 1 }}>{emp.name}</span>
-                                  <span style={{ fontSize: '11px', color: '#64748b' }}>{emp.role}</span>
-                                </div>
-                              ))}
+                            )}
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <select value={bulkTeam} onChange={e => setBulkTeam(e.target.value)}
+                                style={{ ...inputStyle, flex: 1, padding: '6px 8px', fontSize: '11px' }}>
+                                <option value="">팀(파트) 전체 추가...</option>
+                                {ALL_TEAMS.map(t => (
+                                  <option key={t} value={t} style={{ background: '#1e293b', color: '#e2e8f0' }}>{t}</option>
+                                ))}
+                              </select>
+                              <button type="button" disabled={!bulkTeam || badgeBusy} onClick={() => handleBulkAssignTeam(bulkTeam, badge)} style={{
+                                fontSize: '11px', color: '#34d399', background: 'rgba(16,185,129,0.08)',
+                                border: '1px solid rgba(16,185,129,0.25)', borderRadius: '6px', padding: '0 10px',
+                                cursor: bulkTeam ? 'pointer' : 'not-allowed', opacity: bulkTeam ? 1 : 0.5,
+                              }}>
+                                추가
+                              </button>
                             </div>
-                          );
-                        })}
+                            <button type="button" onClick={() => setAddPickerBadge(null)} style={{
+                              fontSize: '11px', color: '#64748b', background: 'transparent', border: 'none', cursor: 'pointer', alignSelf: 'flex-start',
+                            }}>
+                              닫기
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )
+
+                      {/* 임무 미리보기 (재난대응메뉴얼 동기화 내용, 읽기전용) */}
+                      <div style={{ margin: '0 14px 10px', padding: '8px 10px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: `1px solid ${color}22` }}>
+                        {!role.disaster_tasks?.length ? (
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>이 배지의 임무 내용이 없습니다 (재난대응메뉴얼에서 등록 필요).</div>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '5px' }}>
+                              {role.role} · 재난대응메뉴얼 기준 (읽기전용)
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                              {role.disaster_tasks
+                                .slice()
+                                .sort((a, b) => a.task_idx - b.task_idx)
+                                .map(t => (
+                                  <div key={t.id} style={{ fontSize: '11.5px', color: t.label.startsWith('◇') || t.label.startsWith('◆') ? '#e2e8f0' : '#94a3b8', fontWeight: t.label.startsWith('◇') || t.label.startsWith('◆') ? 700 : 400, paddingLeft: t.label.startsWith('┖') || t.label.startsWith('└') ? '12px' : '0' }}>
+                                    {t.label}
+                                  </div>
+                                ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               );
@@ -558,11 +620,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                               <div style={{ padding: '6px 14px 5px', fontSize: '11px', fontWeight: 800, color: '#94a3b8', background: 'rgba(255,255,255,0.03)' }}>
                                 {sg.shift === '기타' ? '기타' : `${sg.shift}조`} · {sg.emps.length}명
                               </div>
-                              {sg.emps.map(emp => <EmpRow key={emp.emp_no} emp={emp} onEdit={openEdit} onDelete={handleDelete} />)}
+                              {sg.emps.map(emp => <EmpRow key={emp.emp_no} emp={emp} badgeMap={allEmployeeBadges[emp.emp_no] ?? {}} onEdit={openEdit} onDelete={handleDelete} />)}
                             </div>
                           ))
                         ) : (
-                          dept.emps.map(emp => <EmpRow key={emp.emp_no} emp={emp} onEdit={openEdit} onDelete={handleDelete} />)
+                          dept.emps.map(emp => <EmpRow key={emp.emp_no} emp={emp} badgeMap={allEmployeeBadges[emp.emp_no] ?? {}} onEdit={openEdit} onDelete={handleDelete} />)
                         )}
                       </div>
                     )}
@@ -622,30 +684,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                 </select>
               </div>
 
-              {/* 재난 배지 자동 적용 안내 */}
-              {autoBadgePreview.length > 0 && (
-                <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '8px', padding: '10px 12px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#34d399', marginBottom: '6px' }}>
-                    ✓ 파트 선택 시 재난 배지 자동 적용
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                    {autoBadgePreview.map(({ disaster, badge }) => (
-                      <span key={disaster} style={{
-                        fontSize: '10px', padding: '2px 7px', borderRadius: '4px',
-                        background: 'rgba(16,185,129,0.1)', color: '#6ee7b7',
-                        border: '1px solid rgba(16,185,129,0.2)',
-                      }}>
-                        {disaster} → {badge}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {autoBadgePreview.length === 0 && (
-                <div style={{ fontSize: '11px', color: '#475569', padding: '6px 0' }}>
-                  이 파트는 재난 배지 매핑이 없습니다.
-                </div>
-              )}
+              {/* 재난 배지 안내 — 배지는 여기서 자동 적용되지 않고 "재난 편제표" 탭에서 개별 배정 */}
+              <div style={{ fontSize: '11px', color: '#64748b', padding: '6px 0' }}>
+                ℹ️ 재난 배지는 여기서 자동 적용되지 않습니다. 저장 후 <b>재난 편제표</b> 탭에서 배지별로 직접 배정해주세요.
+              </div>
 
               {/* 역할 */}
               <div>
@@ -728,10 +770,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
 // ── 직원 행 컴포넌트 ──────────────────────────────────────────────
 const EmpRow: React.FC<{
   emp: EmployeeDB;
+  badgeMap: Record<string, string>;
   onEdit: (emp: EmployeeDB) => void;
   onDelete: (emp: EmployeeDB) => void;
-}> = ({ emp, onEdit, onDelete }) => {
+}> = ({ emp, badgeMap, onEdit, onDelete }) => {
   const lastFour = emp.phone?.replace(/\D/g, '').slice(-4) ?? '—';
+  const badges = useMemo(
+    () => ALL_DISASTERS.filter(d => badgeMap[d]).map(d => ({ disaster: d, badge: badgeMap[d] })),
+    [badgeMap]
+  );
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -745,9 +792,24 @@ const EmpRow: React.FC<{
           )}
         </div>
         <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-          {emp.role}
+          {emp.team} · {emp.role}
           {emp.phone && <span style={{ marginLeft: '8px', color: '#475569' }}>🔑 {lastFour}</span>}
         </div>
+        {badges.length > 0 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginTop: '5px' }}>
+            {badges.map(({ disaster, badge }) => (
+              <span key={disaster} title={`${disaster} 발령 시 배지`} style={{
+                fontSize: '9.5px', padding: '1px 6px', borderRadius: '4px',
+                background: 'rgba(96,165,250,0.08)', color: '#93c5fd',
+                border: '1px solid rgba(96,165,250,0.18)', whiteSpace: 'nowrap',
+              }}>
+                {DISASTER_LABELS[disaster]}·{badge}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div style={{ fontSize: '9.5px', color: '#475569', marginTop: '5px' }}>재난 배지 매핑 없음</div>
+        )}
       </div>
       <button onClick={() => onEdit(emp)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#94a3b8', cursor: 'pointer', padding: '5px 8px' }}>
         <Pencil size={13} />

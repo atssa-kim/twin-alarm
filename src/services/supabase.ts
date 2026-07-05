@@ -344,6 +344,31 @@ export const db = {
     if (error) throw error;
   },
 
+  // 직원목록 탭: 전 직원 × 전 재난 배지 배정 현황 일괄 조회 (emp_no -> disaster -> badge)
+  async getAllEmployeeBadges(): Promise<Record<string, Record<string, string>>> {
+    const { data, error } = await supabase
+      .from('employee_disaster_badges')
+      .select('emp_no, disaster, badge');
+    if (error) throw error;
+    const map: Record<string, Record<string, string>> = {};
+    for (const row of data ?? []) {
+      (map[row.emp_no] ??= {})[row.disaster] = row.badge;
+    }
+    return map;
+  },
+
+  // 재난편제표: 특정 재난의 배지별 배정 인원(emp_no) 전체 조회 — 배지 관리 화면 전용
+  async getEmployeeBadgesByDisaster(disaster: string): Promise<Record<string, string[]>> {
+    const { data, error } = await supabase
+      .from('employee_disaster_badges')
+      .select('emp_no, badge')
+      .eq('disaster', disaster);
+    if (error) throw error;
+    const map: Record<string, string[]> = {};
+    for (const row of data ?? []) (map[row.badge] ??= []).push(row.emp_no);
+    return map;
+  },
+
   // ── 종료 재난 이력 조회 ──────────────────────────────────────
   async getClosedIncidents(): Promise<Incident[]> {
     const { data, error } = await supabase
