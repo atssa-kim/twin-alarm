@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { type Incident, type Responder, type MemberTask, type DisasterRole, type DisasterTask, db } from '../services/supabase';
+import { type Incident, type Responder, type MemberTask, type DisasterRole, type DisasterTask, db, isIncidentParticipant } from '../services/supabase';
 import { type Employee } from './Login';
 import { Check, ShieldAlert, MapPin, Award, CheckSquare, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
 import { unlockAudio } from '../utils/audio';
@@ -166,7 +166,10 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     }
   }, [currentResponder?.status]);
 
-  const myRole = myBadge
+  // 훈련 발령을 특정 대원으로 제한한 경우, 선택 안 된 대원에게는 임무를 보여주지 않음
+  const isParticipant = !activeIncident || isIncidentParticipant(activeIncident, currentUser.empNo);
+
+  const myRole = (myBadge && isParticipant)
     ? (disasterRoles.find(r => r.badge === myBadge) ?? null)
     : null;
 
@@ -199,16 +202,20 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   const STEP_PAGE_SIZE = 3;
 
   type StepFlowItem = {
-    group: TaskGroup | null;   // null인 건 출동 전용 1단계뿐
+    group: TaskGroup | null;   // null인 건 출동/정보 전용 1단계뿐
     showDispatch: boolean;
     showReturn: boolean;
+    showInfo?: boolean;        // 상황실 전용: 체크박스 없이 경보내용·비상장구만 보여주는 1단계
   };
 
   const isSituationRoomForStep = myBadge === '상황';
 
   const stepFlow = useMemo<StepFlowItem[]>(() => {
     if (isSituationRoomForStep) {
-      return taskGroups.map(group => ({ group, showDispatch: false, showReturn: false }));
+      return [
+        { group: null, showDispatch: false, showReturn: false, showInfo: true },
+        ...taskGroups.map(group => ({ group, showDispatch: false, showReturn: false })),
+      ];
     }
     if (taskGroups.length === 0) {
       return [{ group: null, showDispatch: true, showReturn: false }];
@@ -233,6 +240,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   const isReturned = responderStatus === '복귀';
 
   const isStepDone = (item: StepFlowItem): boolean => {
+    if (item.showInfo) return true; // 체크할 항목이 없는 정보 전용 카드
     if (item.showDispatch) return isDispatched;
     let ok = true;
     if (item.group) ok = ok && isGroupDone(item.group);
@@ -345,7 +353,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
           )}
         </div>
 
-        {item.showDispatch && (
+        {(item.showDispatch || item.showInfo) && (
           <>
             <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px', padding: '14px 16px' }}>
               <div style={{ fontSize: '11px', fontWeight: 800, color: '#fca5a5', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -393,10 +401,14 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                 })()}
               </div>
             )}
-            <div style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-              비상장구를 갖추고 <strong style={{ color: 'var(--text-main)' }}>{activeIncident!.location}</strong>으로 출동하세요!
-            </div>
-            <StepCheckRow checked={isDispatched} label="출동체크" onClick={toggleDispatch} big />
+            {item.showDispatch && (
+              <>
+                <div style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                  비상장구를 갖추고 <strong style={{ color: 'var(--text-main)' }}>{activeIncident!.location}</strong>으로 출동하세요!
+                </div>
+                <StepCheckRow checked={isDispatched} label="출동체크" onClick={toggleDispatch} big />
+              </>
+            )}
           </>
         )}
 
@@ -1163,6 +1175,24 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   </div>
 
                   <div className="card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '18px', padding: '22px 20px', margin: '12px 16px', borderRadius: '18px' }}>
+                  {/* 임무 카드 수행률 — 전체목록과 동일한 값(myProgressPct)을 그대로 표시해 두 보기 간 진행률 불일치 방지 */}
+                  <div className="progress-container" style={{ flexShrink: 0 }}>
+                    <div className="progress-header">
+                      <span>임무 카드 수행률</span>
+                      <strong style={{ color: myProgressPct === 100 ? 'var(--color-green)' : 'var(--color-power)' }}>
+                        {myProgressPct}% {myProgressPct === 100 && '✓'}
+                      </strong>
+                    </div>
+                    <div className="progress-track">
+                      <div
+                        className="progress-fill"
+                        style={{
+                          width: `${myProgressPct}%`,
+                          backgroundColor: myProgressPct === 100 ? 'var(--color-green)' : (roleColor || 'var(--color-fire)')
+                        }}
+                      />
+                    </div>
+                  </div>
                   {/* 진행 칩 */}
                   <div style={{ display: 'flex', gap: '7px', overflowX: 'auto', paddingBottom: '2px', flexShrink: 0 }}>
                     {stepFlow.map((item, i) => {

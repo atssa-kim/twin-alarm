@@ -20,6 +20,14 @@ export interface Incident {
   shift?: string; // 'day' | 'night' — 화재만 지휘관이 발령 시 수동 선택, 나머지 재난은 항상 'day'
 }
 
+// 훈련 발령 시 참여인원을 특정 대원으로 제한한 경우(drill_emp_nos), 그 인원만 알람·임무 대상.
+// 실제 상황(mode !== '훈련')이거나 선택 인원 제한이 없으면(drill_emp_nos 없음) 전원 대상.
+export function isIncidentParticipant(incident: Pick<Incident, 'mode' | 'drill_emp_nos'>, empNo: string): boolean {
+  if (incident.mode !== '훈련') return true;
+  if (!incident.drill_emp_nos) return true;
+  return incident.drill_emp_nos.split(',').includes(empNo);
+}
+
 export interface Responder {
   incident_id: string;
   emp_no: string;

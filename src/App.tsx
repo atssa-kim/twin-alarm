@@ -5,7 +5,7 @@ import { CommanderDashboard } from './components/CommanderDashboard';
 import { ResponderView } from './components/ResponderView';
 import { COPDashboard } from './components/COPDashboard';
 import { triggerEmergencyAlert, stopAllAlerts, unlockAudio } from './utils/audio';
-import { db, type EmployeeDB } from './services/supabase';
+import { db, type EmployeeDB, isIncidentParticipant } from './services/supabase';
 import { requestNotificationPermission, onForegroundMessage } from './services/notifications';
 import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Bell, BellOff, Megaphone, Settings } from 'lucide-react';
 import { AdminPanel } from './components/AdminPanel';
@@ -292,6 +292,8 @@ const App: React.FC = () => {
     const handler = (event: MessageEvent) => {
       if (event.data?.type !== 'BACKGROUND_ALERT') return;
       if (!soundEnabled) return;
+      // 서버(FCM 발송)에서 이미 대상자를 걸러 보내지만, 클라이언트에서도 한 번 더 확인
+      if (currentUser && activeIncident && !isIncidentParticipant(activeIncident, currentUser.empNo)) return;
       const { disaster, location, mode } = event.data;
       const key = `${disaster}|${location}|${mode}`;
       if (swAlertedKeys.current.has(key)) return; // 이미 처리한 알림
@@ -314,6 +316,8 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!activeIncident || !currentUser) return;
     if (alertedIncidentIds.current.has(activeIncident.id)) return;
+    // 훈련 발령을 특정 대원으로 제한한 경우, 선택 안 된 대원에게는 알람을 울리지 않음
+    if (!isIncidentParticipant(activeIncident, currentUser.empNo)) return;
 
     alertedIncidentIds.current.add(activeIncident.id);
     // 초기 mode도 Set에 등록해 effect 3의 중복 방지
@@ -332,6 +336,8 @@ const App: React.FC = () => {
     if (!activeIncident || !currentUser) return;
     const key = `${activeIncident.id}__${activeIncident.mode}`;
     if (alertedModeKeys.current.has(key)) return;
+    // 훈련 발령을 특정 대원으로 제한한 경우, 선택 안 된 대원에게는 알람을 울리지 않음
+    if (!isIncidentParticipant(activeIncident, currentUser.empNo)) return;
 
     alertedModeKeys.current.add(key);
     savePersistedSet(ALERTED_MODE_KEY, alertedModeKeys.current);
