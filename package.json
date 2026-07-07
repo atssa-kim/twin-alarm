@@ -11,21 +11,22 @@
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
-    "seed": "npx tsx scripts/seed-disasters.ts",
     "seed-employees": "npx tsx scripts/seed-employees.ts",
     "seed-bangho": "npx tsx scripts/seed-bangho.ts",
     "seed-duty-matrix": "npx tsx scripts/seed-duty-matrix.ts",
     "fix-badges-260704": "npx tsx scripts/fix-badges-260704.ts",
     "fix-badges-260705": "npx tsx scripts/fix-badges-260705.ts",
     "fix-badges-260705b": "npx tsx scripts/fix-badges-260705b.ts",
-    "fix-badges-260706": "npx tsx scripts/fix-badges-260706.ts"
+    "fix-badges-260706": "npx tsx scripts/fix-badges-260706.ts",
+    "setup-disaster-editors": "npx tsx scripts/setup-disaster-editors.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
     "firebase": "^12.15.0",
     "lucide-react": "^1.21.0",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

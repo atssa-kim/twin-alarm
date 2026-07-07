@@ -298,7 +298,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
         ? [...selectedEmps].join(',')
         : null;
       const allRoles = await db.getDisasterRolesWithTasks(selectedDisasterKey, shift);
-      if (!allRoles.length) throw new Error('임무 데이터가 없습니다. npm run seed 를 먼저 실행하세요.');
+      if (!allRoles.length) throw new Error('임무 데이터가 없습니다. 재난대응메뉴얼에서 이 재난·근무의 역할을 먼저 등록하세요.');
 
       // 감지기동작이면 초기출동조 역할만 발령
       const roles = isInitial

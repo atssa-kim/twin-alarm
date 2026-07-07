@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { db, type EmployeeDB, type DisasterRole, type DisasterTask } from '../services/supabase';
-import { UserPlus, Pencil, Trash2, X, Save, Users, ChevronDown, Copy, ExternalLink } from 'lucide-react';
+import { db, supabase, type EmployeeDB, type DisasterRole, type DisasterTask } from '../services/supabase';
+import { UserPlus, Pencil, Trash2, X, Save, Users, ChevronDown, Copy, ExternalLink, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 // ── 팀 목록 (seed-employees.ts team 값과 일치) ──────────────
 const ALL_TEAMS = [
@@ -108,6 +109,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
   // 재난편제표: 배지별 배정 인원(emp_no) — 2026-07-05부터 여기서 직접 배정/해제
   const [badgeAssignments, setBadgeAssignments] = useState<Record<string, string[]>>({});
   const [addPickerBadge, setAddPickerBadge] = useState<string | null>(null);
+  const [exportingOrg, setExportingOrg] = useState(false);
   const [addSearch, setAddSearch] = useState('');
   const [bulkTeam, setBulkTeam] = useState('');
   const [badgeBusy, setBadgeBusy] = useState(false);
@@ -183,9 +185,71 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
   useEffect(() => {
     setPreviewBadge(null);
     setAddPickerBadge(null);
-    db.getDisasterRolesWithTasks(orgDisaster, orgShift).then(setOrgRoles).catch(() => setOrgRoles([]));
-    refreshBadgeAssignments();
+    const refresh = () => {
+      db.getDisasterRolesWithTasks(orgDisaster, orgShift).then(setOrgRoles).catch(() => setOrgRoles([]));
+      refreshBadgeAssignments();
+    };
+    refresh();
+
+    // 재난대응메뉴얼(외부 앱)에서 이 재난의 역할·임무를 수정/삭제하면 실시간으로 반영
+    const channel = supabase
+      .channel(`admin-disaster-roles-${orgDisaster}-${orgShift}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'disaster_roles' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'disaster_tasks' }, refresh)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [orgDisaster, orgShift]);
+
+  // 재난별 전체 조직도(그룹·역할·배지·담당 직원·임무) 엑셀 다운로드 — 현재 선택된 재난과 무관하게 전체 재난을 시트별로 뽑음
+  const exportOrgToExcel = async () => {
+    setExportingOrg(true);
+    try {
+      const wb = XLSX.utils.book_new();
+      const HDR = ['그룹', '역할/담당', '배지', '담당 직원', '임무번호', '임무내용'];
+      const COL_W = [{ wch: 14 }, { wch: 36 }, { wch: 8 }, { wch: 30 }, { wch: 8 }, { wch: 70 }];
+
+      const buildSheet = async (disaster: Disaster, shift: 'day' | 'night', sheetName: string) => {
+        const [roles, badgeMap] = await Promise.all([
+          db.getDisasterRolesWithTasks(disaster, shift),
+          db.getEmployeeBadgesByDisaster(disaster, shift),
+        ]);
+        if (roles.length === 0) return;
+
+        const rows: (string | number)[][] = [HDR];
+        roles.forEach(role => {
+          const assignedNames = (badgeMap[role.badge] ?? [])
+            .map(empNo => employees.find(e => e.emp_no === empNo)?.name ?? empNo)
+            .join('·');
+          const tasks = (role.disaster_tasks ?? []).slice().sort((a, b) => a.task_idx - b.task_idx);
+          if (tasks.length === 0) {
+            rows.push([role.group_name ?? '', role.role, role.badge, assignedNames, '', '']);
+          } else {
+            tasks.forEach((t, i) => {
+              rows.push([role.group_name ?? '', role.role, role.badge, assignedNames, i + 1, t.label]);
+            });
+          }
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = COL_W;
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      };
+
+      for (const d of ORG_DISASTER_ORDER) {
+        await buildSheet(d, 'day', DISASTER_LABELS[d]);
+      }
+      // 화재 야간은 별도 시트 — 현재 야간 임무가 등록된 유일한 재난 (2026-07-08 기준)
+      await buildSheet('화재', 'night', '화재_야간');
+
+      const today = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `트윈타워_재난조직도_${today}.xlsx`);
+    } catch (e) {
+      alert('엑셀 생성 중 오류가 발생했습니다: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setExportingOrg(false);
+    }
+  };
 
   const handleAssignBadge = async (empNo: string, badge: string) => {
     setBadgeBusy(true);
@@ -416,7 +480,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       {adminTab === 'org' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {/* 주간/야간 토글 */}
-          <div style={{ display: 'flex', gap: '6px' }}>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
             {(['day', 'night'] as const).map(s => (
               <button key={s} type="button" onClick={() => setOrgShift(s)} style={{
                 flex: 1, padding: '9px 0', borderRadius: '8px', cursor: 'pointer',
@@ -428,6 +492,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                 {s === 'day' ? '☀️ 주간' : '🌙 야간'}
               </button>
             ))}
+            <button type="button" onClick={exportOrgToExcel} disabled={exportingOrg} style={{
+              display: 'flex', alignItems: 'center', gap: '5px', padding: '0 12px', borderRadius: '8px',
+              fontSize: '12px', fontWeight: 700, cursor: exportingOrg ? 'default' : 'pointer',
+              background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)',
+              color: '#4ade80', opacity: exportingOrg ? 0.6 : 1, whiteSpace: 'nowrap',
+            }}>
+              <Download size={13} />{exportingOrg ? '생성 중...' : '전체 조직도 다운로드'}
+            </button>
           </div>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
           {/* 좌측 세로 메뉴 */}

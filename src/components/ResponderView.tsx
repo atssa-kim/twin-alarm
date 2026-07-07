@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { type Incident, type Responder, type MemberTask, type DisasterRole, type DisasterTask, db, isIncidentParticipant } from '../services/supabase';
+import { type Incident, type Responder, type MemberTask, type DisasterRole, type DisasterTask, db, supabase, isIncidentParticipant } from '../services/supabase';
 import { type Employee } from './Login';
 import { Check, ShieldAlert, MapPin, Award, CheckSquare, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
 import { unlockAudio } from '../utils/audio';
@@ -134,26 +134,38 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
       setPreviewOpenGroups(new Set());
       return;
     }
-    setPreviewLoading(true);
-    Promise.all([
-      db.getDisasterRolesWithTasks(previewDisaster),
-      db.getEmployeeBadge(currentUser.empNo, previewDisaster),
-    ]).then(([roles, badge]) => {
-      setPreviewRoles(roles);
-      setPreviewBadge(badge);
-      setPreviewLocalDone({});
-      // 모든 그룹 기본 펼침
-      const headers = new Set<string>(
-        roles
-          .flatMap(r => r.disaster_tasks ?? [])
-          .filter(t => t.label.startsWith('◇') || t.label.startsWith('◆'))
-          .map(t => `preview_${t.id}`)
-      );
-      setPreviewOpenGroups(headers);
-    }).catch(() => {
-      setPreviewRoles([]);
-      setPreviewBadge(null);
-    }).finally(() => setPreviewLoading(false));
+    const load = () => {
+      setPreviewLoading(true);
+      Promise.all([
+        db.getDisasterRolesWithTasks(previewDisaster),
+        db.getEmployeeBadge(currentUser.empNo, previewDisaster),
+      ]).then(([roles, badge]) => {
+        setPreviewRoles(roles);
+        setPreviewBadge(badge);
+        setPreviewLocalDone({});
+        // 모든 그룹 기본 펼침
+        const headers = new Set<string>(
+          roles
+            .flatMap(r => r.disaster_tasks ?? [])
+            .filter(t => t.label.startsWith('◇') || t.label.startsWith('◆'))
+            .map(t => `preview_${t.id}`)
+        );
+        setPreviewOpenGroups(headers);
+      }).catch(() => {
+        setPreviewRoles([]);
+        setPreviewBadge(null);
+      }).finally(() => setPreviewLoading(false));
+    };
+    load();
+
+    // 재난대응메뉴얼(외부 앱)에서 임무를 수정/삭제하면 미리보기에 실시간 반영
+    const channel = supabase
+      .channel(`preview-disaster-roles-${previewDisaster}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'disaster_roles' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'disaster_tasks' }, load)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [previewDisaster, activeIncident, currentUser.empNo]);
 
   const currentResponder = responders.find(r => r.emp_no === currentUser.empNo);

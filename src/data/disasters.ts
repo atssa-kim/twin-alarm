@@ -142,7 +142,7 @@ export const DISASTERS: Disaster[] = [
       {
         "group": "대응반",
         "role": "🧯 인명구조조 (보안파트)",
-        "badge": "구조",
+        "badge": "응급",
         "bc": "#b91c1c",
         "tasks": [
           "비상장구_방화복SET·공기호흡기·무전기·들것·약품통",
@@ -515,7 +515,7 @@ export const DISASTERS: Disaster[] = [
       {
         "group": "지원반",
         "role": "🏥 구조조",
-        "badge": "구조",
+        "badge": "응급",
         "bc": "#4338ca",
         "tasks": [
           "응급환자 발생 시 119 신고 및 구급차 출동 요청",
@@ -661,7 +661,7 @@ export const DISASTERS: Disaster[] = [
       {
         "group": "지원반",
         "role": "🏥 지원반 (운영파트)",
-        "badge": "구조",
+        "badge": "응급",
         "bc": "#d97706",
         "tasks": [
           "들것·구급약품·산소호흡기 지참 현장 출동",
@@ -900,7 +900,7 @@ export const DISASTERS: Disaster[] = [
       {
         "group": "지원반",
         "role": "🏥 응급·지원반 (운영,보안1)",
-        "badge": "구조",
+        "badge": "응급",
         "bc": "#9f1239",
         "tasks": [
           "부상자 발생 시 응급처치 및 119 신고",

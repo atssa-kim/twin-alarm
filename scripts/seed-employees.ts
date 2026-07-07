@@ -93,7 +93,7 @@ const EMPLOYEES: {
   { emp_no: 'E-3004', name: '이환수', team: '전기파트',   role: '파트원',      is_commander: false, email: 'Ihs0318@sni.co.kr',   phone: '010-3387-8910', dept_code: '전기' },
   { emp_no: 'E-3005', name: '김상훈', team: '전기파트',   role: '파트원',      is_commander: false, email: 'guswlr4@sni.co.kr',   phone: '010-5046-1866', dept_code: '전기' },
   { emp_no: 'E-3006', name: '김현직', team: '전기파트',   role: '파트원',      is_commander: false, email: 'ksh1866@sni.co.kr',   phone: '010-2328-2474', dept_code: '전기' },
-  { emp_no: 'E-3007', name: '이찬희', team: '전기파트',   role: '파트원(교대)',is_commander: false, email: 'chunww1@sni.co.kr',   phone: '010-4809-5710', dept_code: '교대전기' },
+  { emp_no: 'E-3007', name: '이찬희', team: '전기파트',   role: '파트원(교대)',is_commander: false, email: 'chunww1@sni.co.kr',   phone: '010-4809-5710', dept_code: '야전기' },
   { emp_no: 'E-3008', name: '심현보', team: '상황실',     role: '교대원(A조·전기)', is_commander: false, email: 'shb4561@sni.co.kr',   phone: '010-4004-4561', dept_code: '야전기', shift_group: 'A' },
   { emp_no: 'E-3009', name: '김성환', team: '상황실',     role: '교대원(B조·전기)', is_commander: false, email: 'manager100@sni.co.kr',phone: '010-4141-8945', dept_code: '야전기', shift_group: 'B' },
   { emp_no: 'E-3010', name: '이태경', team: '상황실',     role: '교대원(C조·전기)', is_commander: false, email: 'leetae8171@sni.co.kr',phone: '010-6255-8171', dept_code: '야전기', shift_group: 'C' },
