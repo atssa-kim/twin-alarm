@@ -4,11 +4,12 @@ import { type Employee, Login } from './components/Login';
 import { CommanderDashboard } from './components/CommanderDashboard';
 import { ResponderView } from './components/ResponderView';
 import { COPDashboard } from './components/COPDashboard';
-import { triggerEmergencyAlert, stopAllAlerts, unlockAudio } from './utils/audio';
+import { triggerEmergencyAlert, announceTTS, stopAllAlerts, unlockAudio } from './utils/audio';
 import { db, type EmployeeDB, isIncidentParticipant } from './services/supabase';
 import { requestNotificationPermission, onForegroundMessage } from './services/notifications';
 import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Bell, BellOff, Megaphone, Settings } from 'lucide-react';
 import { AdminPanel } from './components/AdminPanel';
+import { VARIANT_LABELS } from './components/CommanderDashboard';
 
 // 알람 중복 방지 Set을 localStorage에 영구 저장 — 앱 재생성(재로딩)해도 이미 경보한
 // 재난은 다시 울리지 않도록 함 (기존엔 useRef뿐이라 재생성 시 항상 초기화되어 재발화됨)
@@ -346,6 +347,21 @@ const App: React.FC = () => {
       vibrateAlert();
     }
   }, [activeIncident?.mode, currentUser?.empNo]);
+
+  // 4. 상황 확정(variant) 알림 — 공통으로 되돌리는 경우(null)는 조용히 처리, TTS는 재생하지 않음
+  useEffect(() => {
+    if (!activeIncident || !currentUser || !activeIncident.variant) return;
+    const key = `${activeIncident.id}__variant__${activeIncident.variant}`;
+    if (alertedModeKeys.current.has(key)) return;
+    if (!isIncidentParticipant(activeIncident, currentUser.empNo)) return;
+
+    alertedModeKeys.current.add(key);
+    savePersistedSet(ALERTED_MODE_KEY, alertedModeKeys.current);
+    if (soundEnabled) {
+      const label = (VARIANT_LABELS[activeIncident.variant] ?? activeIncident.variant).replace(/^\S+\s+/, '');
+      announceTTS(`${activeIncident.disaster} 상황이 ${label}로 확정되었습니다. 임무를 확인하세요.`);
+    }
+  }, [activeIncident?.variant, currentUser?.empNo]);
 
   // Loading Screen
   if (loading) {

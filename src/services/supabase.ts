@@ -18,6 +18,7 @@ export interface Incident {
   scope: string; // 'drill' | 'confirm' | 'all'
   drill_emp_nos?: string | null; // 훈련 승격 시 선택 대원 emp_no (콤마 구분)
   shift?: string; // 'day' | 'night' — 화재만 지휘관이 발령 시 수동 선택, 나머지 재난은 항상 'day'
+  variant?: string | null; // 상황 확정 태그(예: 'K급주방'|'가스구역'|'배터리') — null이면 미확정(공통만 표시)
 }
 
 // 훈련 발령 시 참여인원을 특정 대원으로 제한한 경우(drill_emp_nos), 그 인원만 알람·임무 대상.
@@ -50,6 +51,7 @@ export interface MemberTask {
   done: boolean;
   done_by?: string | null; // DB 컬럼 추가 필요: ALTER TABLE member_tasks ADD COLUMN IF NOT EXISTS done_by TEXT;
   updated_at: number | null;
+  variant?: string | null; // 발령 시 disaster_tasks.variant를 그대로 복사 — null이면 공통(항상 표시)
 }
 
 export interface DisasterRole {
@@ -68,6 +70,7 @@ export interface DisasterTask {
   role_id: number;
   task_idx: number;
   label: string;
+  variant?: string | null; // null이면 공통 임무, 값이 있으면 그 상황(variant)이 확정됐을 때만 표시
 }
 
 export interface EmployeeDB {
@@ -133,6 +136,16 @@ export const db = {
     const { error } = await supabase
       .from('incidents')
       .update(update)
+      .eq('id', incidentId);
+
+    if (error) throw error;
+  },
+
+  // 2-b. 상황 확정(variant) 설정 — null이면 공통으로 되돌림(오조작 복구)
+  async setIncidentVariant(incidentId: string, variant: string | null) {
+    const { error } = await supabase
+      .from('incidents')
+      .update({ variant })
       .eq('id', incidentId);
 
     if (error) throw error;

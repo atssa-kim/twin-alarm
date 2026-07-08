@@ -7,6 +7,13 @@ import { Play, Square, ShieldAlert, Users, Mic, UserCheck, BarChart2, Monitor, H
 // 화재 초기출동조 배지 (감지기동작 시 1차 소집)
 const FIRE_INITIAL_BADGES = new Set(['총괄', '상황', '통제', '출동']);
 
+// 상황 확정(variant) 칩 표시용 라벨 — 새 variant를 추가할 때 여기만 채우면 됨 (미등록 값은 그대로 표시)
+export const VARIANT_LABELS: Record<string, string> = {
+  'K급주방': '🍳 K급',
+  '가스구역': '💨 가스구역',
+  '배터리': '🔋 배터리',
+};
+
 // 전광판 표시용 상태 라벨 — 데이터값(Responder.status)은 그대로 '현장'을 쓰되,
 // 화면에는 "현장 임무수행중"으로 보여줌(출동체크 후 임무 체크 시 자동으로 이 상태가 됨)
 const responderStatusLabel = (status: string) => status === '현장' ? '현장 임무수행중' : status;
@@ -322,6 +329,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
               task_idx: task.task_idx,
               label: task.label,
               done: false,
+              variant: task.variant ?? null,
             });
           });
       });
@@ -396,6 +404,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
               task_idx: task.task_idx,
               label: task.label,
               done: false,
+              variant: task.variant ?? null,
             });
           });
       });
@@ -448,6 +457,31 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
   const activeIsTraining = activeIncident?.mode.startsWith('훈련') ?? false;
   const activeIsInitial = activeIncident?.scope === 'fire_initial';
   const activeIsFire = activeIncident?.disaster === '화재';
+
+  // 상황 확정(variant) — 하드코딩 없이 이 재난의 임무들에 실제로 붙어있는 variant 값에서 동적 생성.
+  // variant 임무가 하나도 없는 재난(정전·지진·승강기 등)은 이 배열이 비어 UI가 렌더되지 않음.
+  const availableVariants = useMemo(() => {
+    const set = new Set<string>();
+    tasks.forEach(t => { if (t.variant) set.add(t.variant); });
+    return [...set];
+  }, [tasks]);
+
+  // 상황 확정 권한 — isCommander와 무관하게 별도 지정(전기파트장은 isCommander=false라 이 체크가 필요).
+  // 출동조장(전기파트장) · 어드민(소방파트장) · 주야간 상황 담당(야소방)만 확정 가능.
+  const currentEmployee = employees.find(e => e.emp_no === currentUser.empNo);
+  const canConfirmVariant =
+    currentEmployee?.team === '전기파트장' ||
+    currentEmployee?.team === '소방파트장' ||
+    currentEmployee?.dept_code === '야소방';
+
+  const handleSetVariant = async (variant: string | null) => {
+    if (!activeIncident) return;
+    try {
+      await db.setIncidentVariant(activeIncident.id, variant);
+    } catch (err: any) {
+      alert('상황 확정 중 오류가 발생했습니다: ' + err.message);
+    }
+  };
 
   // 활동 로그: 발령 → 상태변경 → 임무완료 순으로 타임라인 구성
   const activityLog = useMemo(() => {
@@ -1047,6 +1081,47 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
       ) : (
         // ── 발령 중 모니터링 ────────────────────────
         <>
+          {/* 상황 확정(variant) — variant 임무가 있는 재난에서만 표시 */}
+          {availableVariants.length > 0 && canConfirmVariant && (
+            <div className="card" style={{ padding: '10px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>상황:</span>
+                <button
+                  type="button"
+                  onClick={() => handleSetVariant(null)}
+                  style={{
+                    padding: '6px 12px', borderRadius: '999px', cursor: 'pointer',
+                    fontSize: '12px', fontWeight: 700,
+                    background: !activeIncident?.variant ? 'rgba(148,163,184,0.25)' : 'rgba(255,255,255,0.05)',
+                    border: `1px solid ${!activeIncident?.variant ? 'rgba(148,163,184,0.6)' : 'rgba(255,255,255,0.1)'}`,
+                    color: !activeIncident?.variant ? '#e2e8f0' : 'var(--text-muted)',
+                  }}
+                >
+                  공통
+                </button>
+                {availableVariants.map(v => {
+                  const active = activeIncident?.variant === v;
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => handleSetVariant(v)}
+                      style={{
+                        padding: '6px 12px', borderRadius: '999px', cursor: 'pointer',
+                        fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap',
+                        background: active ? 'rgba(239,68,68,0.22)' : 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${active ? 'rgba(239,68,68,0.6)' : 'rgba(255,255,255,0.1)'}`,
+                        color: active ? '#f87171' : 'var(--text-muted)',
+                      }}
+                    >
+                      {VARIANT_LABELS[v] ?? v}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* 임무 수행률 */}
           <div className="card" style={{ padding: '12px 16px' }}>
             <div className="progress-header">

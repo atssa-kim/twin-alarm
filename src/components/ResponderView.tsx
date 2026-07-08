@@ -188,6 +188,9 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   const rawTasks = myRole
     ? tasks
         .filter(t => t.role === myRole.role)
+        // 상황 확정(variant): 공통 임무(variant 없음)는 항상 표시, variant 있는 임무는 그 상황이
+        // 확정된 경우에만 표시. phase 개념 도입 없이 단일 태그 비교로만 처리.
+        .filter(t => !t.variant || t.variant === activeIncident?.variant)
         .sort((a, b) => a.task_idx - b.task_idx)
     : [];
 
@@ -579,6 +582,8 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     if (!previewMyRole) return [];
     return [previewMyRole].flatMap(r =>
       (r.disaster_tasks ?? [])
+        // 발령 전 미리보기는 상황(variant) 미확정 상태이므로 공통 임무만 보여줌
+        .filter(dt => !dt.variant)
         .sort((a, b) => a.task_idx - b.task_idx)
         .map(dt => ({
           id: `preview_${dt.id}`,
