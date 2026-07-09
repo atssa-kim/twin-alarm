@@ -511,9 +511,9 @@ const App: React.FC = () => {
           onClick={() => setCurrentView('cmd')}
           style={{
             flex: '1 1 0', minWidth: '68px',
-            background: currentView === 'cmd' ? 'var(--on-navy)' : 'transparent',
+            background: currentView === 'cmd' ? 'rgba(255,255,255,0.16)' : 'transparent',
             border: 'none', borderRadius: '10px', margin: '0 2px',
-            color: currentView === 'cmd' ? 'var(--navy)' : 'var(--on-navy-muted)',
+            color: currentView === 'cmd' ? 'var(--on-navy)' : 'var(--on-navy-muted)', transition: 'all 0.25s ease',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: '6px 0',
           }}
@@ -525,9 +525,9 @@ const App: React.FC = () => {
           onClick={() => setCurrentView('responder')}
           style={{
             flex: '1 1 0', minWidth: '68px',
-            background: currentView === 'responder' ? 'var(--on-navy)' : 'transparent',
+            background: currentView === 'responder' ? 'rgba(255,255,255,0.16)' : 'transparent',
             border: 'none', borderRadius: '10px', margin: '0 2px',
-            color: currentView === 'responder' ? 'var(--navy)' : 'var(--on-navy-muted)',
+            color: currentView === 'responder' ? 'var(--on-navy)' : 'var(--on-navy-muted)', transition: 'all 0.25s ease',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: '6px 0',
           }}
@@ -539,9 +539,9 @@ const App: React.FC = () => {
           onClick={() => setCurrentView('cop')}
           style={{
             flex: '1 1 0', minWidth: '68px',
-            background: currentView === 'cop' ? 'var(--on-navy)' : 'transparent',
+            background: currentView === 'cop' ? 'rgba(255,255,255,0.16)' : 'transparent',
             border: 'none', borderRadius: '10px', margin: '0 2px',
-            color: currentView === 'cop' ? 'var(--navy)' : 'var(--on-navy-muted)',
+            color: currentView === 'cop' ? 'var(--on-navy)' : 'var(--on-navy-muted)', transition: 'all 0.25s ease',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: '6px 0',
           }}
@@ -554,9 +554,9 @@ const App: React.FC = () => {
             onClick={() => setCurrentView('admin')}
             style={{
               flex: '1 1 0', minWidth: '68px',
-              background: currentView === 'admin' ? 'var(--on-navy)' : 'transparent',
+              background: currentView === 'admin' ? 'rgba(255,255,255,0.16)' : 'transparent',
               border: 'none', borderRadius: '10px', margin: '0 2px',
-              color: currentView === 'admin' ? 'var(--navy)' : 'var(--on-navy-muted)',
+              color: currentView === 'admin' ? 'var(--on-navy)' : 'var(--on-navy-muted)', transition: 'all 0.25s ease',
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: '6px 0',
             }}
