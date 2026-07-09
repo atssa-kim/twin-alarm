@@ -492,16 +492,15 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Top Navigation Menu (topbar 바로 아래 고정) */}
+      {/* Top Navigation Menu (topbar와 이어지는 동일 폭·동일 배경의 네이비 바) */}
       <nav style={{
         display: 'flex',
         background: 'var(--navy)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '16px',
+        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
         height: '56px',
         alignItems: 'center',
-        padding: '0 8px',
-        margin: '8px 14px 0',
+        padding: '0 12px',
         position: 'sticky',
         top: 'calc(env(safe-area-inset-top, 0px) + 52px)',
         zIndex: 90,
