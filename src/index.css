@@ -70,10 +70,10 @@ img, svg, video, canvas, audio, iframe, embed, object {
   max-width: 100%;
 }
 
-/* App container — 뷰포트 폭의 90%로 고정, 모든 메뉴 동일 폭 보장 */
+/* App container — 모바일 전체 폭, 데스크톱은 480px 상한 */
 #app {
-  width: 90vw;
-  max-width: 90vw;
+  width: 100%;
+  max-width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
   background: var(--bg-app);

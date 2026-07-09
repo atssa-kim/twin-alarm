@@ -441,7 +441,7 @@ const App: React.FC = () => {
         height: '56px',
         alignItems: 'center',
         padding: '0 8px',
-        margin: '8px 14px 0',
+        margin: '8px 0 0',
         position: 'sticky',
         top: 'calc(env(safe-area-inset-top, 0px) + 52px)',
         zIndex: 90,
