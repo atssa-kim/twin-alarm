@@ -372,7 +372,7 @@ const App: React.FC = () => {
         justifyContent: 'center',
         alignItems: 'center',
         height: '100vh',
-        background: '#090d16',
+        background: 'var(--navy)',
         color: '#f8fafc',
         fontFamily: 'var(--font-body)'
       }}>
@@ -413,9 +413,9 @@ const App: React.FC = () => {
       <header className="topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {activeIncident ? (
-            <ShieldAlert size={20} color="var(--color-fire)" />
+            <ShieldAlert size={20} color="#f87171" />
           ) : (
-            <Shield size={20} color="var(--color-green)" />
+            <Shield size={20} color="#34d399" />
           )}
           <a
             href="https://atssa-kim.github.io/disa_app/"
@@ -463,7 +463,7 @@ const App: React.FC = () => {
               background: 'transparent', border: 'none', cursor: 'pointer',
               padding: '2px 4px',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
-              color: soundEnabled ? '#ef4444' : 'var(--text-muted)',
+              color: soundEnabled ? '#f87171' : 'var(--on-navy-muted)',
               opacity: soundEnabled ? 1 : 0.5,
             }}
             title={soundEnabled ? '육성 안내 켜짐' : '육성 안내 꺼짐'}
@@ -480,14 +480,14 @@ const App: React.FC = () => {
             onClick={handleLogout}
             style={{
               background: 'transparent', border: 'none',
-              color: 'var(--color-fire)', cursor: 'pointer',
+              color: '#f87171', cursor: 'pointer',
               padding: '2px 4px',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
             }}
             title="로그아웃"
           >
             <LogOut size={18} />
-            <span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1, color: 'var(--color-fire)' }}>exit</span>
+            <span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1, color: '#f87171' }}>exit</span>
           </button>
         </div>
       </header>
@@ -495,8 +495,7 @@ const App: React.FC = () => {
       {/* Top Navigation Menu (topbar 바로 아래 고정) */}
       <nav style={{
         display: 'flex',
-        background: 'rgba(15, 23, 42, 0.9)',
-        backdropFilter: 'blur(12px)',
+        background: 'var(--navy)',
         border: '1px solid rgba(255, 255, 255, 0.08)',
         borderRadius: '16px',
         height: '56px',
@@ -511,10 +510,12 @@ const App: React.FC = () => {
         <button
           onClick={() => setCurrentView('cmd')}
           style={{
-            flex: '1 1 0', minWidth: '68px', background: 'transparent', border: 'none',
-            color: currentView === 'cmd' ? '#3b82f6' : 'var(--text-muted)',
+            flex: '1 1 0', minWidth: '68px',
+            background: currentView === 'cmd' ? 'var(--on-navy)' : 'transparent',
+            border: 'none', borderRadius: '10px', margin: '0 2px',
+            color: currentView === 'cmd' ? 'var(--navy)' : 'var(--on-navy-muted)',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
-            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: '6px 0',
           }}
         >
           <LayoutDashboard size={17} />
@@ -523,10 +524,12 @@ const App: React.FC = () => {
         <button
           onClick={() => setCurrentView('responder')}
           style={{
-            flex: '1 1 0', minWidth: '68px', background: 'transparent', border: 'none',
-            color: currentView === 'responder' ? '#3b82f6' : 'var(--text-muted)',
+            flex: '1 1 0', minWidth: '68px',
+            background: currentView === 'responder' ? 'var(--on-navy)' : 'transparent',
+            border: 'none', borderRadius: '10px', margin: '0 2px',
+            color: currentView === 'responder' ? 'var(--navy)' : 'var(--on-navy-muted)',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
-            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: '6px 0',
           }}
         >
           <ClipboardCheck size={17} />
@@ -535,10 +538,12 @@ const App: React.FC = () => {
         <button
           onClick={() => setCurrentView('cop')}
           style={{
-            flex: '1 1 0', minWidth: '68px', background: 'transparent', border: 'none',
-            color: currentView === 'cop' ? '#3b82f6' : 'var(--text-muted)',
+            flex: '1 1 0', minWidth: '68px',
+            background: currentView === 'cop' ? 'var(--on-navy)' : 'transparent',
+            border: 'none', borderRadius: '10px', margin: '0 2px',
+            color: currentView === 'cop' ? 'var(--navy)' : 'var(--on-navy-muted)',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
-            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: '6px 0',
           }}
         >
           <Radio size={17} />
@@ -548,10 +553,12 @@ const App: React.FC = () => {
           <button
             onClick={() => setCurrentView('admin')}
             style={{
-              flex: '1 1 0', minWidth: '68px', background: 'transparent', border: 'none',
-              color: currentView === 'admin' ? '#3b82f6' : 'var(--text-muted)',
+              flex: '1 1 0', minWidth: '68px',
+              background: currentView === 'admin' ? 'var(--on-navy)' : 'transparent',
+              border: 'none', borderRadius: '10px', margin: '0 2px',
+              color: currentView === 'admin' ? 'var(--navy)' : 'var(--on-navy-muted)',
               display: 'flex', flexDirection: 'column', alignItems: 'center',
-              gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+              gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: '6px 0',
             }}
           >
             <Settings size={17} />

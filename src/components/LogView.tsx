@@ -80,7 +80,7 @@ export const LogView: React.FC<LogViewProps> = ({ activeIncident, responders, ta
         <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>활동 로그</h2>
         <span style={{
           fontSize: '11px', color: 'var(--text-muted)',
-          background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px',
+          background: 'rgba(11,37,69,0.06)', padding: '2px 8px', borderRadius: '6px',
           marginLeft: 'auto',
         }}>
           {allEntries.length}건
@@ -90,7 +90,7 @@ export const LogView: React.FC<LogViewProps> = ({ activeIncident, responders, ta
       {/* 재난 정보 */}
       <div style={{
         fontSize: '12px', color: 'var(--text-muted)', padding: '6px 12px',
-        background: 'rgba(255,255,255,0.03)', borderRadius: '10px',
+        background: 'rgba(11,37,69,0.035)', borderRadius: '10px',
         borderLeft: `3px solid ${activeIncident.mode === '실제' ? 'var(--color-fire)' : 'var(--color-water)'}`,
       }}>
         {activeIncident.mode === '실제' ? '⚠️ 실제상황' : '🎓 훈련상황'} · {activeIncident.disaster} · {activeIncident.location}
@@ -128,7 +128,7 @@ export const LogView: React.FC<LogViewProps> = ({ activeIncident, responders, ta
               <div key={i} style={{
                 display: 'grid',
                 gridTemplateColumns: '58px 1fr',
-                borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.04)',
+                borderBottom: isLast ? 'none' : '1px solid rgba(11,37,69,0.045)',
               }}>
                 {/* 시간 + 타임라인 선 */}
                 <div style={{
@@ -144,7 +144,7 @@ export const LogView: React.FC<LogViewProps> = ({ activeIncident, responders, ta
                   {!isLast && (
                     <div style={{
                       width: '1px', flex: 1, minHeight: '8px',
-                      background: 'rgba(255,255,255,0.08)',
+                      background: 'rgba(11,37,69,0.09)',
                     }} />
                   )}
                 </div>

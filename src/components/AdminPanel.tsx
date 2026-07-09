@@ -370,9 +370,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '9px 12px',
-    background: '#1e293b',
-    border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: '8px', color: '#e2e8f0',
+    background: '#f8fafc',
+    border: '1px solid var(--border-glow)',
+    borderRadius: '8px', color: 'var(--text-main)',
     fontSize: '13px', outline: 'none', boxSizing: 'border-box',
   };
 
@@ -389,19 +389,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       {rlsError && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 400,
-          background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(6px)',
+          background: 'rgba(11,37,69,0.55)', backdropFilter: 'blur(6px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
         }}>
           <div style={{
-            width: '100%', maxWidth: '420px', background: '#0f172a', borderRadius: '16px',
-            border: '1px solid rgba(239,68,68,0.4)', padding: '24px',
+            width: '100%', maxWidth: '420px', background: '#ffffff', borderRadius: '16px',
+            border: '1px solid rgba(220,38,38,0.3)', padding: '24px',
+            boxShadow: '0 20px 48px rgba(11,37,69,0.28)',
             display: 'flex', flexDirection: 'column', gap: '16px',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span style={{ fontSize: '22px' }}>🔒</span>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '15px', fontWeight: 800, color: '#fca5a5' }}>RLS 정책 오류</div>
-                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#b91c1c' }}>RLS 정책 오류</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
                   Supabase SQL Editor에서 1회 실행 필요
                 </div>
               </div>
@@ -410,25 +411,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
               </button>
             </div>
             <div style={{
-              background: 'rgba(0,0,0,0.4)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)',
-              padding: '12px 14px', fontFamily: 'monospace', fontSize: '12px', color: '#7dd3fc', lineHeight: 1.8,
+              background: '#f1f4f9', borderRadius: '8px', border: '1px solid var(--border-glow)',
+              padding: '12px 14px', fontFamily: 'monospace', fontSize: '12px', color: '#0369a1', lineHeight: 1.8,
             }}>
               {RLS_FIX_SQL.split('\n').map((line, i) => <div key={i}>{line}</div>)}
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={handleCopySQL} style={{
                 flex: 1, padding: '11px', borderRadius: '8px', cursor: 'pointer',
-                background: copied ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)',
-                border: `1px solid ${copied ? 'rgba(16,185,129,0.4)' : 'rgba(59,130,246,0.4)'}`,
-                color: copied ? '#34d399' : '#60a5fa', fontSize: '13px', fontWeight: 700,
+                background: copied ? 'rgba(15,157,99,0.12)' : 'rgba(37,99,235,0.1)',
+                border: `1px solid ${copied ? 'rgba(15,157,99,0.4)' : 'rgba(37,99,235,0.4)'}`,
+                color: copied ? '#0f9d63' : '#2563eb', fontSize: '13px', fontWeight: 700,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
               }}>
                 <Copy size={14} />{copied ? '복사 완료!' : 'SQL 복사'}
               </button>
               <button onClick={() => window.open(SUPABASE_SQL_URL, '_blank')} style={{
                 flex: 1, padding: '11px', borderRadius: '8px', cursor: 'pointer',
-                background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)',
-                color: '#34d399', fontSize: '13px', fontWeight: 700,
+                background: 'rgba(15,157,99,0.1)', border: '1px solid rgba(15,157,99,0.35)',
+                color: '#0f9d63', fontSize: '13px', fontWeight: 700,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
               }}>
                 <ExternalLink size={14} />Supabase 열기
@@ -443,15 +444,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
 
       {/* 헤더 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <Users size={18} color="#60a5fa" />
+        <Users size={18} color="#2563eb" />
         <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0, flex: 1 }}>인원 관리</h2>
-        <span style={{ fontSize: '11px', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px' }}>
+        <span style={{ fontSize: '11px', color: 'var(--text-muted)', background: 'rgba(11,37,69,0.06)', padding: '2px 8px', borderRadius: '6px' }}>
           총 {employees.length}명
         </span>
         {adminTab === 'list' && (
           <button onClick={openAdd} style={{
             display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 12px', borderRadius: '8px', cursor: 'pointer',
-            background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', color: '#60a5fa', fontSize: '12px', fontWeight: 700,
+            background: 'rgba(37,99,235,0.1)', border: '1px solid rgba(37,99,235,0.4)', color: '#2563eb', fontSize: '12px', fontWeight: 700,
           }}>
             <UserPlus size={14} />직원 추가
           </button>
@@ -459,7 +460,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       </div>
 
       {/* 탭 스위처 */}
-      <div style={{ display: 'flex', background: 'rgba(10,15,30,0.6)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '3px', gap: '3px' }}>
+      <div style={{ display: 'flex', background: '#eef1f6', border: '1px solid var(--border-glow)', borderRadius: '10px', padding: '3px', gap: '3px' }}>
         {([
           { key: 'list' as const, label: '👥 직원 목록' },
           { key: 'org'  as const, label: '🗂 재난 편제표' },
@@ -468,7 +469,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
             flex: 1, padding: '8px 0', fontSize: '12px', fontWeight: 700, cursor: 'pointer', borderRadius: '7px',
             background: adminTab === tab.key ? 'rgba(59,130,246,0.2)' : 'transparent',
             border: adminTab === tab.key ? '1px solid rgba(59,130,246,0.4)' : '1px solid transparent',
-            color: adminTab === tab.key ? '#60a5fa' : '#64748b',
+            color: adminTab === tab.key ? '#2563eb' : '#64748b',
             transition: 'all 0.15s',
           }}>
             {tab.label}
@@ -485,9 +486,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
               <button key={s} type="button" onClick={() => setOrgShift(s)} style={{
                 flex: 1, padding: '9px 0', borderRadius: '8px', cursor: 'pointer',
                 fontSize: '13px', fontWeight: 700,
-                background: orgShift === s ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${orgShift === s ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.1)'}`,
-                color: orgShift === s ? '#60a5fa' : 'var(--text-muted)',
+                background: orgShift === s ? 'rgba(59,130,246,0.2)' : 'rgba(11,37,69,0.05)',
+                border: `1px solid ${orgShift === s ? 'rgba(59,130,246,0.5)' : 'rgba(11,37,69,0.12)'}`,
+                color: orgShift === s ? '#2563eb' : 'var(--text-muted)',
               }}>
                 {s === 'day' ? '☀️ 주간' : '🌙 야간'}
               </button>
@@ -496,7 +497,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
               display: 'flex', alignItems: 'center', gap: '5px', padding: '0 12px', borderRadius: '8px',
               fontSize: '12px', fontWeight: 700, cursor: exportingOrg ? 'default' : 'pointer',
               background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)',
-              color: '#4ade80', opacity: exportingOrg ? 0.6 : 1, whiteSpace: 'nowrap',
+              color: '#16a34a', opacity: exportingOrg ? 0.6 : 1, whiteSpace: 'nowrap',
             }}>
               <Download size={13} />{exportingOrg ? '생성 중...' : '전체 조직도 다운로드'}
             </button>
@@ -508,9 +509,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
               <button key={d} type="button" onClick={() => setOrgDisaster(d)} style={{
                 padding: '10px 4px', borderRadius: '8px', cursor: 'pointer',
                 fontSize: '12px', fontWeight: 700, textAlign: 'center',
-                background: orgDisaster === d ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${orgDisaster === d ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.1)'}`,
-                color: orgDisaster === d ? '#60a5fa' : 'var(--text-muted)',
+                background: orgDisaster === d ? 'rgba(59,130,246,0.2)' : 'rgba(11,37,69,0.05)',
+                border: `1px solid ${orgDisaster === d ? 'rgba(59,130,246,0.5)' : 'rgba(11,37,69,0.12)'}`,
+                color: orgDisaster === d ? '#2563eb' : 'var(--text-muted)',
               }}>
                 {DISASTER_LABELS[d]}
               </button>
@@ -526,7 +527,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
               </div>
             )}
             {orgRoles.map(role => {
-              const color = role.bc || '#60a5fa';
+              const color = role.bc || '#2563eb';
               const badge = role.badge;
               const assignedNos = badgeAssignments[badge] ?? [];
               const assignedEmps = assignedNos
@@ -563,7 +564,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                       ) : (
                         assignedEmps.map(emp => (
                           <div key={emp.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0', flex: 1 }}>{emp.name}</span>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', flex: 1 }}>{emp.name}</span>
                             <span style={{ fontSize: '11px', color: '#64748b' }}>{emp.team} · {emp.role}</span>
                             <button type="button" disabled={badgeBusy} onClick={() => handleUnassignBadge(emp.emp_no, emp.name)} style={{
                               background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
@@ -576,10 +577,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                       )}
 
                       {/* 인원 추가 */}
-                      <div style={{ padding: '8px 14px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                      <div style={{ padding: '8px 14px', borderTop: '1px solid rgba(11,37,69,0.045)' }}>
                         {!isPicking ? (
                           <button type="button" onClick={() => { setAddPickerBadge(badge); setAddSearch(''); }} style={{
-                            fontSize: '11px', color: '#60a5fa', background: 'rgba(59,130,246,0.08)',
+                            fontSize: '11px', color: '#2563eb', background: 'rgba(59,130,246,0.08)',
                             border: '1px solid rgba(59,130,246,0.25)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer',
                           }}>
                             + 인원 추가
@@ -596,9 +597,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                                 {searchMatches.map(e => (
                                   <div key={e.emp_no} onClick={() => !badgeBusy && handleAssignBadge(e.emp_no, badge)} style={{
                                     display: 'flex', gap: '8px', padding: '5px 8px', borderRadius: '5px', cursor: 'pointer',
-                                    background: 'rgba(255,255,255,0.03)',
+                                    background: 'rgba(11,37,69,0.035)',
                                   }}>
-                                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#e2e8f0', flex: 1 }}>{e.name}</span>
+                                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', flex: 1 }}>{e.name}</span>
                                     <span style={{ fontSize: '11px', color: '#64748b' }}>{e.team}</span>
                                   </div>
                                 ))}
@@ -609,11 +610,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                                 style={{ ...inputStyle, flex: 1, padding: '6px 8px', fontSize: '11px' }}>
                                 <option value="">팀(파트) 전체 추가...</option>
                                 {ALL_TEAMS.map(t => (
-                                  <option key={t} value={t} style={{ background: '#1e293b', color: '#e2e8f0' }}>{t}</option>
+                                  <option key={t} value={t} style={{ background: '#f1f4f9', color: 'var(--text-main)' }}>{t}</option>
                                 ))}
                               </select>
                               <button type="button" disabled={!bulkTeam || badgeBusy} onClick={() => handleBulkAssignTeam(bulkTeam, badge)} style={{
-                                fontSize: '11px', color: '#34d399', background: 'rgba(16,185,129,0.08)',
+                                fontSize: '11px', color: '#0f9d63', background: 'rgba(16,185,129,0.08)',
                                 border: '1px solid rgba(16,185,129,0.25)', borderRadius: '6px', padding: '0 10px',
                                 cursor: bulkTeam ? 'pointer' : 'not-allowed', opacity: bulkTeam ? 1 : 0.5,
                               }}>
@@ -630,7 +631,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                       </div>
 
                       {/* 임무 미리보기 (재난대응메뉴얼 동기화 내용, 읽기전용) */}
-                      <div style={{ margin: '0 14px 10px', padding: '8px 10px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: `1px solid ${color}22` }}>
+                      <div style={{ margin: '0 14px 10px', padding: '8px 10px', borderRadius: '8px', background: 'rgba(11,37,69,0.03)', border: `1px solid ${color}22` }}>
                         {!role.disaster_tasks?.length ? (
                           <div style={{ fontSize: '11px', color: '#64748b' }}>이 배지의 임무 내용이 없습니다 (재난대응메뉴얼에서 등록 필요).</div>
                         ) : (
@@ -643,7 +644,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                                 .slice()
                                 .sort((a, b) => a.task_idx - b.task_idx)
                                 .map(t => (
-                                  <div key={t.id} style={{ fontSize: '11.5px', color: t.label.startsWith('◇') || t.label.startsWith('◆') ? '#e2e8f0' : '#94a3b8', fontWeight: t.label.startsWith('◇') || t.label.startsWith('◆') ? 700 : 400, paddingLeft: t.label.startsWith('┖') || t.label.startsWith('└') ? '12px' : '0' }}>
+                                  <div key={t.id} style={{ fontSize: '11.5px', color: t.label.startsWith('◇') || t.label.startsWith('◆') ? 'var(--text-main)' : 'var(--text-muted)', fontWeight: t.label.startsWith('◇') || t.label.startsWith('◆') ? 700 : 400, paddingLeft: t.label.startsWith('┖') || t.label.startsWith('└') ? '12px' : '0' }}>
                                     {t.label}
                                   </div>
                                 ))}
@@ -670,9 +671,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
               <button key={cat.label} type="button" onClick={() => { setFilterCategory(cat.label); setExpandedDept(cat.label === '전체' ? null : cat.label); }} style={{
                 padding: '10px 4px', borderRadius: '8px', cursor: 'pointer',
                 fontSize: '12px', fontWeight: 700, textAlign: 'center',
-                background: filterCategory === cat.label ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${filterCategory === cat.label ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.1)'}`,
-                color: filterCategory === cat.label ? '#60a5fa' : 'var(--text-muted)',
+                background: filterCategory === cat.label ? 'rgba(59,130,246,0.2)' : 'rgba(11,37,69,0.05)',
+                border: `1px solid ${filterCategory === cat.label ? 'rgba(59,130,246,0.5)' : 'rgba(11,37,69,0.12)'}`,
+                color: filterCategory === cat.label ? '#2563eb' : 'var(--text-muted)',
               }}>
                 {cat.label}
               </button>
@@ -684,7 +685,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
             <input
               type="text" placeholder="이름 · 역할 검색" value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ ...inputStyle, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)' }}
+              style={{ ...inputStyle, padding: '10px 14px', background: 'rgba(11,37,69,0.045)', border: '1px solid rgba(11,37,69,0.1)' }}
             />
 
             {departmentGroups.length === 0 ? (
@@ -697,7 +698,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                   <div key={dept.label} className="card" style={{ padding: 0, overflow: 'hidden' }}>
                     <div className="accordion-header" onClick={() => setExpandedDept(expandedDept === dept.label ? null : dept.label)} style={{
                       display: 'flex', alignItems: 'center', gap: '8px', padding: '11px 14px',
-                      borderBottom: expandedDept === dept.label ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                      borderBottom: expandedDept === dept.label ? '1px solid rgba(11,37,69,0.06)' : 'none',
                     }}>
                       <span style={{ fontSize: '13px', fontWeight: 800, flex: 1 }}>{dept.label}</span>
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{dept.emps.length}명</span>
@@ -709,7 +710,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                         {dept.shiftGroups ? (
                           dept.shiftGroups.map(sg => (
                             <div key={sg.shift}>
-                              <div style={{ padding: '6px 14px 5px', fontSize: '11px', fontWeight: 800, color: '#94a3b8', background: 'rgba(255,255,255,0.03)' }}>
+                              <div style={{ padding: '6px 14px 5px', fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', background: 'rgba(11,37,69,0.035)' }}>
                                 {sg.shift === '기타' ? '기타' : `${sg.shift}조`} · {sg.emps.length}명
                               </div>
                               {sg.emps.map(emp => <EmpRow key={emp.emp_no} emp={emp} badgeMap={allEmployeeBadges[emp.emp_no] ?? {}} onEdit={openEdit} onDelete={handleDelete} />)}
@@ -731,16 +732,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       {/* ── 추가/편집 모달 ── */}
       {modalMode && (
         <div
-          style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-end' }}
+          style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(11,37,69,0.55)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-end' }}
           onClick={e => { if (e.target === e.currentTarget) setModalMode(null); }}
         >
           <div style={{
-            width: '100%', maxHeight: '90vh', background: '#0f172a',
-            borderRadius: '20px 20px 0 0', border: '1px solid rgba(255,255,255,0.1)',
+            width: '100%', maxHeight: '90vh', background: '#ffffff',
+            borderRadius: '20px 20px 0 0', border: '1px solid rgba(11,37,69,0.12)',
+            boxShadow: '0 -8px 32px rgba(11,37,69,0.22)',
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }}>
             {/* 모달 헤더 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 18px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 18px', borderBottom: '1px solid rgba(11,37,69,0.06)', flexShrink: 0 }}>
               <span style={{ fontSize: '15px', fontWeight: 800, flex: 1 }}>
                 {modalMode === 'add' ? '직원 추가' : '직원 수정'}
               </span>
@@ -771,7 +773,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                 <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.team}
                   onChange={e => setForm(f => ({ ...f, team: e.target.value }))}>
                   {ALL_TEAMS.map(t => (
-                    <option key={t} value={t} style={{ background: '#1e293b', color: '#e2e8f0' }}>{t}</option>
+                    <option key={t} value={t} style={{ background: '#f1f4f9', color: 'var(--text-main)' }}>{t}</option>
                   ))}
                 </select>
               </div>
@@ -792,14 +794,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
               {/* 전화번호 */}
               <div>
                 <label style={labelStyle}>
-                  전화번호 <span style={{ color: '#f59e0b', fontWeight: 500, textTransform: 'none' }}>* 뒤 4자리 = 로그인 비밀번호</span>
+                  전화번호 <span style={{ color: '#b45309', fontWeight: 500, textTransform: 'none' }}>* 뒤 4자리 = 로그인 비밀번호</span>
                 </label>
                 <input style={inputStyle} type="tel" value={form.phone}
                   onChange={e => setForm(f => ({ ...f, phone: formatPhone(e.target.value) }))}
                   placeholder="숫자만 입력" />
                 {form.phone.replace(/\D/g, '').length >= 4 && (
-                  <div style={{ marginTop: '5px', fontSize: '11px', color: '#94a3b8' }}>
-                    로그인 비밀번호: <strong style={{ color: '#fbbf24' }}>{form.phone.replace(/\D/g, '').slice(-4)}</strong>
+                  <div style={{ marginTop: '5px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                    로그인 비밀번호: <strong style={{ color: '#b45309' }}>{form.phone.replace(/\D/g, '').slice(-4)}</strong>
                   </div>
                 )}
               </div>
@@ -820,7 +822,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                   />
                   <span style={{
                     padding: '0 10px', flexShrink: 0,
-                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)',
+                    background: 'rgba(11,37,69,0.045)', border: '1px solid rgba(11,37,69,0.14)',
                     borderLeft: 'none', borderRadius: '0 8px 8px 0',
                     color: '#64748b', fontSize: '12px', display: 'flex', alignItems: 'center',
                   }}>@sni.co.kr</span>
@@ -828,23 +830,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
               </div>
 
               {/* 지휘관 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'rgba(11,37,69,0.035)', borderRadius: '8px' }}>
                 <input type="checkbox" id="is_commander_chk" checked={form.is_commander}
                   onChange={e => setForm(f => ({ ...f, is_commander: e.target.checked }))}
                   style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
-                <label htmlFor="is_commander_chk" style={{ fontSize: '13px', fontWeight: 600, cursor: 'pointer', color: form.is_commander ? '#60a5fa' : '#94a3b8' }}>
+                <label htmlFor="is_commander_chk" style={{ fontSize: '13px', fontWeight: 600, cursor: 'pointer', color: form.is_commander ? '#2563eb' : 'var(--text-muted)' }}>
                   지휘관 권한 부여 (발령·종료 기능 접근 가능)
                 </label>
               </div>
             </div>
 
             {/* 저장 버튼 */}
-            <div style={{ padding: '12px 18px 20px', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ padding: '12px 18px 20px', flexShrink: 0, borderTop: '1px solid rgba(11,37,69,0.06)' }}>
               <button onClick={handleSave} disabled={saving} style={{
                 width: '100%', padding: '13px', borderRadius: '10px',
                 cursor: saving ? 'not-allowed' : 'pointer',
                 background: saving ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.2)',
-                border: '1px solid rgba(59,130,246,0.5)', color: '#60a5fa',
+                border: '1px solid rgba(59,130,246,0.5)', color: '#2563eb',
                 fontSize: '14px', fontWeight: 800,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
               }}>
@@ -873,15 +875,15 @@ const EmpRow: React.FC<{
     [badgeMap]
   );
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid rgba(11,37,69,0.045)' }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ fontSize: '14px', fontWeight: 700 }}>{emp.name}</span>
           {emp.role.includes('조장') && (
-            <span style={{ fontSize: '9px', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>조장</span>
+            <span style={{ fontSize: '9px', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', background: 'rgba(251,191,36,0.15)', color: '#b45309', border: '1px solid rgba(251,191,36,0.3)' }}>조장</span>
           )}
           {emp.is_commander && (
-            <span style={{ fontSize: '9px', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', background: 'rgba(59,130,246,0.2)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}>지휘관</span>
+            <span style={{ fontSize: '9px', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', background: 'rgba(59,130,246,0.2)', color: '#2563eb', border: '1px solid rgba(59,130,246,0.3)' }}>지휘관</span>
           )}
         </div>
         <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
@@ -893,7 +895,7 @@ const EmpRow: React.FC<{
             {badges.map(({ disaster, badge }) => (
               <span key={disaster} title={`${disaster} 발령 시 배지`} style={{
                 fontSize: '9.5px', padding: '1px 6px', borderRadius: '4px',
-                background: 'rgba(96,165,250,0.08)', color: '#93c5fd',
+                background: 'rgba(96,165,250,0.08)', color: '#1d4ed8',
                 border: '1px solid rgba(96,165,250,0.18)', whiteSpace: 'nowrap',
               }}>
                 {DISASTER_LABELS[disaster]}·{badge}
@@ -904,7 +906,7 @@ const EmpRow: React.FC<{
           <div style={{ fontSize: '9.5px', color: '#475569', marginTop: '5px' }}>재난 배지 매핑 없음</div>
         )}
       </div>
-      <button onClick={() => onEdit(emp)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#94a3b8', cursor: 'pointer', padding: '5px 8px' }}>
+      <button onClick={() => onEdit(emp)} style={{ background: 'rgba(11,37,69,0.05)', border: '1px solid rgba(11,37,69,0.12)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', padding: '5px 8px' }}>
         <Pencil size={13} />
       </button>
       <button onClick={() => onDelete(emp)} style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '6px', color: '#ef4444', cursor: 'pointer', padding: '5px 8px' }}>

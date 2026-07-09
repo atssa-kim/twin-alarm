@@ -29,10 +29,10 @@ const isShiftEmployee = (role: string) => role.includes('교대');
 
 
 const INCIDENT_GROUPS = [
-  { key: '지휘연락', label: '지휘연락', color: '#f59e0b' },
-  { key: '현장대응', label: '현장대응', color: '#ef4444' },
-  { key: '대피지원', label: '대피지원', color: '#60a5fa' },
-  { key: '교대',    label: '교대',    color: '#c084fc' },
+  { key: '지휘연락', label: '지휘연락', color: '#b45309' },
+  { key: '현장대응', label: '현장대응', color: '#dc2626' },
+  { key: '대피지원', label: '대피지원', color: '#2563eb' },
+  { key: '교대',    label: '교대',    color: '#7c3aed' },
 ] as const;
 type IncidentGroupKey = typeof INCIDENT_GROUPS[number]['key'];
 
@@ -502,9 +502,9 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
       .filter(r => r.status !== '미응답' && r.updated_at)
       .forEach(r => {
         const si: Record<string, { icon: string; color: string }> = {
-          '출동중': { icon: '🚗', color: '#f97316' },
-          '현장':   { icon: '📍', color: '#38bdf8' },
-          '복귀':   { icon: '🏁', color: '#4ade80' },
+          '출동중': { icon: '🚗', color: '#c2410c' },
+          '현장':   { icon: '📍', color: '#0284c7' },
+          '복귀':   { icon: '🏁', color: '#16a34a' },
         };
         const s = si[r.status] ?? { icon: '●', color: '#64748b' };
         entries.push({ time: r.updated_at, icon: s.icon, text: `${r.name} — ${r.status}`, sub: r.team, color: s.color });
@@ -518,7 +518,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
           icon: '✅',
           text: t.label.replace(/^[◇◆┖└]\s*/, ''),
           sub: `[${t.role}]${t.done_by ? ` · ${t.done_by}` : ''}`,
-          color: '#10b981',
+          color: '#0f9d63',
         });
       });
 
@@ -551,10 +551,10 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                   onClick={() => setShowVoicePicker(v => !v)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '5px',
-                    background: showVoicePicker ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.05)',
-                    border: showVoicePicker ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                    background: showVoicePicker ? 'rgba(37,99,235,0.1)' : 'rgba(11,37,69,0.05)',
+                    border: showVoicePicker ? '1px solid rgba(37,99,235,0.35)' : '1px solid rgba(11,37,69,0.12)',
                     borderRadius: '8px', padding: '6px 10px',
-                    color: showVoicePicker ? '#60a5fa' : 'var(--text-muted)',
+                    color: showVoicePicker ? '#2563eb' : 'var(--text-muted)',
                     fontSize: '12px', fontWeight: 700, cursor: 'pointer',
                   }}
                 >
@@ -563,13 +563,13 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                 {showVoicePicker && (
                   <div style={{
                     position: 'absolute', top: '100%', right: 0, marginTop: '6px',
-                    background: 'rgba(15,23,42,0.97)', backdropFilter: 'blur(16px)',
-                    border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
+                    background: '#ffffff',
+                    border: '1px solid rgba(11,37,69,0.12)', borderRadius: '12px',
                     padding: '6px 0', minWidth: '200px', maxHeight: '260px',
-                    overflowY: 'auto', zIndex: 200, boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+                    overflowY: 'auto', zIndex: 200, boxShadow: '0 12px 32px rgba(11,37,69,0.18)',
                   }}>
-                    <div style={{ padding: '6px 14px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>🎙 TTS 화자 선택</span>
+                    <div style={{ padding: '6px 14px 10px', borderBottom: '1px solid rgba(11,37,69,0.08)', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>🎙 TTS 화자 선택</span>
                     </div>
                     {availableVoices.length === 0 ? (
                       <div style={{ padding: '10px 14px', color: '#64748b', fontSize: '13px' }}>사용 가능한 화자 없음</div>
@@ -582,9 +582,9 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                             style={{
                               display: 'flex', alignItems: 'center', gap: '8px',
                               width: '100%', padding: '9px 14px',
-                              background: selectedVoiceName === voice.name ? 'rgba(59,130,246,0.15)' : 'transparent',
+                              background: selectedVoiceName === voice.name ? 'rgba(37,99,235,0.1)' : 'transparent',
                               border: 'none',
-                              color: selectedVoiceName === voice.name ? '#60a5fa' : '#e2e8f0',
+                              color: selectedVoiceName === voice.name ? '#2563eb' : 'var(--text-main)',
                               fontSize: '13px', cursor: 'pointer', textAlign: 'left',
                             }}
                           >
@@ -630,7 +630,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                       : '';
                     return (
                       <div key={mode} style={{
-                        border: `1px solid ${isSel ? color + '55' : 'rgba(255,255,255,0.08)'}`,
+                        border: `1px solid ${isSel ? color + '55' : 'rgba(11,37,69,0.09)'}`,
                         borderRadius: '10px', overflow: 'hidden',
                         background: isSel ? color + '08' : 'transparent',
                         transition: 'all 0.2s',
@@ -657,7 +657,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                           <div style={{
                             display: 'flex', gap: '6px', padding: '8px 12px 10px',
                             borderTop: `1px solid ${color}22`,
-                            background: 'rgba(0,0,0,0.18)',
+                            background: 'rgba(11,37,69,0.03)',
                           }}>
                             {subOptions.map(opt => (
                               <button
@@ -667,8 +667,8 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                 style={{
                                   flex: 1, padding: '8px 0', borderRadius: '8px', cursor: 'pointer',
                                   fontSize: '12px', fontWeight: 700,
-                                  background: fireSubMode === opt.key ? color + '22' : 'rgba(255,255,255,0.04)',
-                                  border: `1px solid ${fireSubMode === opt.key ? color + '66' : 'rgba(255,255,255,0.07)'}`,
+                                  background: fireSubMode === opt.key ? color + '22' : 'rgba(11,37,69,0.045)',
+                                  border: `1px solid ${fireSubMode === opt.key ? color + '66' : 'rgba(11,37,69,0.07)'}`,
                                   color: fireSubMode === opt.key ? color : '#64748b',
                                   transition: 'all 0.15s',
                                 }}
@@ -681,7 +681,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                         {isSel && isFireDisaster && (
                           <div style={{
                             display: 'flex', gap: '6px', padding: '0 12px 10px',
-                            background: 'rgba(0,0,0,0.18)',
+                            background: 'rgba(11,37,69,0.03)',
                           }}>
                             {([{ key: 'day' as const, icon: '☀️', label: '주간' }, { key: 'night' as const, icon: '🌙', label: '야간' }]).map(opt => (
                               <button
@@ -691,8 +691,8 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                 style={{
                                   flex: 1, padding: '8px 0', borderRadius: '8px', cursor: 'pointer',
                                   fontSize: '12px', fontWeight: 700,
-                                  background: fireShift === opt.key ? color + '22' : 'rgba(255,255,255,0.04)',
-                                  border: `1px solid ${fireShift === opt.key ? color + '66' : 'rgba(255,255,255,0.07)'}`,
+                                  background: fireShift === opt.key ? color + '22' : 'rgba(11,37,69,0.045)',
+                                  border: `1px solid ${fireShift === opt.key ? color + '66' : 'rgba(11,37,69,0.07)'}`,
                                   color: fireShift === opt.key ? color : '#64748b',
                                   transition: 'all 0.15s',
                                 }}
@@ -728,7 +728,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                     padding: '10px 14px', borderRadius: '10px', cursor: 'pointer',
                     border: '1px solid rgba(99,102,241,0.4)',
                     background: showParticipants ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.08)',
-                    color: '#818cf8', fontSize: '13px', fontWeight: 700,
+                    color: '#4f46e5', fontSize: '13px', fontWeight: 700,
                   }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <UserCheck size={16} />
@@ -740,9 +740,9 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                 </button>
 
                 {showParticipants && (
-                  <div style={{ marginTop: '6px', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '10px', overflow: 'hidden', background: 'rgba(15,23,42,0.7)' }}>
+                  <div style={{ marginTop: '6px', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '10px', overflow: 'hidden', background: 'rgba(11,37,69,0.03)' }}>
                     {/* ── 메뉴바 ── */}
-                    <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)', overflowX: 'auto' }}>
+                    <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(11,37,69,0.06)', overflowX: 'auto' }}>
                       {(() => {
                         const allIds = employees.map(e => e.emp_no);
                         const allSel = allIds.length > 0 && allIds.every(id => selectedEmps.has(id));
@@ -750,9 +750,9 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                         return (
                           <button type="button" onClick={() => setSelectedEmps(allSel ? new Set() : new Set(allIds))} style={{
                             padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 800, flexShrink: 0,
-                            border: `1px solid ${allSel ? '#818cf8' : partSel ? '#818cf866' : '#818cf844'}`,
-                            background: allSel ? '#818cf822' : partSel ? '#818cf80d' : 'transparent',
-                            color: allSel ? '#818cf8' : partSel ? '#818cf8aa' : '#64748b',
+                            border: `1px solid ${allSel ? '#4f46e5' : partSel ? '#4f46e566' : '#4f46e544'}`,
+                            background: allSel ? '#4f46e522' : partSel ? '#4f46e50d' : 'transparent',
+                            color: allSel ? '#4f46e5' : partSel ? '#4f46e5aa' : '#64748b',
                           }}>전체</button>
                         );
                       })()}
@@ -811,10 +811,10 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                           <div key={emp.emp_no} onClick={() => setSelectedEmps(prev => {
                             const next = new Set(prev); next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no); return next;
                           })} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '5px 4px', cursor: 'pointer' }}>
-                            <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? c : 'rgba(255,255,255,0.15)'}`, background: checked ? c + '33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? c : 'rgba(11,37,69,0.18)'}`, background: checked ? c + '33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               {checked && <span style={{ color: c, fontSize: '9px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
                             </div>
-                            <span style={{ fontSize: '12px', flex: 1, color: checked ? '#e2e8f0' : '#94a3b8' }}>{emp.name}</span>
+                            <span style={{ fontSize: '12px', flex: 1, color: checked ? 'var(--text-main)' : 'var(--text-muted)' }}>{emp.name}</span>
                             <span style={{ fontSize: '10px', color: '#475569' }}>{emp.role}</span>
                           </div>
                         );
@@ -822,19 +822,19 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
 
                       return (
                         <div key={grpKey} style={{ borderBottom: `1px solid ${color}33` }}>
-                          <div onClick={() => setOpenAccordions(prev => { const next = new Set(prev); next.has(grpKey) ? next.delete(grpKey) : next.add(grpKey); return next; })} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', cursor: 'pointer', borderLeft: `3px solid ${selCount > 0 ? color : 'rgba(255,255,255,0.08)'}`, background: selCount > 0 ? color + '08' : 'transparent' }}>
-                            <span style={{ flex: 1, fontSize: '13px', fontWeight: 700, color: selCount > 0 ? color : '#94a3b8' }}>{grpKey}</span>
+                          <div onClick={() => setOpenAccordions(prev => { const next = new Set(prev); next.has(grpKey) ? next.delete(grpKey) : next.add(grpKey); return next; })} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', cursor: 'pointer', borderLeft: `3px solid ${selCount > 0 ? color : 'rgba(11,37,69,0.09)'}`, background: selCount > 0 ? color + '08' : 'transparent' }}>
+                            <span style={{ flex: 1, fontSize: '13px', fontWeight: 700, color: selCount > 0 ? color : 'var(--text-muted)' }}>{grpKey}</span>
                             <span style={{ fontSize: '11px', color: selCount > 0 ? color : '#475569', fontWeight: 600 }}>{selCount}/{grpEmps.length}명</span>
                             <button type="button" onClick={e => { e.stopPropagation(); toggleGrpSel(); }} style={{ padding: '3px 9px', borderRadius: '5px', fontSize: '10px', fontWeight: 700, border: `1px solid ${allSel ? color : color + '55'}`, background: allSel ? color + '22' : 'transparent', color: allSel ? color : color + 'aa', cursor: 'pointer', flexShrink: 0, marginLeft: '6px' }}>{allSel ? '해제' : '선택'}</button>
                             <span style={{ fontSize: '11px', color: '#475569', marginLeft: '4px' }}>{isOpen ? '▲' : '▼'}</span>
                           </div>
                           {isOpen && (
-                            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 12px 8px' }}>
+                            <div style={{ background: 'rgba(11,37,69,0.025)', padding: '2px 12px 8px' }}>
                               {grpKey === '교대' ? (
                                 (['A', 'B', 'C', 'D'] as const).map(cho => {
                                   const choEmps = grpEmps.filter(e => e.role.includes(cho + '조'));
                                   if (choEmps.length === 0) return null;
-                                  const cc = ({ A: '#a5b4fc', B: '#86efac', C: '#fdba74', D: '#f9a8d4' } as Record<string, string>)[cho];
+                                  const cc = ({ A: '#4f46e5', B: '#86efac', C: '#fdba74', D: '#f9a8d4' } as Record<string, string>)[cho];
                                   const choSel = choEmps.filter(e => selectedEmps.has(e.emp_no)).length;
                                   const allChoSel = choSel === choEmps.length;
                                   return (
@@ -844,7 +844,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                         if (allChoSel) choEmps.forEach(e => next.delete(e.emp_no));
                                         else choEmps.forEach(e => next.add(e.emp_no));
                                         return next;
-                                      })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 4px 3px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', marginBottom: '2px' }}>
+                                      })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 4px 3px', cursor: 'pointer', borderBottom: '1px solid rgba(11,37,69,0.045)', marginBottom: '2px' }}>
                                         <span style={{ fontSize: '11px', color: cc, fontWeight: 700 }}>{cho}조</span>
                                         <span style={{ fontSize: '10px', color: '#475569' }}>{choSel}/{choEmps.length}</span>
                                         <span style={{ marginLeft: 'auto', fontSize: '10px', color: allChoSel ? cc : '#475569' }}>{allChoSel ? '전체해제' : '전체선택'}</span>
@@ -864,7 +864,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                         if (allTSel) teamEmps.forEach(e => next.delete(e.emp_no));
                                         else teamEmps.forEach(e => next.add(e.emp_no));
                                         return next;
-                                      })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 4px 2px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', marginBottom: '2px' }}>
+                                      })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 4px 2px', cursor: 'pointer', borderBottom: '1px solid rgba(11,37,69,0.045)', marginBottom: '2px' }}>
                                         <span style={{ fontSize: '11px', color: tSel > 0 ? color : '#64748b', fontWeight: 700, flex: 1 }}>{team}</span>
                                         <span style={{ fontSize: '10px', color: '#475569' }}>{tSel}/{teamEmps.length}</span>
                                       </div>
@@ -880,7 +880,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                     })}
 
                     <div style={{ padding: '5px 12px 7px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>
-                      총 <strong style={{ color: '#e2e8f0' }}>{selectedEmps.size}명</strong> 선택
+                      총 <strong style={{ color: 'var(--text-main)' }}>{selectedEmps.size}명</strong> 선택
                     </div>
                   </div>
                 )}
@@ -908,8 +908,8 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
 
           {showLog && (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <span style={{ fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderBottom: '1px solid rgba(11,37,69,0.06)' }}>
+                <span style={{ fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
                   <History size={14} /> 종료 재난 기록 (최근 30건)
                 </span>
                 <button type="button" onClick={() => setShowLog(false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '2px', display: 'flex' }}>
@@ -922,16 +922,16 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                 logIncidents.map(inc => {
                   const isExpanded = expandedLogId === inc.id;
                   return (
-                    <div key={inc.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                      <div onClick={() => loadLogDetail(inc.id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '11px 14px', cursor: 'pointer', background: isExpanded ? 'rgba(255,255,255,0.04)' : 'transparent' }}>
+                    <div key={inc.id} style={{ borderBottom: '1px solid rgba(11,37,69,0.045)' }}>
+                      <div onClick={() => loadLogDetail(inc.id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '11px 14px', cursor: 'pointer', background: isExpanded ? 'rgba(11,37,69,0.045)' : 'transparent' }}>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#e2e8f0' }}>{inc.disaster} — {inc.location}</div>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>{inc.disaster} — {inc.location}</div>
                           <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{inc.mode} · {fmtDate(inc.declared_at)}</div>
                         </div>
                         <ChevronDown size={14} color="#475569" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
                       </div>
                       {isExpanded && (
-                        <div style={{ padding: '10px 14px 14px', background: 'rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        <div style={{ padding: '10px 14px 14px', background: 'rgba(11,37,69,0.03)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                           {logDetailLoading ? (
                             <div style={{ fontSize: '12px', color: '#64748b', textAlign: 'center', padding: '12px' }}>로딩 중...</div>
                           ) : logDetail ? (() => {
@@ -959,9 +959,9 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                       ['구분', inc.mode],
                                       ['위치', inc.location],
                                     ] as [string, string][]).map(([lbl, val]) => (
-                                      <div key={lbl} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '6px', padding: '5px 8px' }}>
+                                      <div key={lbl} style={{ background: 'rgba(11,37,69,0.045)', borderRadius: '6px', padding: '5px 8px' }}>
                                         <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, marginBottom: '2px' }}>{lbl}</div>
-                                        <div style={{ fontSize: '12px', color: '#e2e8f0', fontWeight: 600, wordBreak: 'break-all' }}>{val}</div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-main)', fontWeight: 600, wordBreak: 'break-all' }}>{val}</div>
                                       </div>
                                     ))}
                                   </div>
@@ -974,16 +974,16 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                     padding: '5px 11px', borderRadius: '6px', cursor: 'pointer',
                                     fontSize: '11px', fontWeight: 700,
                                     background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)',
-                                    color: '#a5b4fc',
+                                    color: '#4f46e5',
                                   }}>📄 보고서 다운로드</button>
                                 </div>
 
                                 {/* ② 출동 현황 아코디언 */}
-                                <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: '7px', overflow: 'hidden' }}>
+                                <div style={{ border: '1px solid rgba(11,37,69,0.09)', borderRadius: '7px', overflow: 'hidden' }}>
                                   <div onClick={() => toggleSub(inc.id, 'responders')} style={{
                                     display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', cursor: 'pointer',
-                                    background: 'rgba(255,255,255,0.04)',
-                                    borderBottom: isSubOpen(inc.id, 'responders') ? '1px solid rgba(255,255,255,0.07)' : 'none',
+                                    background: 'rgba(11,37,69,0.045)',
+                                    borderBottom: isSubOpen(inc.id, 'responders') ? '1px solid rgba(11,37,69,0.07)' : 'none',
                                   }}>
                                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', flex: 1 }}>
                                       👥 출동 현황 ({logDetail.responders.length}명)
@@ -992,7 +992,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                       {(['현장', '복귀', '출동중', '미응답'] as const).map(st => {
                                         const cnt = logDetail!.responders.filter(r => r.status === st).length;
                                         if (cnt === 0) return null;
-                                        const c = st==='출동중'?'#f97316':st==='현장'?'#38bdf8':st==='복귀'?'#4ade80':'#64748b';
+                                        const c = st==='출동중'?'#c2410c':st==='현장'?'#0284c7':st==='복귀'?'#16a34a':'#64748b';
                                         return <span key={st} style={{ fontSize: '10px', padding: '1px 5px', borderRadius: '3px', background: c+'22', color: c, fontWeight: 700 }}>{st} {cnt}</span>;
                                       })}
                                     </div>
@@ -1006,11 +1006,11 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                           return ord.indexOf(a.status) - ord.indexOf(b.status);
                                         })
                                         .map(r => {
-                                          const c = r.status==='출동중'?'#f97316':r.status==='현장'?'#38bdf8':r.status==='복귀'?'#4ade80':'#64748b';
+                                          const c = r.status==='출동중'?'#c2410c':r.status==='현장'?'#0284c7':r.status==='복귀'?'#16a34a':'#64748b';
                                           return (
-                                            <div key={r.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 6px', borderRadius: '5px', background: 'rgba(255,255,255,0.03)' }}>
+                                            <div key={r.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 6px', borderRadius: '5px', background: 'rgba(11,37,69,0.035)' }}>
                                               <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: c, flexShrink: 0 }} />
-                                              <span style={{ fontSize: '12px', color: '#e2e8f0', flex: 1 }}>{r.name}</span>
+                                              <span style={{ fontSize: '12px', color: 'var(--text-main)', flex: 1 }}>{r.name}</span>
                                               <span style={{ fontSize: '10px', color: '#475569' }}>{r.team}</span>
                                               <span style={{ fontSize: '11px', color: c, fontWeight: 700, marginLeft: '4px' }}>{r.status}</span>
                                             </div>
@@ -1022,20 +1022,20 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                 </div>
 
                                 {/* ③ 임무 수행 내역 아코디언 */}
-                                <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: '7px', overflow: 'hidden' }}>
+                                <div style={{ border: '1px solid rgba(11,37,69,0.09)', borderRadius: '7px', overflow: 'hidden' }}>
                                   <div onClick={() => toggleSub(inc.id, 'tasks')} style={{
                                     display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', cursor: 'pointer',
-                                    background: 'rgba(255,255,255,0.04)',
-                                    borderBottom: isSubOpen(inc.id, 'tasks') ? '1px solid rgba(255,255,255,0.07)' : 'none',
+                                    background: 'rgba(11,37,69,0.045)',
+                                    borderBottom: isSubOpen(inc.id, 'tasks') ? '1px solid rgba(11,37,69,0.07)' : 'none',
                                   }}>
                                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', flex: 1 }}>
                                       ✅ 임무 수행 내역
                                     </span>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                      <div style={{ width: '60px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.06)' }}>
-                                        <div style={{ width: `${pct}%`, height: '100%', borderRadius: '2px', background: '#10b981' }} />
+                                      <div style={{ width: '60px', height: '4px', borderRadius: '2px', background: 'rgba(11,37,69,0.06)' }}>
+                                        <div style={{ width: `${pct}%`, height: '100%', borderRadius: '2px', background: '#0f9d63' }} />
                                       </div>
-                                      <span style={{ fontSize: '10px', color: '#10b981', fontWeight: 700, whiteSpace: 'nowrap' as const }}>{pct}% ({doneTasks.length}/{checkable.length})</span>
+                                      <span style={{ fontSize: '10px', color: '#0f9d63', fontWeight: 700, whiteSpace: 'nowrap' as const }}>{pct}% ({doneTasks.length}/{checkable.length})</span>
                                     </div>
                                     <ChevronDown size={13} color="#475569" style={{ transform: isSubOpen(inc.id, 'tasks') ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
                                   </div>
@@ -1045,13 +1045,13 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                         const doneInRole = roleTasks.filter(t => t.done).length;
                                         return (
                                           <div key={role}>
-                                            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, padding: '3px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '4px' }}>
+                                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, padding: '3px 0', borderBottom: '1px solid rgba(11,37,69,0.06)', marginBottom: '4px' }}>
                                               {role} ({doneInRole}/{roleTasks.length})
                                             </div>
                                             {[...roleTasks].sort((a, b) => a.task_idx - b.task_idx).map(t => (
                                               <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', padding: '3px 2px', opacity: t.done ? 1 : 0.4 }}>
                                                 <span style={{ fontSize: '11px', marginTop: '1px', flexShrink: 0 }}>{t.done ? '✅' : '⬜'}</span>
-                                                <span style={{ fontSize: '12px', color: t.done ? '#e2e8f0' : '#64748b', flex: 1 }}>{t.label}</span>
+                                                <span style={{ fontSize: '12px', color: t.done ? 'var(--text-main)' : '#64748b', flex: 1 }}>{t.label}</span>
                                                 {t.done && (
                                                   <span style={{ fontSize: '10px', color: '#475569', flexShrink: 0, textAlign: 'right' as const }}>
                                                     {t.done_by ? getEmpName(t.done_by) : ''}
@@ -1093,9 +1093,9 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                   style={{
                     padding: '6px 12px', borderRadius: '999px', cursor: 'pointer',
                     fontSize: '12px', fontWeight: 700,
-                    background: !activeIncident?.variant ? 'rgba(148,163,184,0.25)' : 'rgba(255,255,255,0.05)',
-                    border: `1px solid ${!activeIncident?.variant ? 'rgba(148,163,184,0.6)' : 'rgba(255,255,255,0.1)'}`,
-                    color: !activeIncident?.variant ? '#e2e8f0' : 'var(--text-muted)',
+                    background: !activeIncident?.variant ? 'rgba(148,163,184,0.25)' : 'rgba(11,37,69,0.05)',
+                    border: `1px solid ${!activeIncident?.variant ? 'rgba(148,163,184,0.6)' : 'rgba(11,37,69,0.12)'}`,
+                    color: !activeIncident?.variant ? 'var(--text-main)' : 'var(--text-muted)',
                   }}
                 >
                   공통
@@ -1110,9 +1110,9 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                       style={{
                         padding: '6px 12px', borderRadius: '999px', cursor: 'pointer',
                         fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap',
-                        background: active ? 'rgba(239,68,68,0.22)' : 'rgba(255,255,255,0.05)',
-                        border: `1px solid ${active ? 'rgba(239,68,68,0.6)' : 'rgba(255,255,255,0.1)'}`,
-                        color: active ? '#f87171' : 'var(--text-muted)',
+                        background: active ? 'rgba(239,68,68,0.22)' : 'rgba(11,37,69,0.05)',
+                        border: `1px solid ${active ? 'rgba(239,68,68,0.6)' : 'rgba(11,37,69,0.12)'}`,
+                        color: active ? '#dc2626' : 'var(--text-muted)',
                       }}
                     >
                       {VARIANT_LABELS[v] ?? v}
@@ -1133,7 +1133,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
               <strong style={{ fontSize: '18px', color: 'var(--color-green)' }}>{overallProgressPct}%</strong>
             </div>
             <div className="progress-track" style={{ height: '12px' }}>
-              <div className="progress-fill" style={{ width: `${overallProgressPct}%`, background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)' }}></div>
+              <div className="progress-fill" style={{ width: `${overallProgressPct}%`, background: 'linear-gradient(90deg, #0f9d63 0%, #059669 100%)' }}></div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
               <span>완료 임무: {completedTasksCount}건</span>
@@ -1147,12 +1147,12 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
             <div
               className="accordion-header"
               onClick={() => setShowResponders(v => !v)}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', flexShrink: 0, borderBottom: showResponders ? '1px solid rgba(255,255,255,0.06)' : 'none' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', flexShrink: 0, borderBottom: showResponders ? '1px solid rgba(11,37,69,0.06)' : 'none' }}
             >
               <Users size={18} color="var(--color-water)" />
               <span style={{ flex: 1, fontSize: '14px', fontWeight: 700 }}>
                 대원 출동 현황
-                {activeIsInitial && <span style={{ fontSize: '11px', color: '#fbbf24', marginLeft: '6px' }}>초기출동조</span>}
+                {activeIsInitial && <span style={{ fontSize: '11px', color: '#d9820a', marginLeft: '6px' }}>초기출동조</span>}
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span style={{ fontSize: '12px', color: 'var(--color-power)', fontWeight: 700 }}>출동 {respondersByStatus('출동중').length}</span>
@@ -1165,11 +1165,11 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
             {showResponders && (
               <>
                 {/* 탭 버튼 */}
-                <div style={{ display: 'flex', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ display: 'flex', flexShrink: 0, borderBottom: '1px solid rgba(11,37,69,0.06)' }}>
                   {([
-                    { key: 'roster' as const, label: '👥 출동', color: '#38bdf8' },
-                    { key: 'log'    as const, label: '📋 활동', color: '#a855f7' },
-                    { key: 'ai'     as const, label: '🤖 AI보고서', color: '#10b981' },
+                    { key: 'roster' as const, label: '👥 출동', color: '#0284c7' },
+                    { key: 'log'    as const, label: '📋 활동', color: '#7c3aed' },
+                    { key: 'ai'     as const, label: '🤖 AI보고서', color: '#0f9d63' },
                   ]).map(tab => (
                     <button
                       key={tab.key}
@@ -1206,7 +1206,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                         </div>
                       ) : (
                         validResponders.map((resp) => {
-                          let dotColor = '#94a3b8';
+                          let dotColor = 'var(--text-muted)';
                           if (resp.status === '출동중') dotColor = 'var(--color-power)';
                           if (resp.status === '현장') dotColor = 'var(--color-water)';
                           if (resp.status === '복귀') dotColor = 'var(--color-green)';
@@ -1238,7 +1238,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
                         {activityLog.map((entry, i) => (
-                          <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '8px 0', borderBottom: i < activityLog.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+                          <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '8px 0', borderBottom: i < activityLog.length - 1 ? '1px solid rgba(11,37,69,0.045)' : 'none' }}>
                             <div style={{ fontSize: '11px', color: '#475569', fontWeight: 700, flexShrink: 0, width: '38px', paddingTop: '2px' }}>
                               {fmtTime(entry.time)}
                             </div>
@@ -1260,7 +1260,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                     {aiLoading ? (
                       <div style={{ textAlign: 'center', padding: '30px 20px', color: '#64748b' }}>
                         <div style={{ fontSize: '28px', marginBottom: '10px' }}>🤖</div>
-                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#10b981' }}>AI가 상황을 분석 중입니다...</div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f9d63' }}>AI가 상황을 분석 중입니다...</div>
                         <div style={{ fontSize: '11px', marginTop: '6px', color: '#475569' }}>현재 데이터를 종합하여 보고서를 작성합니다</div>
                       </div>
                     ) : aiReport ? (
@@ -1281,14 +1281,14 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                           </button>
                         </div>
                         <div style={{
-                          fontSize: '12px', lineHeight: 1.8, color: '#e2e8f0',
+                          fontSize: '12px', lineHeight: 1.8, color: 'var(--text-main)',
                           whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                         }}>
                           {aiReport.split('\n').map((line, i) => {
-                            if (line.startsWith('## ')) return <div key={i} style={{ fontSize: '14px', fontWeight: 800, color: '#f8fafc', margin: '6px 0 8px', paddingBottom: '4px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>{line.replace('## ', '')}</div>;
-                            if (line.startsWith('**') && line.endsWith('**')) return <div key={i} style={{ fontSize: '12px', fontWeight: 700, color: '#10b981', margin: '10px 0 4px' }}>{line.replace(/\*\*/g, '')}</div>;
+                            if (line.startsWith('## ')) return <div key={i} style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-main)', margin: '6px 0 8px', paddingBottom: '4px', borderBottom: '1px solid rgba(11,37,69,0.12)' }}>{line.replace('## ', '')}</div>;
+                            if (line.startsWith('**') && line.endsWith('**')) return <div key={i} style={{ fontSize: '12px', fontWeight: 700, color: '#0f9d63', margin: '10px 0 4px' }}>{line.replace(/\*\*/g, '')}</div>;
                             if (line.trim() === '') return <div key={i} style={{ height: '4px' }} />;
-                            return <div key={i} style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: 1.7 }}>{line}</div>;
+                            return <div key={i} style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.7 }}>{line}</div>;
                           })}
                         </div>
                       </div>
@@ -1320,7 +1320,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                           padding: '10px 14px', borderRadius: '10px', cursor: 'pointer',
                           border: '1px solid rgba(165,180,252,0.4)',
                           background: showEscalatePanel ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.08)',
-                          color: '#a5b4fc', fontSize: '13px', fontWeight: 700,
+                          color: '#4f46e5', fontSize: '13px', fontWeight: 700,
                         }}>
                         <span>선택 : 2차 소집 대원</span>
                         <span style={{ fontSize: '12px', opacity: 0.8 }}>
@@ -1329,9 +1329,9 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                       </button>
 
                       {showEscalatePanel && (
-                        <div style={{ marginTop: '6px', border: '1px solid rgba(165,180,252,0.2)', borderRadius: '10px', overflow: 'hidden', background: 'rgba(15,23,42,0.7)' }}>
+                        <div style={{ marginTop: '6px', border: '1px solid rgba(165,180,252,0.2)', borderRadius: '10px', overflow: 'hidden', background: 'rgba(11,37,69,0.03)' }}>
                           {/* ── 메뉴바 (1차와 동일 구조, escalateEmps 사용) ── */}
-                          <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)', overflowX: 'auto' }}>
+                          <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(11,37,69,0.06)', overflowX: 'auto' }}>
                             {(() => {
                               const allIds = employees.map(e => e.emp_no);
                               const allSel = allIds.length > 0 && allIds.every(id => escalateEmps.has(id));
@@ -1339,9 +1339,9 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                               return (
                                 <button type="button" onClick={() => setEscalateEmps(allSel ? new Set() : new Set(allIds))} style={{
                                   padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 800, flexShrink: 0,
-                                  border: `1px solid ${allSel ? '#818cf8' : partSel ? '#818cf866' : '#818cf844'}`,
-                                  background: allSel ? '#818cf822' : partSel ? '#818cf80d' : 'transparent',
-                                  color: allSel ? '#818cf8' : partSel ? '#818cf8aa' : '#64748b',
+                                  border: `1px solid ${allSel ? '#4f46e5' : partSel ? '#4f46e566' : '#4f46e544'}`,
+                                  background: allSel ? '#4f46e522' : partSel ? '#4f46e50d' : 'transparent',
+                                  color: allSel ? '#4f46e5' : partSel ? '#4f46e5aa' : '#64748b',
                                 }}>전체</button>
                               );
                             })()}
@@ -1400,10 +1400,10 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                 <div key={emp.emp_no} onClick={() => setEscalateEmps(prev => {
                                   const next = new Set(prev); next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no); return next;
                                 })} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '5px 4px', cursor: 'pointer' }}>
-                                  <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? c : 'rgba(255,255,255,0.15)'}`, background: checked ? c + '33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? c : 'rgba(11,37,69,0.18)'}`, background: checked ? c + '33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     {checked && <span style={{ color: c, fontSize: '9px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
                                   </div>
-                                  <span style={{ fontSize: '12px', flex: 1, color: checked ? '#e2e8f0' : '#94a3b8' }}>{emp.name}</span>
+                                  <span style={{ fontSize: '12px', flex: 1, color: checked ? 'var(--text-main)' : 'var(--text-muted)' }}>{emp.name}</span>
                                   <span style={{ fontSize: '10px', color: '#475569' }}>{emp.role}</span>
                                 </div>
                               );
@@ -1411,19 +1411,19 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
 
                             return (
                               <div key={grpKey} style={{ borderBottom: `1px solid ${color}33` }}>
-                                <div onClick={() => setOpenEscalateAccordions(prev => { const next = new Set(prev); next.has(grpKey) ? next.delete(grpKey) : next.add(grpKey); return next; })} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', cursor: 'pointer', borderLeft: `3px solid ${selCount > 0 ? color : 'rgba(255,255,255,0.08)'}`, background: selCount > 0 ? color + '08' : 'transparent' }}>
-                                  <span style={{ flex: 1, fontSize: '13px', fontWeight: 700, color: selCount > 0 ? color : '#94a3b8' }}>{grpKey}</span>
+                                <div onClick={() => setOpenEscalateAccordions(prev => { const next = new Set(prev); next.has(grpKey) ? next.delete(grpKey) : next.add(grpKey); return next; })} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', cursor: 'pointer', borderLeft: `3px solid ${selCount > 0 ? color : 'rgba(11,37,69,0.09)'}`, background: selCount > 0 ? color + '08' : 'transparent' }}>
+                                  <span style={{ flex: 1, fontSize: '13px', fontWeight: 700, color: selCount > 0 ? color : 'var(--text-muted)' }}>{grpKey}</span>
                                   <span style={{ fontSize: '11px', color: selCount > 0 ? color : '#475569', fontWeight: 600 }}>{selCount}/{grpEmps.length}명</span>
                                   <button type="button" onClick={e => { e.stopPropagation(); toggleGrpSel(); }} style={{ padding: '3px 9px', borderRadius: '5px', fontSize: '10px', fontWeight: 700, border: `1px solid ${allSel ? color : color + '55'}`, background: allSel ? color + '22' : 'transparent', color: allSel ? color : color + 'aa', cursor: 'pointer', flexShrink: 0, marginLeft: '6px' }}>{allSel ? '해제' : '선택'}</button>
                                   <span style={{ fontSize: '11px', color: '#475569', marginLeft: '4px' }}>{isOpen ? '▲' : '▼'}</span>
                                 </div>
                                 {isOpen && (
-                                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 12px 8px' }}>
+                                  <div style={{ background: 'rgba(11,37,69,0.025)', padding: '2px 12px 8px' }}>
                                     {grpKey === '교대' ? (
                                       (['A', 'B', 'C', 'D'] as const).map(cho => {
                                         const choEmps = grpEmps.filter(e => e.role.includes(cho + '조'));
                                         if (choEmps.length === 0) return null;
-                                        const cc = ({ A: '#a5b4fc', B: '#86efac', C: '#fdba74', D: '#f9a8d4' } as Record<string, string>)[cho];
+                                        const cc = ({ A: '#4f46e5', B: '#86efac', C: '#fdba74', D: '#f9a8d4' } as Record<string, string>)[cho];
                                         const choSel = choEmps.filter(e => escalateEmps.has(e.emp_no)).length;
                                         const allChoSel = choSel === choEmps.length;
                                         return (
@@ -1433,7 +1433,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                               if (allChoSel) choEmps.forEach(e => next.delete(e.emp_no));
                                               else choEmps.forEach(e => next.add(e.emp_no));
                                               return next;
-                                            })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 4px 3px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', marginBottom: '2px' }}>
+                                            })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 4px 3px', cursor: 'pointer', borderBottom: '1px solid rgba(11,37,69,0.045)', marginBottom: '2px' }}>
                                               <span style={{ fontSize: '11px', color: cc, fontWeight: 700 }}>{cho}조</span>
                                               <span style={{ fontSize: '10px', color: '#475569' }}>{choSel}/{choEmps.length}</span>
                                               <span style={{ marginLeft: 'auto', fontSize: '10px', color: allChoSel ? cc : '#475569' }}>{allChoSel ? '전체해제' : '전체선택'}</span>
@@ -1453,7 +1453,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                               if (allTSel) teamEmps.forEach(e => next.delete(e.emp_no));
                                               else teamEmps.forEach(e => next.add(e.emp_no));
                                               return next;
-                                            })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 4px 2px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', marginBottom: '2px' }}>
+                                            })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 4px 2px', cursor: 'pointer', borderBottom: '1px solid rgba(11,37,69,0.045)', marginBottom: '2px' }}>
                                               <span style={{ fontSize: '11px', color: tSel > 0 ? color : '#64748b', fontWeight: 700, flex: 1 }}>{team}</span>
                                               <span style={{ fontSize: '10px', color: '#475569' }}>{tSel}/{teamEmps.length}</span>
                                             </div>
@@ -1469,7 +1469,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                           })}
 
                           <div style={{ padding: '5px 12px 7px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>
-                            <strong style={{ color: '#e2e8f0' }}>{escalateEmps.size}명</strong> 선택 (선택 대원에게만 알람 발송)
+                            <strong style={{ color: 'var(--text-main)' }}>{escalateEmps.size}명</strong> 선택 (선택 대원에게만 알람 발송)
                           </div>
                         </div>
                       )}
@@ -1478,9 +1478,9 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
 
                   <button onClick={handleFireEscalate} className="btn" disabled={loading}
                     style={{
-                      background: 'linear-gradient(135deg, rgba(239,68,68,0.10), rgba(220,38,38,0.20))',
-                      border: '1px solid rgba(239,68,68,0.35)',
-                      color: '#fca5a5',
+                      background: 'linear-gradient(135deg, rgba(239,68,68,0.08), rgba(220,38,38,0.14))',
+                      border: '1px solid rgba(220,38,38,0.35)',
+                      color: '#b91c1c',
                     }}
                   >
                     {!activeIsTraining ? '🔥 화재상황으로 승격 (나머지 대원 소집)' : '🎯 2차 출동 발령'}
@@ -1490,12 +1490,12 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
 
               <button onClick={handleClose} className="btn" disabled={loading}
                 style={{
-                  background: 'rgba(59,130,246,0.06)',
-                  border: '1px solid rgba(59,130,246,0.45)',
-                  color: '#60a5fa',
+                  background: 'rgba(37,99,235,0.06)',
+                  border: '1px solid rgba(37,99,235,0.4)',
+                  color: '#2563eb',
                 }}
               >
-                <Square size={16} fill="#60a5fa" />
+                <Square size={16} fill="#2563eb" />
                 상황 종료 및 리셋
               </button>
             </div>

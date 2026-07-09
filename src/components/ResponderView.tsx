@@ -339,8 +339,8 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
         key={i}
         style={{
           display: 'flex', flexDirection: 'column', gap: '12px',
-          border: `1px solid ${isActive ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.08)'}`,
-          background: isActive ? 'rgba(59,130,246,0.06)' : 'rgba(255,255,255,0.02)',
+          border: `1px solid ${isActive ? 'rgba(59,130,246,0.4)' : 'rgba(11,37,69,0.09)'}`,
+          background: isActive ? 'rgba(59,130,246,0.06)' : 'rgba(11,37,69,0.03)',
           borderRadius: '14px', padding: '16px', flexShrink: 0,
         }}
       >
@@ -359,7 +359,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
               })}
               style={{
                 fontSize: '11px', fontWeight: 700, padding: '5px 9px', borderRadius: '7px',
-                background: 'rgba(139,92,246,0.12)', color: '#a78bfa',
+                background: 'rgba(139,92,246,0.12)', color: '#7c3aed',
                 border: '1px solid rgba(139,92,246,0.3)', cursor: 'pointer',
               }}
             >
@@ -371,7 +371,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
         {(item.showDispatch || item.showInfo) && (
           <>
             <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px', padding: '14px 16px' }}>
-              <div style={{ fontSize: '11px', fontWeight: 800, color: '#fca5a5', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: '#b91c1c', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 🚨 경보내용
               </div>
               <div style={{ fontSize: '18px', fontWeight: 800, lineHeight: 1.4 }}>
@@ -391,9 +391,9 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                       onClick={() => setOpenEquipment(prev => prev === eq ? null : eq)}
                       style={{
                         fontSize: '13px', fontWeight: 700, padding: '7px 12px', borderRadius: '20px',
-                        background: openEquipment === eq ? 'rgba(96,165,250,0.18)' : 'rgba(255,255,255,0.05)',
-                        border: `1px solid ${openEquipment === eq ? 'rgba(96,165,250,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                        color: openEquipment === eq ? '#60a5fa' : 'var(--text-main)', cursor: 'pointer',
+                        background: openEquipment === eq ? 'rgba(96,165,250,0.18)' : 'rgba(11,37,69,0.05)',
+                        border: `1px solid ${openEquipment === eq ? 'rgba(96,165,250,0.4)' : 'rgba(11,37,69,0.12)'}`,
+                        color: openEquipment === eq ? '#2563eb' : 'var(--text-main)', cursor: 'pointer',
                       }}
                     >
                       {eq}
@@ -403,7 +403,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                 {openEquipment && equipmentList.includes(openEquipment) && (() => {
                   const found = findEquipmentLocation(activeIncident!.disaster, openEquipment);
                   return (
-                    <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '10px 12px' }}>
+                    <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-muted)', background: 'rgba(11,37,69,0.045)', borderRadius: '10px', padding: '10px 12px' }}>
                       {found ? (
                         <>📍 {openEquipment} 보관위치: <strong style={{ color: 'var(--text-main)' }}>{found.loc}</strong>
                           {found.spec !== '-' && <span> ({found.spec})</span>}
@@ -651,7 +651,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
               background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)',
               borderRadius: '20px', padding: '4px 14px', marginBottom: '10px'
             }}>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: '#60a5fa' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#2563eb' }}>
                 {displayTeam} · {currentUser.name}
               </span>
               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>({currentUser.role})</span>
@@ -682,7 +682,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                 style={{
                   width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '8px',
                   background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)',
-                  color: '#34d399', padding: '8px 16px', borderRadius: '10px',
+                  color: '#059669', padding: '8px 16px', borderRadius: '10px',
                   fontWeight: 700, fontSize: '13px', cursor: 'pointer'
                 }}
               >
@@ -705,8 +705,8 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   style={{
                     padding: '7px 14px', borderRadius: '20px', cursor: 'pointer',
                     fontSize: '13px', fontWeight: 700, border: '1.5px solid',
-                    background: previewDisaster === d.key ? d.color : 'rgba(255,255,255,0.04)',
-                    borderColor: previewDisaster === d.key ? d.color : 'rgba(255,255,255,0.15)',
+                    background: previewDisaster === d.key ? d.color : 'rgba(11,37,69,0.045)',
+                    borderColor: previewDisaster === d.key ? d.color : 'rgba(11,37,69,0.18)',
                     color: previewDisaster === d.key ? '#fff' : 'var(--text-muted)',
                     transition: 'all 0.15s',
                   }}
@@ -736,11 +736,11 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: '8px',
                   background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
-                  borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#c4b5fd',
+                  borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#6d28d9',
                 }}>
                   <span style={{ fontSize: '15px' }}>👁️</span>
                   <span>
-                    <strong style={{ color: '#a78bfa' }}>미리보기 모드</strong> — 발령 전 임무 확인용입니다.
+                    <strong style={{ color: '#7c3aed' }}>미리보기 모드</strong> — 발령 전 임무 확인용입니다.
                     체크는 로컬에만 저장되며 실제 임무와 무관합니다.
                   </span>
                 </div>
@@ -748,10 +748,10 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                 {/* 배지·역할 카드 */}
                 <div className="card" style={{ borderColor: 'rgba(139,92,246,0.3)', background: 'rgba(139,92,246,0.05)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                    <Award size={20} color={previewMyRole.bc ?? '#a78bfa'} />
+                    <Award size={20} color={previewMyRole.bc ?? '#7c3aed'} />
                     <h3 style={{ margin: 0, fontSize: '15px', flex: 1 }}>
                       나의 임무 카드:{' '}
-                      <span style={{ color: previewMyRole.bc ?? '#a78bfa' }}>{previewMyRole.role}</span>
+                      <span style={{ color: previewMyRole.bc ?? '#7c3aed' }}>{previewMyRole.role}</span>
                     </h3>
                     <span style={{
                       background: previewMyRole.bc ?? '#7c3aed', color: '#fff',
@@ -763,7 +763,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   <div className="progress-container">
                     <div className="progress-header">
                       <span>자가 수행률 (미리보기)</span>
-                      <strong style={{ color: previewPct === 100 ? 'var(--color-green)' : '#a78bfa' }}>
+                      <strong style={{ color: previewPct === 100 ? 'var(--color-green)' : '#7c3aed' }}>
                         {previewPct}% {previewPct === 100 && '✓'}
                       </strong>
                     </div>
@@ -780,11 +780,11 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                 <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden', borderColor: 'rgba(139,92,246,0.2)' }}>
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: '8px',
-                    padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)'
+                    padding: '14px 16px', borderBottom: '1px solid rgba(11,37,69,0.06)'
                   }}>
-                    <CheckSquare size={18} color="#a78bfa" />
+                    <CheckSquare size={18} color="#7c3aed" />
                     <h3 style={{ margin: 0, fontSize: '14px', flex: 1 }}>행동 매뉴얼 — {(() => { const d = DISASTERS.find(x => x.key === previewDisaster); return d?.label ?? previewDisaster; })()}</h3>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: previewDoneCount === previewCheckable.length && previewCheckable.length > 0 ? '#34d399' : 'var(--text-muted)' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: previewDoneCount === previewCheckable.length && previewCheckable.length > 0 ? '#059669' : 'var(--text-muted)' }}>
                       {previewDoneCount} / {previewCheckable.length}
                     </span>
                   </div>
@@ -824,13 +824,13 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                             }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
-                              {isOpen ? <ChevronDown size={15} color="#a78bfa" style={{ flexShrink: 0 }} /> : <ChevronRight size={15} color="#a78bfa" style={{ flexShrink: 0 }} />}
-                              <span style={{ fontSize: '13px', fontWeight: 700, color: '#c4b5fd', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                <span style={{ color: '#a78bfa', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {headerNum}</span>
+                              {isOpen ? <ChevronDown size={15} color="#7c3aed" style={{ flexShrink: 0 }} /> : <ChevronRight size={15} color="#7c3aed" style={{ flexShrink: 0 }} />}
+                              <span style={{ fontSize: '13px', fontWeight: 700, color: '#6d28d9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <span style={{ color: '#7c3aed', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {headerNum}</span>
                                 {stripPrefix(group.header.label)}
                               </span>
                             </div>
-                            <span style={{ fontSize: '11px', fontWeight: 700, flexShrink: 0, marginLeft: '8px', color: doneCount === total && total > 0 ? '#34d399' : '#64748b' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 700, flexShrink: 0, marginLeft: '8px', color: doneCount === total && total > 0 ? '#059669' : '#64748b' }}>
                               {doneCount}/{total}
                             </span>
                           </div>
@@ -843,7 +843,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                                     key={child.id}
                                     className={`task-item ${child.done ? 'done' : ''}`}
                                     onClick={() => handlePreviewToggle(child)}
-                                    style={{ borderRadius: 0, borderBottom: ci < group.children.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', paddingLeft: '20px', marginBottom: 0 }}
+                                    style={{ borderRadius: 0, borderBottom: ci < group.children.length - 1 ? '1px solid rgba(11,37,69,0.045)' : 'none', paddingLeft: '20px', marginBottom: 0 }}
                                   >
                                     <div className="checkbox-visual"><Check size={14} strokeWidth={3} /></div>
                                     <div className="task-label">
@@ -881,7 +881,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   {isFireInitial && <span style={{ fontSize: '11px', marginLeft: '6px', opacity: 0.8 }}>· 감지기동작</span>}
                 </span>
               </div>
-              <span style={{ fontSize: '11px', background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '6px', flexShrink: 0 }}>
+              <span style={{ fontSize: '11px', background: 'rgba(11,37,69,0.12)', padding: '2px 8px', borderRadius: '6px', flexShrink: 0 }}>
                 {activeIncident.disaster}
               </span>
             </div>
@@ -895,11 +895,11 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
           {isWaitingForEscalation && (
             <div className="card" style={{ textAlign: 'center', padding: '32px 20px', borderColor: 'rgba(245,158,11,0.3)' }}>
               <div style={{ fontSize: '36px', marginBottom: '12px' }}>⏳</div>
-              <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '8px', color: '#fbbf24' }}>
+              <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '8px', color: '#b45309' }}>
                 대기 중
               </div>
               <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                현재 <strong style={{ color: '#fbbf24' }}>감지기동작 단계</strong>입니다.<br />
+                현재 <strong style={{ color: '#b45309' }}>감지기동작 단계</strong>입니다.<br />
                 초기출동조가 현장을 확인 중입니다.<br />
                 지휘관이 승격하면 임무가 부여됩니다.
               </div>
@@ -926,7 +926,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
               {myBadge && (
                 <span style={{
                   fontSize: '11.5px', fontWeight: 800, padding: '5px 10px', borderRadius: '8px', flexShrink: 0,
-                  background: 'rgba(96,165,250,0.12)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)',
+                  background: 'rgba(96,165,250,0.12)', color: '#2563eb', border: '1px solid rgba(96,165,250,0.3)',
                 }}>
                   배지: {myBadge}
                 </span>
@@ -969,8 +969,8 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                       className="btn"
                       style={{
                         flex: 1, padding: '10px 4px', fontSize: '12px',
-                        background: responderStatus === s ? colors[s] : 'rgba(255,255,255,0.05)',
-                        border: responderStatus === s ? 'none' : '1px solid rgba(255,255,255,0.1)'
+                        background: responderStatus === s ? colors[s] : 'rgba(11,37,69,0.05)',
+                        border: responderStatus === s ? 'none' : '1px solid rgba(11,37,69,0.12)'
                       }}
                       onClick={() => {
                         // 훈련 상황에서는 같은 버튼을 다시 누르면 해제(미응답)됨
@@ -1030,7 +1030,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   style={{
                     display: 'flex', alignItems: 'center', gap: '8px',
                     padding: '14px 16px',
-                    borderBottom: showChecklist ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                    borderBottom: showChecklist ? '1px solid rgba(11,37,69,0.06)' : 'none',
                   }}
                 >
                   <CheckSquare size={18} color="var(--color-green)" />
@@ -1039,7 +1039,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   </h3>
                   <span style={{
                     fontSize: '12px', fontWeight: 700,
-                    color: completedTasksCount === totalTasksCount && totalTasksCount > 0 ? '#34d399' : 'var(--text-muted)',
+                    color: completedTasksCount === totalTasksCount && totalTasksCount > 0 ? '#059669' : 'var(--text-muted)',
                   }}>
                     {completedTasksCount} / {totalTasksCount}
                   </span>
@@ -1096,20 +1096,20 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
                             {isOpen
-                              ? <ChevronDown size={15} color="#60a5fa" style={{ flexShrink: 0 }} />
-                              : <ChevronRight size={15} color="#60a5fa" style={{ flexShrink: 0 }} />
+                              ? <ChevronDown size={15} color="#2563eb" style={{ flexShrink: 0 }} />
+                              : <ChevronRight size={15} color="#2563eb" style={{ flexShrink: 0 }} />
                             }
                             <span style={{
-                              fontSize: '13px', fontWeight: 700, color: '#93c5fd',
+                              fontSize: '13px', fontWeight: 700, color: '#1d4ed8',
                               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                             }}>
-                              <span style={{ color: '#60a5fa', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {headerNum}</span>
+                              <span style={{ color: '#2563eb', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {headerNum}</span>
                               {stripPrefix(group.header.label)}
                             </span>
                           </div>
                           <span style={{
                             fontSize: '11px', fontWeight: 700, flexShrink: 0, marginLeft: '8px',
-                            color: doneCount === total && total > 0 ? '#34d399' : '#64748b'
+                            color: doneCount === total && total > 0 ? '#059669' : '#64748b'
                           }}>
                             {doneCount}/{total}
                           </span>
@@ -1133,7 +1133,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                                   onClick={() => handleTaskToggle(child)}
                                   style={{
                                     borderRadius: 0,
-                                    borderBottom: ci < group.children.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                                    borderBottom: ci < group.children.length - 1 ? '1px solid rgba(11,37,69,0.045)' : 'none',
                                     paddingLeft: '20px',
                                     marginBottom: 0,
                                   }}
@@ -1170,13 +1170,13 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   {/* 전체화면 상단 바 */}
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 16px',
-                    borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0,
+                    borderBottom: '1px solid rgba(11,37,69,0.09)', flexShrink: 0,
                   }}>
                     <button
                       type="button"
                       onClick={() => setViewMode('list')}
                       style={{
-                        background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                        background: 'rgba(11,37,69,0.06)', border: '1px solid rgba(11,37,69,0.12)',
                         color: 'var(--text-muted)', borderRadius: '10px', padding: '8px 12px',
                         cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: 700,
                       }}
@@ -1224,9 +1224,9 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                             flexShrink: 0, width: '38px', height: '38px', borderRadius: '11px',
                             fontSize: '13px', fontWeight: 800, border: '1px solid', cursor: 'pointer',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: done ? 'rgba(16,185,129,0.16)' : isCurrent ? 'rgba(59,130,246,0.16)' : 'rgba(255,255,255,0.05)',
-                            borderColor: done ? 'rgba(16,185,129,0.35)' : isCurrent ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.1)',
-                            color: done ? '#34d399' : isCurrent ? '#60a5fa' : 'var(--text-muted)',
+                            background: done ? 'rgba(16,185,129,0.16)' : isCurrent ? 'rgba(59,130,246,0.16)' : 'rgba(11,37,69,0.05)',
+                            borderColor: done ? 'rgba(16,185,129,0.35)' : isCurrent ? 'rgba(59,130,246,0.4)' : 'rgba(11,37,69,0.12)',
+                            color: done ? '#059669' : isCurrent ? '#2563eb' : 'var(--text-muted)',
                           }}
                         >
                           {done ? <Check size={16} strokeWidth={3} /> : (i + 1)}
