@@ -171,11 +171,11 @@ img, svg, video, canvas, audio, iframe, embed, object {
 /* Forms */
 label {
   font-family: var(--font-display);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-main);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
   margin-bottom: 8px;
   display: block;
 }
@@ -190,6 +190,7 @@ input, select {
   border-radius: 12px;
   padding: 0 16px;
   font-size: 15px;
+  font-weight: 700;
   color: var(--text-main);
   outline: none;
   font-family: inherit;

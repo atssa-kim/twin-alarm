@@ -111,14 +111,14 @@ export const EQUIPMENT_LOCATIONS: Record<string, EquipmentCategory[]> = {
   ],
 
   '누수': [
-    { cat: '💧 누수·침수 — 수거·이송', items: [
+    { cat: '💧 누수 — 수거·이송', items: [
       { name: '물통 (대)', spec: '대', qty: '10', loc: '동관20층 물탱크실(1) · 서관20층 물탱크실(1) · E35F 공조실(1) · E26F EMR(1) · E17F EMR(1) · E06F EMR(1) · W35F 공조실(1) · W26F EMR(1) · W17F EMR(1) · W06F EMR(1)' },
       { name: '물통 (소)', spec: '소', qty: '16', loc: '동관20층 물탱크실(1) · 서관20층 물탱크실(1) · E35F 공조실(2) · E26F EMR(2) · E17F EMR(2) · E06F EMR(2) · W35F 공조실(1) · W26F EMR(2) · W17F EMR(1) · W06F EMR(2)' },
       { name: '소형 흡진/흡수기', spec: '50ℓ', qty: '10', loc: '동관20층 물탱크실(1) · 서관20층 물탱크실(1) · E35F 공조실(1) · E26F EMR(1) · E17F EMR(1) · E06F EMR(1) · W35F 공조실(1) · W26F EMR(1) · W17F EMR(1) · W06F EMR(1)' },
       { name: '고무밀대', spec: '-', qty: '20', loc: '각 층 물탱크실·공조실·EMR 각 2EA' },
       { name: '천막호스', spec: '외경 24cm', qty: '8', loc: 'E35F·W35F 공조실(2) · 동·서관 6F/17F/26F EMR(6)' },
     ] },
-    { cat: '💧 누수·침수 — 보양·작업', items: [
+    { cat: '💧 누수 — 보양·작업', items: [
       { name: '보양비닐', spec: '-', qty: '10', loc: '각 층 물탱크실·공조실·EMR' },
       { name: '비닐카바링', spec: '대·소', qty: '28', loc: '각 층 물탱크실·공조실·EMR (대 17 / 소 11)' },
       { name: '사다리', spec: '2M', qty: '2', loc: '동관20층 물탱크실(1) · 서관20층 물탱크실(1)' },

@@ -201,8 +201,10 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
       });
       if (error) throw error;
       setAiReport(data.report ?? '보고서를 생성할 수 없습니다.');
-    } catch (e: any) {
-      setAiReport('오류: ' + (e.message ?? String(e)));
+    } catch {
+      // AI 보고서는 Anthropic API(유료) 호출이 필요함 — API 키/크레딧 미설정 시
+      // 실제 오류(500, 시크릿 누락 등) 대신 관리자가 조치할 수 있는 안내를 표시
+      setAiReport('⚠️ AI 보고서 기능은 유료 구독(Anthropic API 크레딧)이 필요합니다.\n관리자에게 문의해 API 키를 설정해주세요.');
     } finally {
       setAiLoading(false);
     }
@@ -636,24 +638,32 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                       : '';
                     return (
                       <div key={mode} style={{
-                        border: `1px solid ${isSel ? color + '55' : 'rgba(11,37,69,0.09)'}`,
+                        border: `2px solid ${isSel ? color : 'rgba(11,37,69,0.12)'}`,
                         borderRadius: '12px', overflow: 'hidden',
-                        background: isSel ? color + '12' : 'transparent',
+                        background: isSel ? color + '22' : 'transparent',
+                        boxShadow: isSel ? `0 2px 8px ${color}33` : 'none',
                         transition: 'all 0.2s',
                       }}>
                         <div
                           onClick={() => setSelectedMode(mode)}
                           style={{
                             display: 'flex', alignItems: 'center', gap: '10px',
-                            padding: '11px 14px', cursor: 'pointer',
-                            borderLeft: `3px solid ${isSel ? color : 'transparent'}`,
+                            padding: '12px 14px', cursor: 'pointer',
+                            borderLeft: `6px solid ${isSel ? color : 'transparent'}`,
                           }}
                         >
-                          <span style={{ fontSize: '14px', fontWeight: 700, color: isSel ? color : '#64748b', flex: 1 }}>
+                          {isSel && (
+                            <span style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
+                              background: color, color: '#fff', fontSize: '12px', fontWeight: 900,
+                            }}>✓</span>
+                          )}
+                          <span style={{ fontSize: '15px', fontWeight: isSel ? 900 : 700, color: isSel ? color : '#475569', flex: 1 }}>
                             {modeLabel}
                           </span>
                           {subLabel && (
-                            <span style={{ fontSize: '11px', color: color + 'bb', fontWeight: 600 }}>{subLabel}</span>
+                            <span style={{ fontSize: '11px', color: color, fontWeight: 800 }}>{subLabel}</span>
                           )}
                           {isFireDisaster && (
                             <span style={{ fontSize: '10px', color: '#475569' }}>{isSel ? '▲' : '▶'}</span>

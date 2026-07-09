@@ -312,7 +312,7 @@ export const DISASTERS: Disaster[] = [
   },
   {
     "key": "누수",
-    "label": "💧 누수·침수",
+    "label": "💧 누수",
     "color": "#1d4ed8",
     "members": [
       {
