@@ -2,7 +2,7 @@ import React, { useRef, useState, useMemo } from 'react';
 import { type Incident, type Responder, type MemberTask, type EmployeeDB, db, supabase } from '../services/supabase';
 import { DISASTERS } from '../data/disasters';
 import { stopAllAlerts } from '../utils/audio';
-import { Play, Square, ShieldAlert, Users, Mic, UserCheck, BarChart2, Monitor, History, X, ChevronDown } from 'lucide-react';
+import { Play, Square, AlertTriangle, Users, Mic, UserCheck, BarChart2, Monitor, History, X, ChevronDown } from 'lucide-react';
 
 // 화재 초기출동조 배지 (감지기동작 시 1차 소집)
 const FIRE_INITIAL_BADGES = new Set(['총괄', '상황', '통제', '출동']);
@@ -538,10 +538,16 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
         ) : (
         <>
           {/* 헤더 카드 (제목 + 화자변경) */}
-          <div className="card" style={{ padding: '12px 14px' }}>
+          <div className="card" style={{ padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderLeft: '4px solid #ef4444' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <ShieldAlert color="var(--color-fire)" size={22} style={{ flexShrink: 0 }} />
-              <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '16px', margin: 0, flex: 1 }}>
+              <span style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
+                background: '#ef4444', color: '#fff',
+              }}>
+                <AlertTriangle size={15} />
+              </span>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '16px', margin: 0, flex: 1, color: '#991b1b' }}>
                 신규 비상 상황 발령
               </h3>
               {/* 화자변경 버튼 */}
@@ -618,7 +624,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {(['훈련', '실제'] as const).map(mode => {
                     const isSel = selectedMode === mode;
-                    const color = mode === '훈련' ? '#a78bfa' : '#ef4444';
+                    const color = mode === '훈련' ? '#d97706' : '#ef4444';
                     const modeLabel = mode === '훈련' ? '🎓 훈련상황' : '⚠️ 실제상황';
                     const subOptions = isFireDisaster
                       ? mode === '훈련'
@@ -631,8 +637,8 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                     return (
                       <div key={mode} style={{
                         border: `1px solid ${isSel ? color + '55' : 'rgba(11,37,69,0.09)'}`,
-                        borderRadius: '10px', overflow: 'hidden',
-                        background: isSel ? color + '08' : 'transparent',
+                        borderRadius: '12px', overflow: 'hidden',
+                        background: isSel ? color + '12' : 'transparent',
                         transition: 'all 0.2s',
                       }}>
                         <div
@@ -655,51 +661,48 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                         </div>
                         {isSel && isFireDisaster && (
                           <div style={{
-                            display: 'flex', gap: '6px', padding: '8px 12px 10px',
+                            display: 'flex', flexDirection: 'column', gap: '8px',
+                            padding: '4px 12px 12px',
                             borderTop: `1px solid ${color}22`,
-                            background: 'rgba(11,37,69,0.03)',
                           }}>
-                            {subOptions.map(opt => (
-                              <button
-                                key={opt.key}
-                                type="button"
-                                onClick={e => { e.stopPropagation(); setFireSubMode(opt.key); }}
-                                style={{
-                                  flex: 1, padding: '8px 0', borderRadius: '8px', cursor: 'pointer',
-                                  fontSize: '12px', fontWeight: 700,
-                                  background: fireSubMode === opt.key ? color + '22' : 'rgba(11,37,69,0.045)',
-                                  border: `1px solid ${fireSubMode === opt.key ? color + '66' : 'rgba(11,37,69,0.07)'}`,
-                                  color: fireSubMode === opt.key ? color : '#64748b',
-                                  transition: 'all 0.15s',
-                                }}
-                              >
-                                {opt.icon} {opt.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {isSel && isFireDisaster && (
-                          <div style={{
-                            display: 'flex', gap: '6px', padding: '0 12px 10px',
-                            background: 'rgba(11,37,69,0.03)',
-                          }}>
-                            {([{ key: 'day' as const, icon: '☀️', label: '주간' }, { key: 'night' as const, icon: '🌙', label: '야간' }]).map(opt => (
-                              <button
-                                key={opt.key}
-                                type="button"
-                                onClick={e => { e.stopPropagation(); setFireShift(opt.key); }}
-                                style={{
-                                  flex: 1, padding: '8px 0', borderRadius: '8px', cursor: 'pointer',
-                                  fontSize: '12px', fontWeight: 700,
-                                  background: fireShift === opt.key ? color + '22' : 'rgba(11,37,69,0.045)',
-                                  border: `1px solid ${fireShift === opt.key ? color + '66' : 'rgba(11,37,69,0.07)'}`,
-                                  color: fireShift === opt.key ? color : '#64748b',
-                                  transition: 'all 0.15s',
-                                }}
-                              >
-                                {opt.icon} {opt.label}
-                              </button>
-                            ))}
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              {subOptions.map(opt => (
+                                <button
+                                  key={opt.key}
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); setFireSubMode(opt.key); }}
+                                  style={{
+                                    flex: 1, padding: '13px 0', borderRadius: '10px', cursor: 'pointer',
+                                    fontSize: '13px', fontWeight: 800,
+                                    background: fireSubMode === opt.key ? color + '2e' : '#ffffff',
+                                    border: `1px solid ${fireSubMode === opt.key ? color + 'aa' : 'rgba(11,37,69,0.12)'}`,
+                                    color: fireSubMode === opt.key ? color : '#64748b',
+                                    transition: 'all 0.15s',
+                                  }}
+                                >
+                                  {opt.icon} {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              {([{ key: 'day' as const, icon: '☀️', label: '주간' }, { key: 'night' as const, icon: '🌙', label: '야간' }]).map(opt => (
+                                <button
+                                  key={opt.key}
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); setFireShift(opt.key); }}
+                                  style={{
+                                    flex: 1, padding: '13px 0', borderRadius: '10px', cursor: 'pointer',
+                                    fontSize: '13px', fontWeight: 800,
+                                    background: fireShift === opt.key ? color + '2e' : '#ffffff',
+                                    border: `1px solid ${fireShift === opt.key ? color + 'aa' : 'rgba(11,37,69,0.12)'}`,
+                                    color: fireShift === opt.key ? color : '#64748b',
+                                    transition: 'all 0.15s',
+                                  }}
+                                >
+                                  {opt.icon} {opt.label}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>

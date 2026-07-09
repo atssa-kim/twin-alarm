@@ -433,10 +433,11 @@ const App: React.FC = () => {
           <button
             onClick={handleEnableNotif}
             style={{
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              padding: '2px 4px',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
-              color: notifPerm === 'granted' ? '#22c55e' : notifPerm === 'denied' ? '#ef4444' : '#f59e0b',
+              background: notifPerm === 'granted' ? '#fef3c7' : notifPerm === 'denied' ? '#fee2e2' : '#fef3c7',
+              border: 'none', borderRadius: '999px', cursor: 'pointer',
+              padding: '5px 10px',
+              display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '5px',
+              color: notifPerm === 'granted' ? '#92400e' : notifPerm === 'denied' ? '#991b1b' : '#92400e',
             }}
             title={
               notifPerm === 'granted' ? '알림 활성화됨' :
@@ -444,8 +445,8 @@ const App: React.FC = () => {
                                         '탭하여 알림 허용'
             }
           >
-            {notifPerm === 'granted' ? <Bell size={18} /> : <BellOff size={18} />}
-            <span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1 }}>
+            {notifPerm === 'granted' ? <Bell size={14} /> : <BellOff size={14} />}
+            <span style={{ fontSize: '11px', fontWeight: 800, lineHeight: 1 }}>
               {notifPerm === 'granted' ? '활성' : notifPerm === 'denied' ? '차단' : '알림'}
             </span>
           </button>
@@ -460,16 +461,16 @@ const App: React.FC = () => {
               if (!next) stopAllAlerts();
             }}
             style={{
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              padding: '2px 4px',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
-              color: soundEnabled ? '#f87171' : 'var(--on-navy-muted)',
-              opacity: soundEnabled ? 1 : 0.5,
+              background: soundEnabled ? '#ffedd5' : 'rgba(255,255,255,0.1)',
+              border: 'none', borderRadius: '999px', cursor: 'pointer',
+              padding: '5px 10px',
+              display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '5px',
+              color: soundEnabled ? '#9a3412' : 'var(--on-navy-muted)',
             }}
             title={soundEnabled ? '육성 안내 켜짐' : '육성 안내 꺼짐'}
           >
-            <Megaphone size={18} />
-            <span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1 }}>
+            <Megaphone size={14} />
+            <span style={{ fontSize: '11px', fontWeight: 800, lineHeight: 1 }}>
               {soundEnabled ? '음성' : '음소거'}
             </span>
           </button>
