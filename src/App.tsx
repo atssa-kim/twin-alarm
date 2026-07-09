@@ -419,7 +419,7 @@ const App: React.FC = () => {
           )}
           <a
             href="https://atssa-kim.github.io/disa_app/"
-            target="_blank"
+            target="disa_app_window"
             rel="noopener noreferrer"
             className="topbar-title"
             style={{ textDecoration: 'none', cursor: 'pointer' }}
