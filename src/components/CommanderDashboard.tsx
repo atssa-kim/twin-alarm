@@ -9,9 +9,10 @@ const FIRE_INITIAL_BADGES = new Set(['총괄', '상황', '통제', '출동']);
 
 // 상황 확정(variant) 칩 표시용 라벨 — 새 variant를 추가할 때 여기만 채우면 됨 (미등록 값은 그대로 표시)
 export const VARIANT_LABELS: Record<string, string> = {
-  'K급주방': '🍳 K급',
+  'K급주방': '🍳 K급주방',
   '가스구역': '💨 가스구역',
-  '배터리': '🔋 배터리',
+  'UPS실': '🔋 UPS실',
+  '지하주차장': '🚗 지하주차장',
 };
 
 // 전광판 표시용 상태 라벨 — 데이터값(Responder.status)은 그대로 '현장'을 쓰되,
