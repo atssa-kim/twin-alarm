@@ -20,7 +20,7 @@ import { dirname, resolve } from 'path';
 import { createClient } from '@supabase/supabase-js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const envPath = resolve(__dirname, '../.env');
+const envPath = resolve(__dirname, '../../.env');
 const env: Record<string, string> = {};
 for (const line of readFileSync(envPath, 'utf8').split('\n')) {
   const eq = line.indexOf('=');

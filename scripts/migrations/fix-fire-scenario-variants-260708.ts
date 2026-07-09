@@ -21,7 +21,7 @@ import { dirname, resolve } from 'path';
 import { createClient } from '@supabase/supabase-js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const envPath = resolve(__dirname, '../.env');
+const envPath = resolve(__dirname, '../../.env');
 const env: Record<string, string> = {};
 for (const line of readFileSync(envPath, 'utf8').split('\n')) {
   const eq = line.indexOf('=');
@@ -77,14 +77,23 @@ async function upgradeGasZone() {
   for (const badge of badges) {
     const { roleId, tasks } = await getRoleWithTasks(badge);
     const already = tasks.filter(t => t.variant === '가스구역');
+    const target = scenarioData['가스구역'][badge];
+    // 이미 목표 문구와 완전히 같으면 건드리지 않음 — disa_app에서 그 사이 수동으로 고친
+    // 내용이 있다면 재실행할 때마다 조용히 되돌리는 걸 방지
+    const alreadyMatches = already.length === target.length &&
+      already.every(t => target.includes(t.label));
+    if (alreadyMatches) {
+      console.log(`  ⏭  [${badge}] 이미 최신 상태 — 건너뜀`);
+      continue;
+    }
     if (already.length > 0) {
       await deleteByVariant(roleId, '가스구역');
       console.log(`  · [${badge}] 기존 가스구역 ${already.length}건 삭제`);
     }
     const fresh = await getRoleWithTasks(badge); // 삭제 후 다시 조회해 정확한 max idx 사용
     const maxIdx = fresh.tasks.length ? Math.max(...fresh.tasks.map(t => t.task_idx)) : -1;
-    await appendTasks(roleId, maxIdx + 1, '가스구역', scenarioData['가스구역'][badge]);
-    console.log(`  ✓ [${badge}] 신규 ${scenarioData['가스구역'][badge].length}건 추가`);
+    await appendTasks(roleId, maxIdx + 1, '가스구역', target);
+    console.log(`  ✓ [${badge}] 신규 ${target.length}건 추가`);
   }
 }
 

@@ -36,7 +36,7 @@ SUPABASE_SERVICE_ROLE_KEY=...       # scripts/ 하위 1회성 스크립트 전�
 1. 재난별 역할·배지·임무 내용(누가 무엇을 하는지)은 **재난대응 앱에서만 수정**합니다. 트윈알람 코드에는 `disaster_roles`/`disaster_tasks`에 쓰는 코드가 없고, 앞으로도 추가하지 않습니다.
 2. `src/data/disasters.ts`는 재난 목록(`key`/`label`, 드롭다운용)만 실제로 쓰입니다. 안에 남아있는 역할·배지·임무 배열은 최초 이관 당시의 스냅샷이라 이미 실제 값과 다를 수 있는 **참고용 사본**입니다. 절대 이 파일을 실데이터의 기준으로 보지 마세요.
 3. `src/data/disasters.ts` → Supabase로 통째로 밀어넣는 재시딩 스크립트(옛 `scripts/seed-disasters.ts`, `npm run seed`)는 **삭제했습니다**. 이걸 되살려 재실행하면 재난대응 앱에서 한 수정·삭제가 옛날 값으로 전부 덮어써집니다.
-4. `scripts/fix-badges-*.ts`류는 특정 날짜에 배지명을 표준화한 **1회성 마이그레이션 기록**입니다. 다시 실행할 필요 없고, 새로 비슷한 정합 작업이 필요하면 같은 방식(`fix-badges-YYMMDD.ts`, 파일 상단에 배경·매핑 규칙 주석)으로 새 파일을 추가하세요.
+4. `scripts/migrations/`에 있는 `fix-*.ts`류는 특정 날짜에 배지명·임무 구조를 정리한 **1회성 마이그레이션 기록**입니다. 다시 실행할 필요 없고, 새로 비슷한 정합 작업이 필요하면 같은 방식(`scripts/migrations/fix-YYMMDD-설명.ts`, 파일 상단에 배경·매핑 규칙 주석)으로 새 파일을 추가하세요. `scripts/` 최상위에는 계속 재사용하는 도구(seed-employees, seed-duty-matrix, setup-disaster-editors)만 둡니다.
 5. 진행 중인 재난(`incidents.status = 'active'`)의 `member_tasks`는 **발령 시점에 `disaster_roles`/`disaster_tasks`를 복사한 스냅샷**입니다(의도된 동작). 재난대응 앱에서 그 이후 임무를 고쳐도 이미 진행 중인 사고에는 반영되지 않고, **다음 발령부터** 새 내용이 적용됩니다.
 
 ## 실시간 동기화 (2026-07-07 추가)

@@ -24,7 +24,7 @@ import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const envPath = resolve(__dirname, '../.env');
+const envPath = resolve(__dirname, '../../.env');
 const envContent = fs.readFileSync(envPath, 'utf-8');
 const env: Record<string, string> = {};
 for (const line of envContent.split('\n')) {
