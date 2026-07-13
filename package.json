@@ -19,7 +19,8 @@
     "fix-badges-260706": "npx tsx scripts/migrations/fix-badges-260706.ts",
     "fix-fire-variants-260708": "npx tsx scripts/migrations/fix-fire-variants-260708.ts",
     "fix-fire-scenario-variants-260708": "npx tsx scripts/migrations/fix-fire-scenario-variants-260708.ts",
-    "setup-disaster-editors": "npx tsx scripts/setup-disaster-editors.ts"
+    "setup-disaster-editors": "npx tsx scripts/setup-disaster-editors.ts",
+    "backup": "npx tsx scripts/backup-db.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
