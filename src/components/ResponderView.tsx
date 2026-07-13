@@ -970,7 +970,8 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                       style={{
                         flex: 1, padding: '10px 4px', fontSize: '12px',
                         background: responderStatus === s ? colors[s] : 'rgba(11,37,69,0.05)',
-                        border: responderStatus === s ? 'none' : '1px solid rgba(11,37,69,0.12)'
+                        border: responderStatus === s ? 'none' : '1px solid rgba(11,37,69,0.12)',
+                        color: responderStatus === s ? '#ffffff' : '#2563eb',
                       }}
                       onClick={() => {
                         // 훈련 상황에서는 같은 버튼을 다시 누르면 해제(미응답)됨
