@@ -49,6 +49,12 @@ function stripEquipmentClause(text: string): string {
   return text.replace(/비상장(?:구|비)[_:\s]*[^\n]+?\s*(?:휴대|지참|착용)\s*(?:후)?\s*/, '').trim();
 }
 
+// 임무 전체가 "비상장구_..." 하나로만 이루어진 줄인지 판별 — 뒤에 붙는 동사(휴대/지참/착용)나
+// "-화재층 출동" 같은 부가 문구 유무와 무관하게, 모두 1단계 비상장구 안내로 모으기 위함
+function isEquipmentOnlyTask(label: string): boolean {
+  return /^비상장(?:구|비)[_:\s]/.test(stripPrefix(label));
+}
+
 // "행동)... / 무전)..." 패턴을 행동요령 / 무전 예시로 분리 (없으면 radio는 null)
 function splitRadio(label: string): { instruction: string; radio: string | null } {
   const clean = stripPrefix(label);
@@ -57,12 +63,16 @@ function splitRadio(label: string): { instruction: string; radio: string | null 
   return { instruction: clean.replace(/^행동\)\s*/, ''), radio: null };
 }
 
-// 임무 텍스트에서 "비상장구_A,B,C 휴대/지참/착용" 패턴을 장비 목록으로 추출
+// 임무 텍스트에서 "비상장구_A,B,C (휴대/지참/착용 | -지역 출동 등)" 패턴을 장비 목록으로 추출.
+// 뒤에 붙는 동사가 없는 경우("...-화재층 출동")도 인식하도록 두 패턴 모두 제거를 시도.
 function parseEquipmentList(label: string): string[] {
   const clean = stripPrefix(label);
-  const m = clean.match(/비상장(?:구|비)[_:\s]*([^\n]+?)\s*(?:휴대|지참|착용)/);
+  const m = clean.match(/^비상장(?:구|비)[_:\s]*(.+)$/);
   if (!m) return [];
-  return m[1].split(/[,·]/).map(s => s.trim()).filter(Boolean);
+  let rest = m[1];
+  rest = rest.replace(/\s*(?:휴대|지참|착용)\s*(?:후)?\s*.*$/, '');
+  rest = rest.replace(/[-–]\s*[^,·]*(?:출동|이동|현장).*$/, '');
+  return rest.split(/[,·]/).map(s => s.trim()).filter(Boolean);
 }
 
 // ── 단계별 임무수행: 체크박스 1줄 ──────────────────────────────
@@ -212,6 +222,13 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   const taskGroups = useMemo(() => groupTasks(myTasks), [myTasks]);
   const taskNumMap = useMemo(() => computeTaskNumMap(myTasks), [myTasks]);
 
+  // 단계별 보기 전용: "비상장구_..." 임무는 몇 개든 전부 1단계로 모으고, 나머지 임무로만 단계를 구성
+  const equipmentTasks = useMemo(() => myTasks.filter(t => isEquipmentOnlyTask(t.label)), [myTasks]);
+  const stepTaskGroups = useMemo(
+    () => groupTasks(myTasks.filter(t => !isEquipmentOnlyTask(t.label))),
+    [myTasks]
+  );
+
   // ── 단계별 임무수행: 출동(1단계, 단독 전체화면) → 임무1 → 임무2 → ... → (마지막 임무 + 복귀) ──
   // 현장도착은 별도 체크박스 없이, 출동 후 임무를 하나 체크하면 자동으로 처리됨(상태 '현장').
   const STEP_PAGE_SIZE = 3;
@@ -229,24 +246,24 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     if (isSituationRoomForStep) {
       return [
         { group: null, showDispatch: false, showReturn: false, showInfo: true },
-        ...taskGroups.map(group => ({ group, showDispatch: false, showReturn: false })),
+        ...stepTaskGroups.map(group => ({ group, showDispatch: false, showReturn: false })),
       ];
     }
-    if (taskGroups.length === 0) {
+    if (stepTaskGroups.length === 0) {
       return [{ group: null, showDispatch: true, showReturn: false }];
     }
     const items: StepFlowItem[] = [
       { group: null, showDispatch: true, showReturn: false },
     ];
-    taskGroups.forEach((group, i) => {
+    stepTaskGroups.forEach((group, i) => {
       items.push({
         group,
         showDispatch: false,
-        showReturn: i === taskGroups.length - 1,
+        showReturn: i === stepTaskGroups.length - 1,
       });
     });
     return items;
-  }, [taskGroups, isSituationRoomForStep]);
+  }, [stepTaskGroups, isSituationRoomForStep]);
 
   const isGroupDone = (group: TaskGroup): boolean =>
     group.type === 'standalone' ? group.task.done : group.children.every(c => c.done);
@@ -318,11 +335,13 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode, activeIncident?.id]);
 
-  // 1단계(출동)의 비상장구 목록은 첫 임무 텍스트에서 파싱 — 재난과 무관하게 항상 1단계에 표시
-  const firstTaskHeader = taskGroups[0]
-    ? (taskGroups[0].type === 'standalone' ? taskGroups[0].task : taskGroups[0].header)
-    : null;
-  const equipmentList = firstTaskHeader ? parseEquipmentList(firstTaskHeader.label) : [];
+  // 1단계(출동)의 비상장구 목록 — "비상장구_..." 임무는 몇 번째에 있든 전부 모아서 표시
+  const equipmentList = equipmentTasks.flatMap(t => parseEquipmentList(t.label));
+  // 여러 개여도 하나의 그룹처럼 묶어 기존 체크 로직(isGroupDone/handleGroupCheck)을 그대로 재사용
+  const equipmentGroup: TaskGroup | null =
+    equipmentTasks.length === 0 ? null :
+    equipmentTasks.length === 1 ? { type: 'standalone', task: equipmentTasks[0] } :
+    { type: 'group', header: equipmentTasks[0], children: equipmentTasks.slice(1) };
 
   // 단계별 임무수행 카드 1개 렌더 — 1단계(출동) 단독 화면과 2단계 이후 페이지 뷰에서 공용으로 사용
   const renderStepCard = (item: StepFlowItem, i: number, isActive: boolean) => {
@@ -414,6 +433,13 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                     </div>
                   );
                 })()}
+                {equipmentGroup && (
+                  <StepCheckRow
+                    checked={isGroupDone(equipmentGroup)}
+                    label="비상장구 확인 완료"
+                    onClick={() => handleGroupCheck(equipmentGroup)}
+                  />
+                )}
               </div>
             )}
             {item.showDispatch && (
