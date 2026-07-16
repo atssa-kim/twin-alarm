@@ -110,6 +110,8 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const [fireSubMode, setFireSubMode] = useState<'initial' | 'full'>('initial');
   // 화재 전용 주간/야간 — 지휘관이 발령 시 직접 선택 (다른 재난은 항상 'day')
   const [fireShift, setFireShift] = useState<'day' | 'night'>('day');
+  // 실제상황 발령 시 30초 무응답자 TTS 전화 사용 여부 (기본 켜짐, 필요 시 해제)
+  const [ttsCallEnabled, setTtsCallEnabled] = useState(true);
   const [location, setLocation] = useState('');
   const [loading, setLoading] = useState(false);
   const [showVoicePicker, setShowVoicePicker] = useState(false);
@@ -316,7 +318,8 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
         : allRoles;
 
       const incident = await db.declareIncident(
-        selectedDisasterKey, modeLabel, location.trim(), scope, currentUser.empNo, drillEmpNos, shift
+        selectedDisasterKey, modeLabel, location.trim(), scope, currentUser.empNo, drillEmpNos, shift,
+        ttsCallEnabled
       );
 
       const bulkTasks: Omit<MemberTask, 'updated_at' | 'done_by'>[] = [];
@@ -381,7 +384,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
 
     setLoading(true);
     try {
-      await db.escalateIncident(activeIncident.id, newMode, newScope, drillEmpNos);
+      await db.escalateIncident(activeIncident.id, newMode, newScope, drillEmpNos, ttsCallEnabled);
 
       // 선택 대원을 responders에 추가 (훈련 + 선택 대원 있을 때)
       if (isTraining && escalateEmps.size > 0) {
@@ -721,6 +724,25 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                 </div>
               </div>
             </div>
+
+            {/* 실제상황일 때만: 30초 무응답자 TTS 전화 사용 여부 */}
+            {selectedMode === '실제' && (
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                padding: '10px 12px', borderRadius: '10px',
+                border: '1.5px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.06)',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={ttsCallEnabled}
+                  onChange={e => setTtsCallEnabled(e.target.checked)}
+                  style={{ width: '16px', height: '16px', accentColor: '#ef4444', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#475569' }}>
+                  📞 30초 내 미확인자에게 TTS 전화 (통화료 발생)
+                </span>
+              </label>
+            )}
 
             {/* 위치 */}
             <div>
