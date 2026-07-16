@@ -41,8 +41,13 @@ function groupTasks(tasks: MemberTask[]): TaskGroup[] {
 
 const stripPrefix = (label: string) => label.replace(/^[◇◆┖└]\s*/, '');
 
-// 화재: 이 배지의 조장(파트장)이 임무를 체크하면, 이미 출동체크한 조원도 자동으로 현장 처리
-const FIRE_LEADER_AUTO_BADGES = new Set(['출동', '대응', '구조']);
+// 화재: 이 배지(또는 "대응1"처럼 번호가 붙은 세분화 배지 포함)의 조장(파트장)이 임무를 체크하면,
+// 이미 출동체크한 조원도 자동으로 현장 처리. 접두어 매칭이라 대응1~4/지원1~4/유도1~4처럼 배지가
+// 더 세분화돼도 코드 수정 없이 그대로 동작함.
+const FIRE_LEADER_AUTO_BADGE_PREFIXES = ['출동', '대응', '구조'];
+function isFireLeaderAutoBadge(badge: string): boolean {
+  return FIRE_LEADER_AUTO_BADGE_PREFIXES.some(p => badge.startsWith(p));
+}
 
 // 비상장구 목록은 1단계(출동)에 이미 표시되므로, 다른 단계의 임무 문구에서는 중복되지 않게 제거
 function stripEquipmentClause(text: string): string {
@@ -589,7 +594,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
         updateStatus('현장');
       }
       // 화재: 출동/대응/구조 배지의 조장이 체크하면, 이미 출동체크한 조원도 자동으로 현장 처리
-      if (activeIncident?.disaster === '화재' && myBadge && FIRE_LEADER_AUTO_BADGES.has(myBadge) && currentUser.role.includes('파트장')) {
+      if (activeIncident?.disaster === '화재' && myBadge && isFireLeaderAutoBadge(myBadge) && currentUser.role.includes('파트장')) {
         promoteDispatchedTeammates(myBadge);
       }
     } catch (err: any) {
