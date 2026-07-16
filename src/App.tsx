@@ -156,6 +156,13 @@ const App: React.FC = () => {
     }
   }, [activeIncident?.id, activeIncident?.mode, currentUser?.empNo, soundEnabled]);
 
+  // 0-b-2. activeIncident+currentUser 로드되면 "확인(ack)" 기록 — TTS 전화 에스컬레이션이
+  // 이 사람을 무응답자로 오판해 불필요하게 전화 걸지 않도록, 앱을 열어본 시점에 남긴다.
+  useEffect(() => {
+    if (!activeIncident || !currentUser) return;
+    db.ackIncident(activeIncident.id, currentUser.empNo);
+  }, [activeIncident?.id, currentUser?.empNo]);
+
   // 0-c. 화면 복귀 시 AudioContext 재활성화 (백그라운드 복귀 후 사이렌 묵음 방지)
   useEffect(() => {
     const handleVisibility = () => {

@@ -244,6 +244,21 @@ export const db = {
     if (error) throw error;
   },
 
+  // 9-b. 재난 알림 확인(앱을 열어봄) 기록 — TTS 전화 에스컬레이션의 "확인" 판정 기준.
+  // 이미 기록돼 있으면 조용히 무시(idempotent), 실패해도 앱 동작에 영향 없도록 에러 삼킴.
+  async ackIncident(incidentId: string, empNo: string): Promise<void> {
+    try {
+      await supabase
+        .from('incident_acks')
+        .upsert(
+          { incident_id: incidentId, emp_no: empNo, acked_at: Date.now() },
+          { onConflict: 'incident_id,emp_no', ignoreDuplicates: true }
+        );
+    } catch (e) {
+      console.warn('[ackIncident] 실패:', e);
+    }
+  },
+
   // 11. Set training participants (pre-populate responders with 미응답)
   async setTrainingParticipants(
     incidentId: string,
