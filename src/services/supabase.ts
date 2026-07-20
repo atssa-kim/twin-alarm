@@ -248,14 +248,16 @@ export const db = {
   },
 
   // 9-b. 재난 알림 확인(앱을 열어봄) 기록 — TTS 전화 에스컬레이션의 "확인" 판정 기준.
-  // 이미 기록돼 있으면 조용히 무시(idempotent), 실패해도 앱 동작에 영향 없도록 에러 삼킴.
-  async ackIncident(incidentId: string, empNo: string): Promise<void> {
+  // mode도 같이 저장하고 매번 갱신(ignoreDuplicates 없음) — 감지기동작 단계에서 확인했다고
+  // 전체화재로 승격된 뒤에도 "확인됨"으로 착각해 전화가 안 가는 걸 막기 위함. 에스컬레이션
+  // 쪽에서 "현재 mode와 일치하는 확인 기록만" 인정하도록 조회함. 실패해도 앱 동작엔 영향 없게 에러 삼킴.
+  async ackIncident(incidentId: string, empNo: string, mode: string): Promise<void> {
     try {
       await supabase
         .from('incident_acks')
         .upsert(
-          { incident_id: incidentId, emp_no: empNo, acked_at: Date.now() },
-          { onConflict: 'incident_id,emp_no', ignoreDuplicates: true }
+          { incident_id: incidentId, emp_no: empNo, mode, acked_at: Date.now() },
+          { onConflict: 'incident_id,emp_no' }
         );
     } catch (e) {
       console.warn('[ackIncident] 실패:', e);

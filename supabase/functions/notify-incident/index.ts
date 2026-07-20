@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { normalizePhones, sendSolapiMessages, type SolapiMessage } from '../_shared/solapi.ts';
 
 // ─── SOLAPI (SMS + Kakao 알림톡) ─────────────────────────────────────────────
 // 필요 Supabase Secrets:
@@ -9,16 +10,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 //   KAKAO_TEMPLATE_ID   - 승인된 알림톡 템플릿 ID    ex) KA01TP...  (알림톡 승인 후 설정)
 // SMS는 SOLAPI_API_KEY + SOLAPI_API_SECRET + SENDER_PHONE 만으로 즉시 발송
 // 알림톡은 KAKAO_PF_ID + KAKAO_TEMPLATE_ID 추가 설정 후 자동 활성화
-
-async function hmacSha256(message: string, secret: string): Promise<string> {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw', enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
-  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+// (HMAC 서명·발신 로직은 _shared/solapi.ts로 이동 — escalate-unacked-calls와 공유)
 
 async function sendKakaoAlimtalk(
   phones: string[],
@@ -31,19 +23,10 @@ async function sendKakaoAlimtalk(
   const pfId = Deno.env.get('KAKAO_PF_ID');
   const templateId = Deno.env.get('KAKAO_TEMPLATE_ID');
   const senderPhone = Deno.env.get('SENDER_PHONE');
+  if (!pfId || !templateId || !senderPhone) return; // 알림톡 설정 미완료 시 스킵
 
-  if (!apiKey || !apiSecret || !pfId || !templateId || !senderPhone) return; // 미설정 시 스킵
-
-  const validPhones = phones
-    .map(p => p.replace(/[-\s]/g, ''))
-    .filter(p => /^0\d{9,10}$/.test(p));
-  if (validPhones.length === 0) return;
-
-  const date = new Date().toISOString();
-  const salt = crypto.randomUUID().replace(/-/g, '');
-  const signature = await hmacSha256(`${date}${salt}`, apiSecret);
-
-  const messages = validPhones.map(to => ({
+  const validPhones = normalizePhones(phones);
+  const messages: SolapiMessage[] = validPhones.map(to => ({
     to,
     from: senderPhone.replace(/[-\s]/g, ''),
     type: 'ATA',
@@ -57,21 +40,7 @@ async function sendKakaoAlimtalk(
       },
     },
   }));
-
-  try {
-    const resp = await fetch('https://api.solapi.com/messages/v4/send-many', {
-      method: 'POST',
-      headers: {
-        'Authorization': `HMAC-SHA256 apiKey=${apiKey}, date=${date}, salt=${salt}, signature=${signature}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ messages }),
-    });
-    const result = await resp.json();
-    console.log(`[Kakao] sent=${result?.groupInfo?.count?.total ?? validPhones.length}, status=${resp.status}`);
-  } catch (e) {
-    console.warn('[Kakao] 발송 실패:', e);
-  }
+  await sendSolapiMessages(messages, { apiKey, apiSecret }, 'Kakao');
 }
 
 // ─── SMS 발송 (SOLAPI LMS) ────────────────────────────────────────────────────
@@ -85,42 +54,18 @@ async function sendSMS(
   const apiKey = Deno.env.get('SOLAPI_API_KEY');
   const apiSecret = Deno.env.get('SOLAPI_API_SECRET');
   const senderPhone = Deno.env.get('SENDER_PHONE');
+  if (!senderPhone) return;
 
-  if (!apiKey || !apiSecret || !senderPhone) return;
-
-  const validPhones = phones
-    .map(p => p.replace(/[-\s]/g, ''))
-    .filter(p => /^0\d{9,10}$/.test(p));
-  if (validPhones.length === 0) return;
-
-  const date = new Date().toISOString();
-  const salt = crypto.randomUUID().replace(/-/g, '');
-  const signature = await hmacSha256(`${date}${salt}`, apiSecret);
-
+  const validPhones = normalizePhones(phones);
   const text = `[트윈타워 재난알람]\n${disaster} 발생\n위치: ${location}\n\n${content}\n\n앱에서 행동매뉴얼을 확인하세요.`;
-
-  const messages = validPhones.map(to => ({
+  const messages: SolapiMessage[] = validPhones.map(to => ({
     to,
     from: senderPhone.replace(/[-\s]/g, ''),
     type: 'LMS',
     subject: `[재난알람] ${disaster} 발생`,
     text,
   }));
-
-  try {
-    const resp = await fetch('https://api.solapi.com/messages/v4/send-many', {
-      method: 'POST',
-      headers: {
-        'Authorization': `HMAC-SHA256 apiKey=${apiKey}, date=${date}, salt=${salt}, signature=${signature}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ messages }),
-    });
-    const result = await resp.json();
-    console.log(`[SMS] sent=${result?.groupInfo?.count?.total ?? validPhones.length}, status=${resp.status}`);
-  } catch (e) {
-    console.warn('[SMS] 발송 실패:', e);
-  }
+  await sendSolapiMessages(messages, { apiKey, apiSecret }, 'SMS');
 }
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -251,6 +196,22 @@ Deno.serve(async (req) => {
     const isTraining = mode.startsWith('훈련');
     const isEscalation = type === 'UPDATE';
 
+    // (incident_id, mode) 단위로 중복 발송 방지 — CommanderDashboard가 발령/승격 직후
+    // db.sendIncidentPush()로 이 함수를 직접 호출하는 것과, incidents 테이블의
+    // on_incident_fcm DB 트리거가 동시에 이 함수를 호출하는 것 두 경로가 항상 겹쳐서
+    // 실행됨. 선점 안 되면(이미 처리됨) 조용히 종료해 push/SMS/알림톡이 매번 두 번씩
+    // 나가던 문제(2026-07-20 발견)를 막음.
+    const supabaseForClaim = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+    const { error: dispatchClaimErr } = await supabaseForClaim
+      .from('notify_dispatches')
+      .insert({ incident_id: record.id, mode, dispatched_at: Date.now() });
+    if (dispatchClaimErr) {
+      return new Response('skip: already dispatched for this mode', { status: 200, headers: CORS });
+    }
+
     // audio.ts triggerEmergencyAlert 와 동일한 본문 계산
     let ttsText: string;
     if (mode === '훈련/감지기') {
@@ -274,56 +235,54 @@ Deno.serve(async (req) => {
 
     // drill_emp_nos: 앱 직접 호출(body) 또는 DB 트리거(record 컬럼)
     const drillEmpNos: string | null = body.drill_emp_nos || record?.drill_emp_nos || null;
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-    let subsQuery = supabase.from('push_subscriptions').select('fcm_token');
-    if (drillEmpNos) {
-      const empNoList = String(drillEmpNos).split(',').map((s: string) => s.trim()).filter(Boolean);
-      if (empNoList.length > 0) subsQuery = (subsQuery as any).in('emp_no', empNoList);
-    }
-    const { data: subs, error } = await subsQuery;
-    if (error) throw new Error('DB error: ' + error.message);
-    if (!subs || subs.length === 0) {
-      return new Response(JSON.stringify({ sent: 0 }), { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } });
-    }
-
-    const accessToken = await getGoogleAccessToken(sa);
-
-    await Promise.allSettled(
-      subs.map((s: { fcm_token: string }) =>
-        sendFcmPush(accessToken, s.fcm_token, title, bodyText, {
-          disaster: record.disaster ?? '',
-          location: record.location ?? '',
-          mode: record.mode ?? '',
-        })
-      )
-    );
-
-    // ── SMS + Kakao 알림톡 병행 발송 ─────────────────────────────────────────
     const empNoList: string[] = drillEmpNos
       ? String(drillEmpNos).split(',').map((s: string) => s.trim()).filter(Boolean)
       : [];
+
+    const supabase = supabaseForClaim;
+    let subsQuery = supabase.from('push_subscriptions').select('fcm_token');
+    if (empNoList.length > 0) subsQuery = (subsQuery as any).in('emp_no', empNoList);
     let phoneQuery = supabase.from('employees').select('phone').not('phone', 'is', null);
     if (empNoList.length > 0) phoneQuery = (phoneQuery as any).in('emp_no', empNoList);
-    const { data: empPhones } = await phoneQuery;
-    const phones = (empPhones ?? []).map((e: { phone: string }) => e.phone).filter(Boolean);
 
-    // SMS: SOLAPI_API_KEY + SENDER_PHONE 설정 시 즉시 발송 (알림톡 심사와 무관)
-    await sendSMS(phones, disaster, location, bodyText);
-    // 알림톡: KAKAO_PF_ID + KAKAO_TEMPLATE_ID 설정 시 추가 발송 (심사 완료 후)
-    await sendKakaoAlimtalk(phones, disaster, location, bodyText);
+    // push 발송 대상 조회, SMS/알림톡 발송 대상 조회, FCM용 구글 OAuth 토큰 발급은
+    // 서로 의존 관계가 없으므로 병렬로 실행 (2026-07-20 — 이전엔 순차 실행이라 불필요하게 느렸음)
+    const [{ data: subs, error: subsErr }, { data: empPhones, error: phoneErr }, accessToken] = await Promise.all([
+      subsQuery,
+      phoneQuery,
+      getGoogleAccessToken(sa),
+    ]);
+    if (subsErr) throw new Error('push_subscriptions 조회 오류: ' + subsErr.message);
+    if (phoneErr) throw new Error('employees 조회 오류: ' + phoneErr.message);
+
+    if (subs && subs.length > 0) {
+      await Promise.allSettled(
+        subs.map((s: { fcm_token: string }) =>
+          sendFcmPush(accessToken, s.fcm_token, title, bodyText, {
+            disaster: record.disaster ?? '',
+            location: record.location ?? '',
+            mode: record.mode ?? '',
+          })
+        )
+      );
+    }
+
+    // ── SMS + Kakao 알림톡 병행 발송 ─────────────────────────────────────────
+    // push 대상이 0명이어도(아직 알림 권한 허용 안 한 경우 등) SMS/알림톡은 별도로 계속 발송됨
+    const phones = (empPhones ?? []).map((e: { phone: string }) => e.phone).filter(Boolean);
+    await Promise.all([
+      sendSMS(phones, disaster, location, bodyText),        // SOLAPI_API_KEY + SENDER_PHONE 설정 시 즉시 발송 (알림톡 심사와 무관)
+      sendKakaoAlimtalk(phones, disaster, location, bodyText), // KAKAO_PF_ID + KAKAO_TEMPLATE_ID 설정 시 추가 발송 (심사 완료 후)
+    ]);
     // ─────────────────────────────────────────────────────────────────────────
 
-    return new Response(JSON.stringify({ sent: subs.length, sms: phones.length, kakao: phones.length }), {
+    return new Response(JSON.stringify({ sent: subs?.length ?? 0, sms: phones.length, kakao: phones.length }), {
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('notify-incident error:', message);
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({ error: 'internal error' }), {
       status: 500,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });

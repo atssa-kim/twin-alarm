@@ -1,11 +1,8 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { type Incident, type Responder, type MemberTask, type EmployeeDB, db, supabase } from '../services/supabase';
-import { DISASTERS } from '../data/disasters';
+import { DISASTERS, FIRE_INITIAL_BADGES } from '../data/disasters';
 import { stopAllAlerts } from '../utils/audio';
 import { Play, Square, AlertTriangle, Users, Mic, UserCheck, BarChart2, Monitor, History, X, ChevronDown } from 'lucide-react';
-
-// 화재 초기출동조 배지 (감지기동작 시 1차 소집)
-const FIRE_INITIAL_BADGES = new Set(['총괄', '상황', '통제', '출동']);
 
 // 상황 확정(variant) 칩 표시용 라벨 — 새 variant를 추가할 때 여기만 채우면 됨 (미등록 값은 그대로 표시)
 export const VARIANT_LABELS: Record<string, string> = {
@@ -92,6 +89,172 @@ const TEAM_ORDER = [
   '주차파트', '미화파트',
 ];
 
+// 훈련 참여인원 선택기(1차 발령)와 2차 소집 대원 선택기가 거의 동일한 구조라 공통 컴포넌트로
+// 추출함(2026-07-20) — 재난그룹 메뉴바 + 그룹→팀(또는 교대 A/B/C/D) 아코디언 + 하단 선택 인원수.
+// 바깥 토글 버튼(라벨·아이콘)은 두 화면에서 문구가 달라 각 호출부에 그대로 남겨두고,
+// 이 컴포넌트는 펼쳐졌을 때 보이는 내부 목록만 담당한다.
+interface EmployeeGroupPickerProps {
+  employees: EmployeeDB[];
+  disasterKey: string;
+  selected: Set<string>;
+  setSelected: React.Dispatch<React.SetStateAction<Set<string>>>;
+  openAccordions: Set<string>;
+  setOpenAccordions: React.Dispatch<React.SetStateAction<Set<string>>>;
+  wrapperBorderColor: string;
+  footerSuffix?: string;
+  showTotalPrefix?: boolean;
+}
+
+const EmployeeGroupPicker: React.FC<EmployeeGroupPickerProps> = ({
+  employees, disasterKey, selected, setSelected, openAccordions, setOpenAccordions, wrapperBorderColor, footerSuffix, showTotalPrefix = true,
+}) => {
+  return (
+    <div style={{ marginTop: '6px', border: `1px solid ${wrapperBorderColor}`, borderRadius: '10px', overflow: 'hidden', background: 'rgba(11,37,69,0.03)' }}>
+      {/* ── 메뉴바 ── */}
+      <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(11,37,69,0.06)', overflowX: 'auto' }}>
+        {(() => {
+          const allIds = employees.map(e => e.emp_no);
+          const allSel = allIds.length > 0 && allIds.every(id => selected.has(id));
+          const partSel = !allSel && allIds.some(id => selected.has(id));
+          return (
+            <button type="button" onClick={() => setSelected(allSel ? new Set() : new Set(allIds))} style={{
+              padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 800, flexShrink: 0,
+              border: `1px solid ${allSel ? '#4f46e5' : partSel ? '#4f46e566' : '#4f46e544'}`,
+              background: allSel ? '#4f46e522' : partSel ? '#4f46e50d' : 'transparent',
+              color: allSel ? '#4f46e5' : partSel ? '#4f46e5aa' : '#64748b',
+            }}>전체</button>
+          );
+        })()}
+        {INCIDENT_GROUPS.map(({ key, label, color }) => {
+          const grpIds = employees.filter(e => getIncidentGroup(e, disasterKey) === key).map(e => e.emp_no);
+          if (grpIds.length === 0) return null;
+          const selCount = grpIds.filter(id => selected.has(id)).length;
+          const allSel = selCount === grpIds.length;
+          const partSel = selCount > 0 && !allSel;
+          return (
+            <button key={key} type="button" onClick={() => setSelected(prev => {
+              const next = new Set(prev);
+              if (allSel) grpIds.forEach(id => next.delete(id));
+              else grpIds.forEach(id => next.add(id));
+              return next;
+            })} style={{
+              padding: '5px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 700, flexShrink: 0,
+              border: `1px solid ${allSel ? color : partSel ? color + '66' : color + '44'}`,
+              background: allSel ? color + '22' : partSel ? color + '0d' : 'transparent',
+              color: allSel ? color : partSel ? color + 'bb' : '#64748b',
+            }}>
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── 아코디언 목록 (그룹 → 팀 서브섹션) ── */}
+      {INCIDENT_GROUPS.map(({ key: grpKey, color }) => {
+        const grpEmps = employees.filter(e => getIncidentGroup(e, disasterKey) === grpKey);
+        if (grpEmps.length === 0) return null;
+        const selCount = grpEmps.filter(e => selected.has(e.emp_no)).length;
+        const allSel = selCount === grpEmps.length;
+        const isOpen = openAccordions.has(grpKey);
+
+        const tmap: Record<string, EmployeeDB[]> = {};
+        for (const e of grpEmps) {
+          const t = normalizeParticipantTeam(e.team, e.role);
+          (tmap[t] ??= []).push(e);
+        }
+        const teams: [string, EmployeeDB[]][] = [
+          ...TEAM_ORDER.filter(t => tmap[t]).map(t => [t, tmap[t]] as [string, EmployeeDB[]]),
+          ...Object.entries(tmap).filter(([t]) => !TEAM_ORDER.includes(t)),
+        ];
+
+        const toggleGrpSel = () => setSelected(prev => {
+          const next = new Set(prev);
+          if (allSel) grpEmps.forEach(e => next.delete(e.emp_no));
+          else grpEmps.forEach(e => next.add(e.emp_no));
+          return next;
+        });
+
+        const mkEmpRow = (emp: EmployeeDB, c: string) => {
+          const checked = selected.has(emp.emp_no);
+          return (
+            <div key={emp.emp_no} onClick={() => setSelected(prev => {
+              const next = new Set(prev); next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no); return next;
+            })} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '5px 4px', cursor: 'pointer' }}>
+              <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? c : 'rgba(11,37,69,0.18)'}`, background: checked ? c + '33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {checked && <span style={{ color: c, fontSize: '9px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
+              </div>
+              <span style={{ fontSize: '12px', flex: 1, color: checked ? 'var(--text-main)' : 'var(--text-muted)' }}>{emp.name}</span>
+              <span style={{ fontSize: '10px', color: '#475569' }}>{emp.role}</span>
+            </div>
+          );
+        };
+
+        return (
+          <div key={grpKey} style={{ borderBottom: `1px solid ${color}33` }}>
+            <div onClick={() => setOpenAccordions(prev => { const next = new Set(prev); next.has(grpKey) ? next.delete(grpKey) : next.add(grpKey); return next; })} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', cursor: 'pointer', borderLeft: `3px solid ${selCount > 0 ? color : 'rgba(11,37,69,0.09)'}`, background: selCount > 0 ? color + '08' : 'transparent' }}>
+              <span style={{ flex: 1, fontSize: '13px', fontWeight: 700, color: selCount > 0 ? color : 'var(--text-muted)' }}>{grpKey}</span>
+              <span style={{ fontSize: '11px', color: selCount > 0 ? color : '#475569', fontWeight: 600 }}>{selCount}/{grpEmps.length}명</span>
+              <button type="button" onClick={e => { e.stopPropagation(); toggleGrpSel(); }} style={{ padding: '3px 9px', borderRadius: '5px', fontSize: '10px', fontWeight: 700, border: `1px solid ${allSel ? color : color + '55'}`, background: allSel ? color + '22' : 'transparent', color: allSel ? color : color + 'aa', cursor: 'pointer', flexShrink: 0, marginLeft: '6px' }}>{allSel ? '해제' : '선택'}</button>
+              <span style={{ fontSize: '11px', color: '#475569', marginLeft: '4px' }}>{isOpen ? '▲' : '▼'}</span>
+            </div>
+            {isOpen && (
+              <div style={{ background: 'rgba(11,37,69,0.025)', padding: '2px 12px 8px' }}>
+                {grpKey === '교대' ? (
+                  (['A', 'B', 'C', 'D'] as const).map(cho => {
+                    const choEmps = grpEmps.filter(e => e.role.includes(cho + '조'));
+                    if (choEmps.length === 0) return null;
+                    const cc = ({ A: '#4f46e5', B: '#86efac', C: '#fdba74', D: '#f9a8d4' } as Record<string, string>)[cho];
+                    const choSel = choEmps.filter(e => selected.has(e.emp_no)).length;
+                    const allChoSel = choSel === choEmps.length;
+                    return (
+                      <div key={cho}>
+                        <div onClick={() => setSelected(prev => {
+                          const next = new Set(prev);
+                          if (allChoSel) choEmps.forEach(e => next.delete(e.emp_no));
+                          else choEmps.forEach(e => next.add(e.emp_no));
+                          return next;
+                        })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 4px 3px', cursor: 'pointer', borderBottom: '1px solid rgba(11,37,69,0.045)', marginBottom: '2px' }}>
+                          <span style={{ fontSize: '11px', color: cc, fontWeight: 700 }}>{cho}조</span>
+                          <span style={{ fontSize: '10px', color: '#475569' }}>{choSel}/{choEmps.length}</span>
+                          <span style={{ marginLeft: 'auto', fontSize: '10px', color: allChoSel ? cc : '#475569' }}>{allChoSel ? '전체해제' : '전체선택'}</span>
+                        </div>
+                        {choEmps.map(emp => mkEmpRow(emp, cc))}
+                      </div>
+                    );
+                  })
+                ) : (
+                  teams.map(([team, teamEmps]) => {
+                    const tSel = teamEmps.filter(e => selected.has(e.emp_no)).length;
+                    const allTSel = tSel === teamEmps.length;
+                    return (
+                      <div key={team} style={{ marginBottom: '3px' }}>
+                        <div onClick={() => setSelected(prev => {
+                          const next = new Set(prev);
+                          if (allTSel) teamEmps.forEach(e => next.delete(e.emp_no));
+                          else teamEmps.forEach(e => next.add(e.emp_no));
+                          return next;
+                        })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 4px 2px', cursor: 'pointer', borderBottom: '1px solid rgba(11,37,69,0.045)', marginBottom: '2px' }}>
+                          <span style={{ fontSize: '11px', color: tSel > 0 ? color : '#64748b', fontWeight: 700, flex: 1 }}>{team}</span>
+                          <span style={{ fontSize: '10px', color: '#475569' }}>{tSel}/{teamEmps.length}</span>
+                        </div>
+                        {teamEmps.map(emp => mkEmpRow(emp, color))}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      <div style={{ padding: '5px 12px 7px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>
+        {showTotalPrefix ? '총 ' : ''}<strong style={{ color: 'var(--text-main)' }}>{selected.size}명</strong> 선택{footerSuffix || ''}
+      </div>
+    </div>
+  );
+};
+
 export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   activeIncident,
   responders,
@@ -134,6 +297,13 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const [aiReport, setAiReport] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const isFireDisaster = selectedDisasterKey === '화재';
+
+  // 재난이 바뀌거나(새 발령) 종료되면 이전 재난의 AI보고서·탭 선택이 남아있지 않도록 초기화.
+  // (없으면: 이전 재난에서 본 AI보고서 텍스트가 새 재난 화면에 그대로 남아 오인 위험 — 2026-07-20 발견)
+  useEffect(() => {
+    setAiReport(null);
+    setActiveMonitorTab('roster');
+  }, [activeIncident?.id]);
 
   // ── 종료 재난 로그 ───────────────────────────────────────────
   const [showLog, setShowLog] = useState(false);
@@ -775,149 +945,15 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                 </button>
 
                 {showParticipants && (
-                  <div style={{ marginTop: '6px', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '10px', overflow: 'hidden', background: 'rgba(11,37,69,0.03)' }}>
-                    {/* ── 메뉴바 ── */}
-                    <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(11,37,69,0.06)', overflowX: 'auto' }}>
-                      {(() => {
-                        const allIds = employees.map(e => e.emp_no);
-                        const allSel = allIds.length > 0 && allIds.every(id => selectedEmps.has(id));
-                        const partSel = !allSel && allIds.some(id => selectedEmps.has(id));
-                        return (
-                          <button type="button" onClick={() => setSelectedEmps(allSel ? new Set() : new Set(allIds))} style={{
-                            padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 800, flexShrink: 0,
-                            border: `1px solid ${allSel ? '#4f46e5' : partSel ? '#4f46e566' : '#4f46e544'}`,
-                            background: allSel ? '#4f46e522' : partSel ? '#4f46e50d' : 'transparent',
-                            color: allSel ? '#4f46e5' : partSel ? '#4f46e5aa' : '#64748b',
-                          }}>전체</button>
-                        );
-                      })()}
-                      {INCIDENT_GROUPS.map(({ key, label, color }) => {
-                        const grpIds = employees.filter(e => getIncidentGroup(e, selectedDisasterKey) === key).map(e => e.emp_no);
-                        if (grpIds.length === 0) return null;
-                        const selCount = grpIds.filter(id => selectedEmps.has(id)).length;
-                        const allSel = selCount === grpIds.length;
-                        const partSel = selCount > 0 && !allSel;
-                        return (
-                          <button key={key} type="button" onClick={() => setSelectedEmps(prev => {
-                            const next = new Set(prev);
-                            if (allSel) grpIds.forEach(id => next.delete(id));
-                            else grpIds.forEach(id => next.add(id));
-                            return next;
-                          })} style={{
-                            padding: '5px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 700, flexShrink: 0,
-                            border: `1px solid ${allSel ? color : partSel ? color + '66' : color + '44'}`,
-                            background: allSel ? color + '22' : partSel ? color + '0d' : 'transparent',
-                            color: allSel ? color : partSel ? color + 'bb' : '#64748b',
-                          }}>
-                            {label}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* ── 아코디언 목록 (그룹 → 팀 서브섹션) ── */}
-                    {INCIDENT_GROUPS.map(({ key: grpKey, color }) => {
-                      const grpEmps = employees.filter(e => getIncidentGroup(e, selectedDisasterKey) === grpKey);
-                      if (grpEmps.length === 0) return null;
-                      const selCount = grpEmps.filter(e => selectedEmps.has(e.emp_no)).length;
-                      const allSel = selCount === grpEmps.length;
-                      const isOpen = openAccordions.has(grpKey);
-
-                      const tmap: Record<string, EmployeeDB[]> = {};
-                      for (const e of grpEmps) {
-                        const t = normalizeParticipantTeam(e.team, e.role);
-                        (tmap[t] ??= []).push(e);
-                      }
-                      const teams: [string, EmployeeDB[]][] = [
-                        ...TEAM_ORDER.filter(t => tmap[t]).map(t => [t, tmap[t]] as [string, EmployeeDB[]]),
-                        ...Object.entries(tmap).filter(([t]) => !TEAM_ORDER.includes(t)),
-                      ];
-
-                      const toggleGrpSel = () => setSelectedEmps(prev => {
-                        const next = new Set(prev);
-                        if (allSel) grpEmps.forEach(e => next.delete(e.emp_no));
-                        else grpEmps.forEach(e => next.add(e.emp_no));
-                        return next;
-                      });
-
-                      const mkEmpRow = (emp: EmployeeDB, c: string) => {
-                        const checked = selectedEmps.has(emp.emp_no);
-                        return (
-                          <div key={emp.emp_no} onClick={() => setSelectedEmps(prev => {
-                            const next = new Set(prev); next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no); return next;
-                          })} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '5px 4px', cursor: 'pointer' }}>
-                            <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? c : 'rgba(11,37,69,0.18)'}`, background: checked ? c + '33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              {checked && <span style={{ color: c, fontSize: '9px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
-                            </div>
-                            <span style={{ fontSize: '12px', flex: 1, color: checked ? 'var(--text-main)' : 'var(--text-muted)' }}>{emp.name}</span>
-                            <span style={{ fontSize: '10px', color: '#475569' }}>{emp.role}</span>
-                          </div>
-                        );
-                      };
-
-                      return (
-                        <div key={grpKey} style={{ borderBottom: `1px solid ${color}33` }}>
-                          <div onClick={() => setOpenAccordions(prev => { const next = new Set(prev); next.has(grpKey) ? next.delete(grpKey) : next.add(grpKey); return next; })} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', cursor: 'pointer', borderLeft: `3px solid ${selCount > 0 ? color : 'rgba(11,37,69,0.09)'}`, background: selCount > 0 ? color + '08' : 'transparent' }}>
-                            <span style={{ flex: 1, fontSize: '13px', fontWeight: 700, color: selCount > 0 ? color : 'var(--text-muted)' }}>{grpKey}</span>
-                            <span style={{ fontSize: '11px', color: selCount > 0 ? color : '#475569', fontWeight: 600 }}>{selCount}/{grpEmps.length}명</span>
-                            <button type="button" onClick={e => { e.stopPropagation(); toggleGrpSel(); }} style={{ padding: '3px 9px', borderRadius: '5px', fontSize: '10px', fontWeight: 700, border: `1px solid ${allSel ? color : color + '55'}`, background: allSel ? color + '22' : 'transparent', color: allSel ? color : color + 'aa', cursor: 'pointer', flexShrink: 0, marginLeft: '6px' }}>{allSel ? '해제' : '선택'}</button>
-                            <span style={{ fontSize: '11px', color: '#475569', marginLeft: '4px' }}>{isOpen ? '▲' : '▼'}</span>
-                          </div>
-                          {isOpen && (
-                            <div style={{ background: 'rgba(11,37,69,0.025)', padding: '2px 12px 8px' }}>
-                              {grpKey === '교대' ? (
-                                (['A', 'B', 'C', 'D'] as const).map(cho => {
-                                  const choEmps = grpEmps.filter(e => e.role.includes(cho + '조'));
-                                  if (choEmps.length === 0) return null;
-                                  const cc = ({ A: '#4f46e5', B: '#86efac', C: '#fdba74', D: '#f9a8d4' } as Record<string, string>)[cho];
-                                  const choSel = choEmps.filter(e => selectedEmps.has(e.emp_no)).length;
-                                  const allChoSel = choSel === choEmps.length;
-                                  return (
-                                    <div key={cho}>
-                                      <div onClick={() => setSelectedEmps(prev => {
-                                        const next = new Set(prev);
-                                        if (allChoSel) choEmps.forEach(e => next.delete(e.emp_no));
-                                        else choEmps.forEach(e => next.add(e.emp_no));
-                                        return next;
-                                      })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 4px 3px', cursor: 'pointer', borderBottom: '1px solid rgba(11,37,69,0.045)', marginBottom: '2px' }}>
-                                        <span style={{ fontSize: '11px', color: cc, fontWeight: 700 }}>{cho}조</span>
-                                        <span style={{ fontSize: '10px', color: '#475569' }}>{choSel}/{choEmps.length}</span>
-                                        <span style={{ marginLeft: 'auto', fontSize: '10px', color: allChoSel ? cc : '#475569' }}>{allChoSel ? '전체해제' : '전체선택'}</span>
-                                      </div>
-                                      {choEmps.map(emp => mkEmpRow(emp, cc))}
-                                    </div>
-                                  );
-                                })
-                              ) : (
-                                teams.map(([team, teamEmps]) => {
-                                  const tSel = teamEmps.filter(e => selectedEmps.has(e.emp_no)).length;
-                                  const allTSel = tSel === teamEmps.length;
-                                  return (
-                                    <div key={team} style={{ marginBottom: '3px' }}>
-                                      <div onClick={() => setSelectedEmps(prev => {
-                                        const next = new Set(prev);
-                                        if (allTSel) teamEmps.forEach(e => next.delete(e.emp_no));
-                                        else teamEmps.forEach(e => next.add(e.emp_no));
-                                        return next;
-                                      })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 4px 2px', cursor: 'pointer', borderBottom: '1px solid rgba(11,37,69,0.045)', marginBottom: '2px' }}>
-                                        <span style={{ fontSize: '11px', color: tSel > 0 ? color : '#64748b', fontWeight: 700, flex: 1 }}>{team}</span>
-                                        <span style={{ fontSize: '10px', color: '#475569' }}>{tSel}/{teamEmps.length}</span>
-                                      </div>
-                                      {teamEmps.map(emp => mkEmpRow(emp, color))}
-                                    </div>
-                                  );
-                                })
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    <div style={{ padding: '5px 12px 7px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>
-                      총 <strong style={{ color: 'var(--text-main)' }}>{selectedEmps.size}명</strong> 선택
-                    </div>
-                  </div>
+                  <EmployeeGroupPicker
+                    employees={employees}
+                    disasterKey={selectedDisasterKey}
+                    selected={selectedEmps}
+                    setSelected={setSelectedEmps}
+                    openAccordions={openAccordions}
+                    setOpenAccordions={setOpenAccordions}
+                    wrapperBorderColor="rgba(99,102,241,0.2)"
+                  />
                 )}
               </div>
             )}
@@ -1364,149 +1400,17 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                       </button>
 
                       {showEscalatePanel && (
-                        <div style={{ marginTop: '6px', border: '1px solid rgba(165,180,252,0.2)', borderRadius: '10px', overflow: 'hidden', background: 'rgba(11,37,69,0.03)' }}>
-                          {/* ── 메뉴바 (1차와 동일 구조, escalateEmps 사용) ── */}
-                          <div style={{ display: 'flex', gap: '4px', padding: '7px 8px', borderBottom: '1px solid rgba(11,37,69,0.06)', overflowX: 'auto' }}>
-                            {(() => {
-                              const allIds = employees.map(e => e.emp_no);
-                              const allSel = allIds.length > 0 && allIds.every(id => escalateEmps.has(id));
-                              const partSel = !allSel && allIds.some(id => escalateEmps.has(id));
-                              return (
-                                <button type="button" onClick={() => setEscalateEmps(allSel ? new Set() : new Set(allIds))} style={{
-                                  padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 800, flexShrink: 0,
-                                  border: `1px solid ${allSel ? '#4f46e5' : partSel ? '#4f46e566' : '#4f46e544'}`,
-                                  background: allSel ? '#4f46e522' : partSel ? '#4f46e50d' : 'transparent',
-                                  color: allSel ? '#4f46e5' : partSel ? '#4f46e5aa' : '#64748b',
-                                }}>전체</button>
-                              );
-                            })()}
-                            {INCIDENT_GROUPS.map(({ key, label, color }) => {
-                              const grpIds = employees.filter(e => getIncidentGroup(e, activeIncident!.disaster) === key).map(e => e.emp_no);
-                              if (grpIds.length === 0) return null;
-                              const selCount = grpIds.filter(id => escalateEmps.has(id)).length;
-                              const allSel = selCount === grpIds.length;
-                              const partSel = selCount > 0 && !allSel;
-                              return (
-                                <button key={key} type="button" onClick={() => setEscalateEmps(prev => {
-                                  const next = new Set(prev);
-                                  if (allSel) grpIds.forEach(id => next.delete(id));
-                                  else grpIds.forEach(id => next.add(id));
-                                  return next;
-                                })} style={{
-                                  padding: '5px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 700, flexShrink: 0,
-                                  border: `1px solid ${allSel ? color : partSel ? color + '66' : color + '44'}`,
-                                  background: allSel ? color + '22' : partSel ? color + '0d' : 'transparent',
-                                  color: allSel ? color : partSel ? color + 'bb' : '#64748b',
-                                }}>
-                                  {label}
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          {/* ── 아코디언 목록 (1차에서 이어받은 선택 표시) ── */}
-                          {INCIDENT_GROUPS.map(({ key: grpKey, color }) => {
-                            const grpEmps = employees.filter(e => getIncidentGroup(e, activeIncident!.disaster) === grpKey);
-                            if (grpEmps.length === 0) return null;
-                            const selCount = grpEmps.filter(e => escalateEmps.has(e.emp_no)).length;
-                            const allSel = selCount === grpEmps.length;
-                            const isOpen = openEscalateAccordions.has(grpKey);
-
-                            const tmap: Record<string, EmployeeDB[]> = {};
-                            for (const e of grpEmps) {
-                              const t = normalizeParticipantTeam(e.team, e.role);
-                              (tmap[t] ??= []).push(e);
-                            }
-                            const teams: [string, EmployeeDB[]][] = [
-                              ...TEAM_ORDER.filter(t => tmap[t]).map(t => [t, tmap[t]] as [string, EmployeeDB[]]),
-                              ...Object.entries(tmap).filter(([t]) => !TEAM_ORDER.includes(t)),
-                            ];
-
-                            const toggleGrpSel = () => setEscalateEmps(prev => {
-                              const next = new Set(prev);
-                              if (allSel) grpEmps.forEach(e => next.delete(e.emp_no));
-                              else grpEmps.forEach(e => next.add(e.emp_no));
-                              return next;
-                            });
-
-                            const mkEmpRow = (emp: EmployeeDB, c: string) => {
-                              const checked = escalateEmps.has(emp.emp_no);
-                              return (
-                                <div key={emp.emp_no} onClick={() => setEscalateEmps(prev => {
-                                  const next = new Set(prev); next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no); return next;
-                                })} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '5px 4px', cursor: 'pointer' }}>
-                                  <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? c : 'rgba(11,37,69,0.18)'}`, background: checked ? c + '33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    {checked && <span style={{ color: c, fontSize: '9px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
-                                  </div>
-                                  <span style={{ fontSize: '12px', flex: 1, color: checked ? 'var(--text-main)' : 'var(--text-muted)' }}>{emp.name}</span>
-                                  <span style={{ fontSize: '10px', color: '#475569' }}>{emp.role}</span>
-                                </div>
-                              );
-                            };
-
-                            return (
-                              <div key={grpKey} style={{ borderBottom: `1px solid ${color}33` }}>
-                                <div onClick={() => setOpenEscalateAccordions(prev => { const next = new Set(prev); next.has(grpKey) ? next.delete(grpKey) : next.add(grpKey); return next; })} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', cursor: 'pointer', borderLeft: `3px solid ${selCount > 0 ? color : 'rgba(11,37,69,0.09)'}`, background: selCount > 0 ? color + '08' : 'transparent' }}>
-                                  <span style={{ flex: 1, fontSize: '13px', fontWeight: 700, color: selCount > 0 ? color : 'var(--text-muted)' }}>{grpKey}</span>
-                                  <span style={{ fontSize: '11px', color: selCount > 0 ? color : '#475569', fontWeight: 600 }}>{selCount}/{grpEmps.length}명</span>
-                                  <button type="button" onClick={e => { e.stopPropagation(); toggleGrpSel(); }} style={{ padding: '3px 9px', borderRadius: '5px', fontSize: '10px', fontWeight: 700, border: `1px solid ${allSel ? color : color + '55'}`, background: allSel ? color + '22' : 'transparent', color: allSel ? color : color + 'aa', cursor: 'pointer', flexShrink: 0, marginLeft: '6px' }}>{allSel ? '해제' : '선택'}</button>
-                                  <span style={{ fontSize: '11px', color: '#475569', marginLeft: '4px' }}>{isOpen ? '▲' : '▼'}</span>
-                                </div>
-                                {isOpen && (
-                                  <div style={{ background: 'rgba(11,37,69,0.025)', padding: '2px 12px 8px' }}>
-                                    {grpKey === '교대' ? (
-                                      (['A', 'B', 'C', 'D'] as const).map(cho => {
-                                        const choEmps = grpEmps.filter(e => e.role.includes(cho + '조'));
-                                        if (choEmps.length === 0) return null;
-                                        const cc = ({ A: '#4f46e5', B: '#86efac', C: '#fdba74', D: '#f9a8d4' } as Record<string, string>)[cho];
-                                        const choSel = choEmps.filter(e => escalateEmps.has(e.emp_no)).length;
-                                        const allChoSel = choSel === choEmps.length;
-                                        return (
-                                          <div key={cho}>
-                                            <div onClick={() => setEscalateEmps(prev => {
-                                              const next = new Set(prev);
-                                              if (allChoSel) choEmps.forEach(e => next.delete(e.emp_no));
-                                              else choEmps.forEach(e => next.add(e.emp_no));
-                                              return next;
-                                            })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 4px 3px', cursor: 'pointer', borderBottom: '1px solid rgba(11,37,69,0.045)', marginBottom: '2px' }}>
-                                              <span style={{ fontSize: '11px', color: cc, fontWeight: 700 }}>{cho}조</span>
-                                              <span style={{ fontSize: '10px', color: '#475569' }}>{choSel}/{choEmps.length}</span>
-                                              <span style={{ marginLeft: 'auto', fontSize: '10px', color: allChoSel ? cc : '#475569' }}>{allChoSel ? '전체해제' : '전체선택'}</span>
-                                            </div>
-                                            {choEmps.map(emp => mkEmpRow(emp, cc))}
-                                          </div>
-                                        );
-                                      })
-                                    ) : (
-                                      teams.map(([team, teamEmps]) => {
-                                        const tSel = teamEmps.filter(e => escalateEmps.has(e.emp_no)).length;
-                                        const allTSel = tSel === teamEmps.length;
-                                        return (
-                                          <div key={team} style={{ marginBottom: '3px' }}>
-                                            <div onClick={() => setEscalateEmps(prev => {
-                                              const next = new Set(prev);
-                                              if (allTSel) teamEmps.forEach(e => next.delete(e.emp_no));
-                                              else teamEmps.forEach(e => next.add(e.emp_no));
-                                              return next;
-                                            })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 4px 2px', cursor: 'pointer', borderBottom: '1px solid rgba(11,37,69,0.045)', marginBottom: '2px' }}>
-                                              <span style={{ fontSize: '11px', color: tSel > 0 ? color : '#64748b', fontWeight: 700, flex: 1 }}>{team}</span>
-                                              <span style={{ fontSize: '10px', color: '#475569' }}>{tSel}/{teamEmps.length}</span>
-                                            </div>
-                                            {teamEmps.map(emp => mkEmpRow(emp, color))}
-                                          </div>
-                                        );
-                                      })
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-
-                          <div style={{ padding: '5px 12px 7px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>
-                            <strong style={{ color: 'var(--text-main)' }}>{escalateEmps.size}명</strong> 선택 (선택 대원에게만 알람 발송)
-                          </div>
-                        </div>
+                        <EmployeeGroupPicker
+                          employees={employees}
+                          disasterKey={activeIncident!.disaster}
+                          selected={escalateEmps}
+                          setSelected={setEscalateEmps}
+                          openAccordions={openEscalateAccordions}
+                          setOpenAccordions={setOpenEscalateAccordions}
+                          wrapperBorderColor="rgba(165,180,252,0.2)"
+                          footerSuffix=" (선택 대원에게만 알람 발송)"
+                          showTotalPrefix={false}
+                        />
                       )}
                     </div>
                   )}

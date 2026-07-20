@@ -13,6 +13,9 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
   responders,
   tasks
 }) => {
+  const [showRoles, setShowRoles] = useState(true);
+  const [showActivityLog, setShowActivityLog] = useState(false);
+
   if (!activeIncident) {
     return (
       <div className="content">
@@ -29,9 +32,6 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
       </div>
     );
   }
-
-  const [showRoles, setShowRoles] = useState(true);
-  const [showActivityLog, setShowActivityLog] = useState(false);
 
   // Overall calculations
   const totalTasks = tasks.length;

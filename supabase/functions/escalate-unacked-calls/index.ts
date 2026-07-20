@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { normalizePhones, sendSolapiMessages, type SolapiMessage } from '../_shared/solapi.ts';
 
 // ─── SOLAPI 보이스(TTS 전화) 에스컬레이션 ────────────────────────────────────
 // "실제 상황" 발령/승격 후 30초가 지나도 앱을 열어보지 않은 대상자에게만 전화를
@@ -7,10 +8,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // 30초는 골든타임(3분) 안에서 최대한 빨리 잡기 위한 값 — 짧을수록 정상적으로
 // 반응 중인 사람에게도 전화가 걸릴 가능성이 커지는 트레이드오프가 있음(2026-07-16 논의).
 //
-// 대상자 범위 (2026-07-16b):
-//   화재 감지기동작(scope='fire_initial') → 총괄/통제/출동
-//   화재 전체화재(그 외 scope)            → 위 3배지를 "제외한" 나머지 전 배지
-//   그 외 8개 재난                        → 총괄/통제/상황 (지휘연락급)
+// 대상자 범위 (2026-07-16b, 2026-07-20 수정):
+//   화재 감지기동작(scope='fire_initial')               → 총괄/통제/출동
+//   화재 전체화재, 감지기동작 단계를 이미 거친 경우      → 총괄/통제/출동을 "제외한" 나머지 전 배지
+//   화재 전체화재를 감지기동작 없이 곧바로 발령한 경우   → 전 배지(제외 없음) — 총괄/통제/출동이
+//     한 번도 에스컬레이션 대상이 된 적 없으므로 여기서 빠지면 아무도 안 걸림(2026-07-20 발견된 버그)
+//   그 외 8개 재난                                       → 총괄/통제/상황 (지휘연락급)
 //
 // 감지기동작→전체화재 승격은 새 발령(INSERT)이 아니라 같은 incident 행의
 // UPDATE라서, 같은 incident_id가 두 번(1.1, 1.2) 에스컬레이션될 수 있음 →
@@ -32,56 +35,22 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function hmacSha256(message: string, secret: string): Promise<string> {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw', enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
-  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
+// HMAC 서명·발신 로직은 _shared/solapi.ts로 이동 — notify-incident와 공유(2026-07-20)
 async function sendVoiceCalls(phones: string[], text: string): Promise<void> {
   const apiKey = Deno.env.get('SOLAPI_API_KEY');
   const apiSecret = Deno.env.get('SOLAPI_API_SECRET');
   const senderPhone = Deno.env.get('SENDER_PHONE');
-  if (!apiKey || !apiSecret || !senderPhone) {
-    console.warn('[Voice] SOLAPI secrets 미설정 — 스킵');
-    return;
-  }
+  if (!senderPhone) return;
 
-  const validPhones = phones
-    .map(p => p.replace(/[-\s]/g, ''))
-    .filter(p => /^0\d{9,10}$/.test(p));
-  if (validPhones.length === 0) return;
-
-  const date = new Date().toISOString();
-  const salt = crypto.randomUUID().replace(/-/g, '');
-  const signature = await hmacSha256(`${date}${salt}`, apiSecret);
-
-  const messages = validPhones.map(to => ({
+  const validPhones = normalizePhones(phones);
+  const messages: SolapiMessage[] = validPhones.map(to => ({
     to,
     from: senderPhone.replace(/[-\s]/g, ''),
     type: 'CTI', // SOLAPI 음성(TTS 전화) 메시지 타입
     text: text.slice(0, 490), // 한글 최대 490자
     voiceOptions: { voiceType: 'FEMALE' },
   }));
-
-  try {
-    const resp = await fetch('https://api.solapi.com/messages/v4/send-many', {
-      method: 'POST',
-      headers: {
-        'Authorization': `HMAC-SHA256 apiKey=${apiKey}, date=${date}, salt=${salt}, signature=${signature}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ messages }),
-    });
-    const result = await resp.json();
-    console.log(`[Voice] called=${result?.groupInfo?.count?.total ?? validPhones.length}, status=${resp.status}`);
-  } catch (e) {
-    console.warn('[Voice] 발신 실패:', e);
-  }
+  await sendSolapiMessages(messages, { apiKey, apiSecret }, 'Voice');
 }
 
 function sleep(ms: number): Promise<void> {
@@ -148,6 +117,19 @@ Deno.serve(async (req) => {
       return new Response('skip: incident closed', { status: 200, headers: CORS });
     }
 
+    // 화재 전체화재 단계라면, 감지기동작 단계가 "이 사건에서 실제로 먼저 처리됐는지" 확인.
+    // (claim은 대상자 유무와 무관하게 항상 남으므로, 존재 여부만으로 판단 가능)
+    let fireInitialAlreadyHandled = false;
+    if (disaster === '화재' && !isFireInitial) {
+      const { data: priorInitial } = await supabase
+        .from('incident_call_escalations')
+        .select('mode')
+        .eq('incident_id', incidentId)
+        .like('mode', '%감지기%')
+        .maybeSingle();
+      fireInitialAlreadyHandled = !!priorInitial;
+    }
+
     // 대상 배지 범위 결정
     let badgeQuery = supabase
       .from('employee_disaster_badges')
@@ -156,27 +138,30 @@ Deno.serve(async (req) => {
       .eq('shift', shift);
     if (isFireInitial) {
       badgeQuery = badgeQuery.in('badge', FIRE_INITIAL_BADGES);
-    } else if (disaster === '화재') {
-      // 전체화재: 감지기동작 단계에서 이미 다룬 3배지를 제외한 나머지 전원
+    } else if (disaster === '화재' && fireInitialAlreadyHandled) {
+      // 감지기동작 단계에서 이미 다룬 3배지를 제외한 나머지 전원
       badgeQuery = badgeQuery.not('badge', 'in', `(${FIRE_INITIAL_BADGES.join(',')})`);
+    } else if (disaster === '화재') {
+      // 감지기동작 없이 곧바로 전체화재로 발령된 경우 — 총괄/통제/출동도 아직 아무 데도
+      // 안 걸렸으므로 제외하지 않고 전 배지를 대상으로 함
     } else {
       badgeQuery = badgeQuery.in('badge', COMMAND_BADGES);
     }
-    const { data: badgeRows, error: badgeErr } = await badgeQuery;
+    // 대상 배지 조회와, 이미 이 mode(상황 단계)에서 앱을 열어 확인(ack)한 사람 조회는 서로
+    // 독립적이므로 병렬 실행. ack는 mode까지 일치시켜서 — 감지기동작 단계에서 확인한 기록이
+    // 전체화재 승격 이후까지 "확인됨"으로 잘못 인정되지 않도록 함.
+    const [{ data: badgeRows, error: badgeErr }, { data: ackRows, error: ackErr }] = await Promise.all([
+      badgeQuery,
+      supabase.from('incident_acks').select('emp_no').eq('incident_id', incidentId).eq('mode', mode),
+    ]);
     if (badgeErr) throw new Error('employee_disaster_badges 조회 오류: ' + badgeErr.message);
+    if (ackErr) throw new Error('incident_acks 조회 오류: ' + ackErr.message);
     const targetEmpNos = [...new Set((badgeRows ?? []).map((r: { emp_no: string }) => r.emp_no))];
     if (targetEmpNos.length === 0) {
       return new Response(JSON.stringify({ called: 0, reason: 'no targets' }), {
         status: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
-
-    // 이미 앱을 열어 확인(ack)한 사람 제외
-    const { data: ackRows, error: ackErr } = await supabase
-      .from('incident_acks')
-      .select('emp_no')
-      .eq('incident_id', incidentId);
-    if (ackErr) throw new Error('incident_acks 조회 오류: ' + ackErr.message);
     const ackedSet = new Set((ackRows ?? []).map((r: { emp_no: string }) => r.emp_no));
     const unackedEmpNos = targetEmpNos.filter(empNo => !ackedSet.has(empNo));
     if (unackedEmpNos.length === 0) {
@@ -204,7 +189,7 @@ Deno.serve(async (req) => {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('escalate-unacked-calls error:', message);
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({ error: 'internal error' }), {
       status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }

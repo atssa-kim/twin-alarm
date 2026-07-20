@@ -3,7 +3,7 @@ import { type Incident, type Responder, type MemberTask, type DisasterRole, type
 import { type Employee } from './Login';
 import { Check, ShieldAlert, MapPin, Award, CheckSquare, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
 import { unlockAudio } from '../utils/audio';
-import { DISASTERS } from '../data/disasters';
+import { DISASTERS, FIRE_INITIAL_BADGES } from '../data/disasters';
 import { findEquipmentLocation } from '../data/equipmentLocations';
 
 interface ResponderViewProps {
@@ -42,8 +42,9 @@ function groupTasks(tasks: MemberTask[]): TaskGroup[] {
 const stripPrefix = (label: string) => label.replace(/^[◇◆┖└]\s*/, '');
 
 // 화재: 이 배지(또는 "대응1"처럼 번호가 붙은 세분화 배지 포함)의 조장(파트장)이 임무를 체크하면,
-// 이미 출동체크한 조원도 자동으로 현장 처리. 접두어 매칭이라 대응1~4/지원1~4/유도1~4처럼 배지가
-// 더 세분화돼도 코드 수정 없이 그대로 동작함.
+// 이미 출동체크한 조원도 자동으로 현장 처리. 접두어 매칭이라 대응1~4처럼 세분화돼도 코드
+// 수정 없이 그대로 동작함. 대상은 원래부터 출동/대응/구조 3계열뿐이며, 유도/지원 계열은
+// 포함되지 않음(2026-07-20 기준 — 필요하면 배지 추가 검토).
 const FIRE_LEADER_AUTO_BADGE_PREFIXES = ['출동', '대응', '구조'];
 function isFireLeaderAutoBadge(badge: string): boolean {
   return FIRE_LEADER_AUTO_BADGE_PREFIXES.some(p => badge.startsWith(p));
@@ -105,6 +106,113 @@ function computeTaskNumMap(tasks: MemberTask[]): Record<string, string> {
   });
   return map;
 }
+
+// 실제 임무 체크리스트(목록뷰, 파란 테마)와 자가 수행률 미리보기(다른 배지 미리보기, 보라 테마)가
+// 거의 동일한 아코디언 구조라 공통 컴포넌트로 추출함(2026-07-20). 색상만 theme으로 넘겨받는다.
+interface TaskChecklistTheme {
+  headerBg: string;
+  headerBorder: string;
+  chevronColor: string;
+  labelColor: string;
+  bodyBorder: string;
+}
+
+const TaskChecklistBody: React.FC<{
+  groups: TaskGroup[];
+  numMap: Record<string, string>;
+  openGroups: Set<string>;
+  onToggleGroup: (id: string) => void;
+  onToggleTask: (task: MemberTask) => void;
+  theme: TaskChecklistTheme;
+}> = ({ groups, numMap, openGroups, onToggleGroup, onToggleTask, theme }) => (
+  <>
+    {groups.map((group, gi) => {
+      if (group.type === 'standalone') {
+        const task = group.task;
+        const num = numMap[task.id] ?? String(gi + 1).padStart(2, '0');
+        return (
+          <div key={task.id} className={`task-item ${task.done ? 'done' : ''}`} onClick={() => onToggleTask(task)}>
+            <div className="checkbox-visual"><Check size={14} strokeWidth={3} /></div>
+            <div className="task-label">
+              <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{num}</span>
+              {stripPrefix(task.label)}
+            </div>
+          </div>
+        );
+      }
+
+      const isOpen = openGroups.has(group.header.id);
+      const doneCount = group.children.filter(c => c.done).length;
+      const total = group.children.length;
+      const headerNum = numMap[group.header.id] ?? String(gi + 1).padStart(2, '0');
+
+      return (
+        <div key={group.header.id}>
+          <div
+            onClick={() => onToggleGroup(group.header.id)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '11px 14px',
+              background: theme.headerBg, border: `1px solid ${theme.headerBorder}`,
+              borderRadius: isOpen ? '10px 10px 0 0' : '10px',
+              cursor: 'pointer', userSelect: 'none',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+              {isOpen
+                ? <ChevronDown size={15} color={theme.chevronColor} style={{ flexShrink: 0 }} />
+                : <ChevronRight size={15} color={theme.chevronColor} style={{ flexShrink: 0 }} />
+              }
+              <span style={{
+                fontSize: '13px', fontWeight: 700, color: theme.labelColor,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                <span style={{ color: theme.chevronColor, fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {headerNum}</span>
+                {stripPrefix(group.header.label)}
+              </span>
+            </div>
+            <span style={{
+              fontSize: '11px', fontWeight: 700, flexShrink: 0, marginLeft: '8px',
+              color: doneCount === total && total > 0 ? '#059669' : '#64748b',
+            }}>
+              {doneCount}/{total}
+            </span>
+          </div>
+
+          {isOpen && (
+            <div style={{
+              border: `1px solid ${theme.bodyBorder}`, borderTop: 'none',
+              borderRadius: '0 0 10px 10px', overflow: 'hidden',
+              marginBottom: gi < groups.length - 1 ? '2px' : '0',
+            }}>
+              {group.children.map((child, ci) => {
+                const childNum = numMap[child.id] ?? `${gi + 1}-${ci + 1}`;
+                return (
+                  <div
+                    key={child.id}
+                    className={`task-item ${child.done ? 'done' : ''}`}
+                    onClick={() => onToggleTask(child)}
+                    style={{
+                      borderRadius: 0,
+                      borderBottom: ci < group.children.length - 1 ? '1px solid rgba(11,37,69,0.045)' : 'none',
+                      paddingLeft: '20px', marginBottom: 0,
+                    }}
+                  >
+                    <div className="checkbox-visual"><Check size={14} strokeWidth={3} /></div>
+                    <div className="task-label">
+                      <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{childNum}</span>
+                      {stripPrefix(child.label)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    })}
+  </>
+);
 
 export const ResponderView: React.FC<ResponderViewProps> = ({
   activeIncident,
@@ -656,7 +764,6 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   const roleColor = isSituationRoom ? '#facc15' : (myRole?.bc ?? undefined);
 
   // 화재 감지기동작 시 초기출동조 여부 판단
-  const FIRE_INITIAL_BADGES = new Set(['총괄', '상황', '통제', '출동']);
   const isFireInitial = activeIncident?.disaster === '화재' && activeIncident?.scope === 'fire_initial';
   const isWaitingForEscalation = isFireInitial && myBadge !== null && !FIRE_INITIAL_BADGES.has(myBadge ?? '');
 
@@ -820,75 +927,17 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                     </span>
                   </div>
                   <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px 16px' }}>
-                    {previewTaskGroups.map((group, gi) => {
-                      if (group.type === 'standalone') {
-                        const task = group.task;
-                        const num = previewTaskNumMap[task.id] ?? String(gi + 1).padStart(2, '0');
-                        return (
-                          <div
-                            key={task.id}
-                            className={`task-item ${task.done ? 'done' : ''}`}
-                            onClick={() => handlePreviewToggle(task)}
-                          >
-                            <div className="checkbox-visual"><Check size={14} strokeWidth={3} /></div>
-                            <div className="task-label">
-                              <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{num}</span>
-                              {stripPrefix(task.label)}
-                            </div>
-                          </div>
-                        );
-                      }
-                      const isOpen = previewOpenGroups.has(group.header.id);
-                      const doneCount = group.children.filter(c => c.done).length;
-                      const total = group.children.length;
-                      const headerNum = previewTaskNumMap[group.header.id] ?? String(gi + 1).padStart(2, '0');
-                      return (
-                        <div key={group.header.id}>
-                          <div
-                            onClick={() => togglePreviewGroup(group.header.id)}
-                            style={{
-                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                              padding: '11px 14px',
-                              background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)',
-                              borderRadius: isOpen ? '10px 10px 0 0' : '10px',
-                              cursor: 'pointer', userSelect: 'none',
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
-                              {isOpen ? <ChevronDown size={15} color="#7c3aed" style={{ flexShrink: 0 }} /> : <ChevronRight size={15} color="#7c3aed" style={{ flexShrink: 0 }} />}
-                              <span style={{ fontSize: '13px', fontWeight: 700, color: '#6d28d9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                <span style={{ color: '#7c3aed', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {headerNum}</span>
-                                {stripPrefix(group.header.label)}
-                              </span>
-                            </div>
-                            <span style={{ fontSize: '11px', fontWeight: 700, flexShrink: 0, marginLeft: '8px', color: doneCount === total && total > 0 ? '#059669' : '#64748b' }}>
-                              {doneCount}/{total}
-                            </span>
-                          </div>
-                          {isOpen && (
-                            <div style={{ border: '1px solid rgba(139,92,246,0.15)', borderTop: 'none', borderRadius: '0 0 10px 10px', overflow: 'hidden', marginBottom: gi < previewTaskGroups.length - 1 ? '2px' : '0' }}>
-                              {group.children.map((child, ci) => {
-                                const childNum = previewTaskNumMap[child.id] ?? `${gi + 1}-${ci + 1}`;
-                                return (
-                                  <div
-                                    key={child.id}
-                                    className={`task-item ${child.done ? 'done' : ''}`}
-                                    onClick={() => handlePreviewToggle(child)}
-                                    style={{ borderRadius: 0, borderBottom: ci < group.children.length - 1 ? '1px solid rgba(11,37,69,0.045)' : 'none', paddingLeft: '20px', marginBottom: 0 }}
-                                  >
-                                    <div className="checkbox-visual"><Check size={14} strokeWidth={3} /></div>
-                                    <div className="task-label">
-                                      <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{childNum}</span>
-                                      {stripPrefix(child.label)}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    <TaskChecklistBody
+                      groups={previewTaskGroups}
+                      numMap={previewTaskNumMap}
+                      openGroups={previewOpenGroups}
+                      onToggleGroup={togglePreviewGroup}
+                      onToggleTask={handlePreviewToggle}
+                      theme={{
+                        headerBg: 'rgba(139,92,246,0.1)', headerBorder: 'rgba(139,92,246,0.2)',
+                        chevronColor: '#7c3aed', labelColor: '#6d28d9', bodyBorder: 'rgba(139,92,246,0.15)',
+                      }}
+                    />
                   </div>
                 </div>
               </>
@@ -1082,109 +1131,17 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
 
                 {showChecklist && (
                 <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px 16px' }}>
-                  {taskGroups.map((group, gi) => {
-                    if (group.type === 'standalone') {
-                      const task = group.task;
-                      const num = taskNumMap[task.id] ?? String(gi + 1).padStart(2, '0');
-                      return (
-                        <div
-                          key={task.id}
-                          className={`task-item ${task.done ? 'done' : ''}`}
-                          onClick={() => handleTaskToggle(task)}
-                        >
-                          <div className="checkbox-visual">
-                            <Check size={14} strokeWidth={3} />
-                          </div>
-                          <div className="task-label">
-                            <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{num}</span>
-                            {stripPrefix(task.label)}
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    // Accordion group
-                    const isOpen = openGroups.has(group.header.id);
-                    const doneCount = group.children.filter(c => c.done).length;
-                    const total = group.children.length;
-                    const headerNum = taskNumMap[group.header.id] ?? String(gi + 1).padStart(2, '0');
-
-                    return (
-                      <div key={group.header.id}>
-                        {/* 그룹 헤더 바 (◇) */}
-                        <div
-                          onClick={() => toggleGroup(group.header.id)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '11px 14px',
-                            background: 'rgba(59,130,246,0.12)',
-                            border: '1px solid rgba(59,130,246,0.25)',
-                            borderRadius: isOpen ? '10px 10px 0 0' : '10px',
-                            cursor: 'pointer',
-                            userSelect: 'none',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
-                            {isOpen
-                              ? <ChevronDown size={15} color="#2563eb" style={{ flexShrink: 0 }} />
-                              : <ChevronRight size={15} color="#2563eb" style={{ flexShrink: 0 }} />
-                            }
-                            <span style={{
-                              fontSize: '13px', fontWeight: 700, color: '#1d4ed8',
-                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-                            }}>
-                              <span style={{ color: '#2563eb', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {headerNum}</span>
-                              {stripPrefix(group.header.label)}
-                            </span>
-                          </div>
-                          <span style={{
-                            fontSize: '11px', fontWeight: 700, flexShrink: 0, marginLeft: '8px',
-                            color: doneCount === total && total > 0 ? '#059669' : '#64748b'
-                          }}>
-                            {doneCount}/{total}
-                          </span>
-                        </div>
-
-                        {/* 서브 항목 (┖) */}
-                        {isOpen && (
-                          <div style={{
-                            border: '1px solid rgba(59,130,246,0.15)',
-                            borderTop: 'none',
-                            borderRadius: '0 0 10px 10px',
-                            overflow: 'hidden',
-                            marginBottom: gi < taskGroups.length - 1 ? '2px' : '0',
-                          }}>
-                            {group.children.map((child, ci) => {
-                              const childNum = taskNumMap[child.id] ?? `${gi + 1}-${ci + 1}`;
-                              return (
-                                <div
-                                  key={child.id}
-                                  className={`task-item ${child.done ? 'done' : ''}`}
-                                  onClick={() => handleTaskToggle(child)}
-                                  style={{
-                                    borderRadius: 0,
-                                    borderBottom: ci < group.children.length - 1 ? '1px solid rgba(11,37,69,0.045)' : 'none',
-                                    paddingLeft: '20px',
-                                    marginBottom: 0,
-                                  }}
-                                >
-                                  <div className="checkbox-visual">
-                                    <Check size={14} strokeWidth={3} />
-                                  </div>
-                                  <div className="task-label">
-                                    <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{childNum}</span>
-                                    {stripPrefix(child.label)}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  <TaskChecklistBody
+                    groups={taskGroups}
+                    numMap={taskNumMap}
+                    openGroups={openGroups}
+                    onToggleGroup={toggleGroup}
+                    onToggleTask={handleTaskToggle}
+                    theme={{
+                      headerBg: 'rgba(59,130,246,0.12)', headerBorder: 'rgba(59,130,246,0.25)',
+                      chevronColor: '#2563eb', labelColor: '#1d4ed8', bodyBorder: 'rgba(59,130,246,0.15)',
+                    }}
+                  />
                 </div>
                 )}
               </div>
@@ -1270,11 +1227,27 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   {/* 1단계(출동)는 단독 전체화면, 2단계부터는 3개씩 페이지로 보여줌 */}
                   <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
                   {stepIndex >= stepFlow.length ? (
-                    <div style={{ textAlign: 'center', padding: '20px 8px', margin: 'auto 0' }}>
-                      <div style={{ fontSize: '52px', marginBottom: '14px' }}>🎉</div>
-                      <div style={{ fontWeight: 800, fontSize: '22px', marginBottom: '8px' }}>모든 임무를 완료했습니다</div>
-                      <div style={{ fontSize: '15px', color: 'var(--text-muted)' }}>수고하셨습니다.</div>
-                    </div>
+                    stepFlow.every(isStepDone) ? (
+                      <div style={{ textAlign: 'center', padding: '20px 8px', margin: 'auto 0' }}>
+                        <div style={{ fontSize: '52px', marginBottom: '14px' }}>🎉</div>
+                        <div style={{ fontWeight: 800, fontSize: '22px', marginBottom: '8px' }}>모든 임무를 완료했습니다</div>
+                        <div style={{ fontSize: '15px', color: 'var(--text-muted)' }}>수고하셨습니다.</div>
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '20px 8px', margin: 'auto 0' }}>
+                        <div style={{ fontSize: '52px', marginBottom: '14px' }}>⚠️</div>
+                        <div style={{ fontWeight: 800, fontSize: '22px', marginBottom: '8px' }}>아직 완료하지 않은 임무가 있습니다</div>
+                        <div style={{ fontSize: '15px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                          체크하지 않고 넘어간 단계가 있어요. 처음부터 다시 확인해주세요.
+                        </div>
+                        <button
+                          type="button" className="btn btn-primary" style={{ padding: '13px 24px', fontSize: '15px' }}
+                          onClick={() => setStepIndex(0)}
+                        >
+                          처음부터 확인하기
+                        </button>
+                      </div>
+                    )
                   ) : stepIndex === 0 ? (
                     <>
                       {renderStepCard(stepFlow[0], 0, true)}
