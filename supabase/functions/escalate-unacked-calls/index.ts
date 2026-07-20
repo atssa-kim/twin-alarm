@@ -1,5 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { normalizePhones, sendSolapiMessages, type SolapiMessage } from '../_shared/solapi.ts';
 
 // ─── SOLAPI 보이스(TTS 전화) 에스컬레이션 ────────────────────────────────────
 // "실제 상황" 발령/승격 후 30초가 지나도 앱을 열어보지 않은 대상자에게만 전화를
@@ -35,7 +34,67 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// HMAC 서명·발신 로직은 _shared/solapi.ts로 이동 — notify-incident와 공유(2026-07-20)
+// notify-incident와 동일한 HMAC 서명·발신 로직. 대시보드 "Via Editor" 붙여넣기 배포는
+// 파일 하나만 올라가고 상대경로 import를 못 가져오므로 공유 모듈로 빼지 않고 각 함수
+// 파일에 그대로 복사해서 유지함(2026-07-20).
+
+interface SolapiMessage {
+  to: string;
+  from: string;
+  type: 'LMS' | 'ATA' | 'CTI';
+  [key: string]: unknown;
+}
+
+async function hmacSha256(message: string, secret: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// 발신 가능한 국내 번호 형식만 남김(하이픈/공백 제거 후 0으로 시작하는 10~11자리)
+function normalizePhones(phones: string[]): string[] {
+  return phones
+    .map(p => p.replace(/[-\s]/g, ''))
+    .filter(p => /^0\d{9,10}$/.test(p));
+}
+
+// 이미 검증된 메시지 배열을 SOLAPI send-many로 발송. apiKey/apiSecret 미설정 시 조용히 스킵.
+async function sendSolapiMessages(
+  messages: SolapiMessage[],
+  creds: { apiKey?: string; apiSecret?: string },
+  logLabel: string,
+): Promise<void> {
+  const { apiKey, apiSecret } = creds;
+  if (!apiKey || !apiSecret) {
+    console.warn(`[${logLabel}] SOLAPI secrets 미설정 — 스킵`);
+    return;
+  }
+  if (messages.length === 0) return;
+
+  const date = new Date().toISOString();
+  const salt = crypto.randomUUID().replace(/-/g, '');
+  const signature = await hmacSha256(`${date}${salt}`, apiSecret);
+
+  try {
+    const resp = await fetch('https://api.solapi.com/messages/v4/send-many', {
+      method: 'POST',
+      headers: {
+        'Authorization': `HMAC-SHA256 apiKey=${apiKey}, date=${date}, salt=${salt}, signature=${signature}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messages }),
+    });
+    const result = await resp.json();
+    console.log(`[${logLabel}] sent=${result?.groupInfo?.count?.total ?? messages.length}, status=${resp.status}`);
+  } catch (e) {
+    console.warn(`[${logLabel}] 발송 실패:`, e);
+  }
+}
+
 async function sendVoiceCalls(phones: string[], text: string): Promise<void> {
   const apiKey = Deno.env.get('SOLAPI_API_KEY');
   const apiSecret = Deno.env.get('SOLAPI_API_SECRET');
