@@ -1,13 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // ─── SOLAPI 보이스(TTS 전화) 에스컬레이션 ────────────────────────────────────
-// "실제 상황" 발령/승격 후 30초가 지나도 앱을 열어보지 않은 대상자에게만 전화를
-// 겁니다. 훈련(mode가 '훈련'으로 시작)과 발령 시 "TTS 전화 사용"을 해제한 경우는
-// 제외.
+// 발령/승격 후 30초가 지나도 앱을 열어보지 않은 대상자에게만 전화를 겁니다.
+// 발령 시 "TTS 전화 사용"을 해제한 경우는 완전히 제외.
 // 30초는 골든타임(3분) 안에서 최대한 빨리 잡기 위한 값 — 짧을수록 정상적으로
 // 반응 중인 사람에게도 전화가 걸릴 가능성이 커지는 트레이드오프가 있음(2026-07-16 논의).
 //
-// 대상자 범위 (2026-07-16b, 2026-07-20 수정):
+// 대상자 범위 (2026-07-16b, 2026-07-20 수정, 2026-07-20c 훈련 범위 추가):
+//   훈련(mode가 '훈련'으로 시작)                        → 통제(각 조 통제자)만 — 훈련마다 전 대원에게
+//     전화까지 걸리면 번거로우니 확인 전화는 조 대표자에게만 감
 //   화재 감지기동작(scope='fire_initial')               → 총괄/통제/출동
 //   화재 전체화재, 감지기동작 단계를 이미 거친 경우      → 총괄/통제/출동을 "제외한" 나머지 전 배지
 //   화재 전체화재를 감지기동작 없이 곧바로 발령한 경우   → 전 배지(제외 없음) — 총괄/통제/출동이
@@ -135,9 +136,7 @@ Deno.serve(async (req) => {
       return new Response('mode unchanged', { status: 200, headers: CORS });
     }
     const mode: string = record.mode || '';
-    if (mode.startsWith('훈련')) {
-      return new Response('training — skipped', { status: 200, headers: CORS });
-    }
+    const isTraining = mode.startsWith('훈련');
     if (record.tts_call_enabled === false) {
       return new Response('tts call disabled at declare time', { status: 200, headers: CORS });
     }
@@ -179,7 +178,7 @@ Deno.serve(async (req) => {
     // 화재 전체화재 단계라면, 감지기동작 단계가 "이 사건에서 실제로 먼저 처리됐는지" 확인.
     // (claim은 대상자 유무와 무관하게 항상 남으므로, 존재 여부만으로 판단 가능)
     let fireInitialAlreadyHandled = false;
-    if (disaster === '화재' && !isFireInitial) {
+    if (!isTraining && disaster === '화재' && !isFireInitial) {
       const { data: priorInitial } = await supabase
         .from('incident_call_escalations')
         .select('mode')
@@ -195,7 +194,10 @@ Deno.serve(async (req) => {
       .select('emp_no')
       .eq('disaster', disaster)
       .eq('shift', shift);
-    if (isFireInitial) {
+    if (isTraining) {
+      // 훈련은 전화까지 걸리면 번거로우니 각 조 통제자에게만 확인 전화
+      badgeQuery = badgeQuery.in('badge', ['통제']);
+    } else if (isFireInitial) {
       badgeQuery = badgeQuery.in('badge', FIRE_INITIAL_BADGES);
     } else if (disaster === '화재' && fireInitialAlreadyHandled) {
       // 감지기동작 단계에서 이미 다룬 3배지를 제외한 나머지 전원
@@ -237,9 +239,11 @@ Deno.serve(async (req) => {
     if (empErr) throw new Error('employees 조회 오류: ' + empErr.message);
     const phones = (empRows ?? []).map((e: { phone: string }) => e.phone).filter(Boolean);
 
-    const ttsText = isFireInitial
-      ? `화재감지기 동작. ${location}. 확인 바랍니다.`
-      : `${disaster} 발생. ${location}. 즉시 대응 바랍니다.`;
+    const ttsText = isTraining
+      ? `훈련상황입니다. ${disaster} 훈련. ${location}. 통제관 확인 바랍니다.`
+      : isFireInitial
+        ? `화재감지기 동작. ${location}. 확인 바랍니다.`
+        : `${disaster} 발생. ${location}. 즉시 대응 바랍니다.`;
     await sendVoiceCalls(phones, ttsText);
 
     return new Response(JSON.stringify({ called: phones.length, targets: unackedEmpNos.length }), {
