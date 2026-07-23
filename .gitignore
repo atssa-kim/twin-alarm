@@ -30,3 +30,7 @@ dist-ssr
 
 # DB backups — 개인정보(직원 전화번호 등) 포함, 커밋하지 않음
 backups/
+
+# Claude Code / OMC local tool state
+.claude/
+.omc/
