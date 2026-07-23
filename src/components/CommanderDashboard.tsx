@@ -46,6 +46,10 @@ const CMD_TEAMS: Record<string, string[]> = {
   '테러':     [],
 };
 
+// 파트장 TTS 일괄선택 대상 팀 — role==='파트장'만으로는 소방파트장(role: '파트장(안전관리자)')이
+// 빠지는 버그가 있어(2026-07-23), 팀명으로 직접 지정
+const PART_LEADER_TEAMS = ['소방파트장', '전기파트장', '기계파트장', '건축파트장', '운영파트장'];
+
 // 재난별 대피지원반 팀 목록
 const EVAC_TEAMS: Record<string, string[]> = {
   '화재':     ['보안1', '보안2', '보안3', '운영파트장', '운영파트', '주차파트', '품질/안전파트', '미화파트'],
@@ -130,7 +134,7 @@ const EmployeeGroupPicker: React.FC<EmployeeGroupPickerProps> = ({
           );
         })()}
         {setTtsSelected && (() => {
-          const leaderIds = employees.filter(e => e.role === '파트장').map(e => e.emp_no);
+          const leaderIds = employees.filter(e => PART_LEADER_TEAMS.includes(e.team)).map(e => e.emp_no);
           if (leaderIds.length === 0) return null;
           const allLeaderTts = leaderIds.every(id => ttsSelected!.has(id));
           return (
@@ -144,7 +148,7 @@ const EmployeeGroupPicker: React.FC<EmployeeGroupPickerProps> = ({
               border: `1px solid ${allLeaderTts ? '#ef4444' : '#ef444455'}`,
               background: allLeaderTts ? '#ef444422' : 'transparent',
               color: allLeaderTts ? '#ef4444' : '#64748b',
-            }}>📞 파트장 전체 TTS</button>
+            }}>📞 파트장 TTS</button>
           );
         })()}
         {INCIDENT_GROUPS.map(({ key, label, color }) => {
