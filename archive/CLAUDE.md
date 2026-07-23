@@ -272,3 +272,16 @@ GitHub Pages(https://atssa-kim.github.io/twin-alarm/) 반영 완료.
   `record.tts_emp_nos`가 `undefined`).
 - Edge Function은 `supabase functions deploy escalate-unacked-calls`로 배포 완료. 프론트는
   `npm run build && npm run deploy`로 GitHub Pages 반영 완료.
+
+### 5. "파트장 TTS" 버튼 파트장 판정 버그 수정 + 운영파트장 인사 정리
+"파트장 TTS" 버튼(role==='파트장' 기준)이 소방파트장(김견수, role: '파트장(안전관리자)')을
+놓치는 버그 발견 → team명 화이트리스트(`PART_LEADER_TEAMS` = 소방/전기/기계/건축/운영파트장)
+로 교체.
+
+이 과정에서 라이브 DB를 보니 **곽우람(E-1001, 운영파트장)이 이미 삭제되어 있고 박세훈
+(E-1003)이 이미 파트장으로 승격되어 있었음**(배지도 이미 본인 앞으로 정상 배정됨) — 다만
+`team` 값이 다른 4개 파트장과 다르게 `'운영파트'`(파트원과 동일)로 남아있어서, `team`명
+문자열로 매칭하는 CMD_TEAMS(폭설 지휘연락 분류)·PART_LEADER_TEAMS 등에서 누락되는 상태였음.
+`team`을 다른 파트장과 동일한 규칙(`'운영파트장'`)으로 정정, `scripts/seed-employees.ts`도
+라이브 상태에 맞춰 곽우람 행 제거 + 박세훈 team/role/is_commander 갱신(다음에 스크립트를
+재실행해도 되돌아가지 않도록). 프론트 코드 변경 없어 재배포는 불필요.

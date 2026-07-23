@@ -63,10 +63,9 @@ const EMPLOYEES: {
   { emp_no: 'E-0001', name: '김기창', team: '센터장',  role: '센터장', is_commander: true, email: 'xgplus@sni.co.kr',  phone: '010-3240-8177', dept_code: '총괄' },
   { emp_no: 'E-0002', name: '상황실', team: '상황실',  role: '상황실', is_commander: true, email: 'fire@sni.co.kr',    phone: '02-3773-1119',  dept_code: '상황' },
 
-  // ── 운영 ───────────────────────────────────────────────
-  { emp_no: 'E-1001', name: '곽우람', team: '운영파트장', role: '파트장',      is_commander: false, email: 'mprokmc@sni.co.kr',  phone: '010-6251-9466', dept_code: '운영' },
+  // ── 운영 (2026-07-23: 곽우람 퇴사로 박세훈이 파트장 승계) ─────
   { emp_no: 'E-1002', name: '엄성철', team: '운영파트',   role: '파트원',      is_commander: false, email: 'sceom@sni.co.kr',    phone: '010-3384-0248', dept_code: '운영' },
-  { emp_no: 'E-1003', name: '박세훈', team: '운영파트',   role: '파트원',      is_commander: false, email: 'sehunpark@sni.co.kr',phone: '010-4776-7305', dept_code: '운영' },
+  { emp_no: 'E-1003', name: '박세훈', team: '운영파트장', role: '파트장',      is_commander: true,  email: 'sehunpark@sni.co.kr',phone: '010-4776-7305', dept_code: '운영' },
   { emp_no: 'E-1004', name: '김기복', team: '운영파트',   role: '파트원',      is_commander: false, email: 'Igmbkkb@sni.co.kr',  phone: '010-5682-8498', dept_code: '운영' },
   { emp_no: 'E-1005', name: '김기환', team: '운영파트',   role: '파트원',      is_commander: false, email: 'kgh90400@sni.co.kr', phone: '010-8593-9040', dept_code: '운영' },
 
