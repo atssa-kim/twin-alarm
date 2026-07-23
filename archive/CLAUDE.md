@@ -220,3 +220,35 @@ NOTIFY pgrst, 'reload schema';
   해서 앱에서 보이는 임무 체크리스트가 바뀌지는 않습니다 (Phase 2 연동 전까지는).
 - Phase 2로 넘어가 `employee_disaster_badges`/`AdminPanel.tsx`와 실제로 연동한 뒤에는,
   이 파일이 곧 "재난 임무 배정 규정"이 되므로 수정 시 반드시 관련자 확인을 받고 바꿀 것.
+
+## 작업 로그 — 2026-07-23
+
+### 1. GitHub 동기화 확인
+로컬 main이 origin/main보다 **30개 커밋 뒤처져** 있던 걸 발견(직전 세션 이후 다른 곳에서
+TTS 에스컬레이션·배지 세분화 등 대량 작업이 이미 푸시돼 있었음). `git pull --rebase`로
+받아온 뒤, 로컬에만 있던 archive 정리(중복 연락처 파일 삭제, 오탈자 수정)와 `.gitignore`에
+`.claude/`·`.omc/`(로컬 도구 상태 폴더) 추가를 리베이스해서 푸시함.
+
+### 2. 화재/주간 '상황실' 배지 중복 정리 (DB)
+`disaster_roles`에 화재/day용 상황실 관련 역할이 **3개 중복**으로 남아있던 걸 발견:
+- `상황`(id=3, 47건) — 이미 병합·2026-07-13 재분류까지 반영된 최종본
+- `상황실`(id=810, 33건), `상황실/화재`(id=811, 19건) — `fix-badges-260705b.ts`가
+  병합 후 삭제하도록 설계됐으나 라이브 DB엔 삭제가 반영 안 돼 남아있던 잔재
+
+`상황실` 배지를 쓰던 직원 11명(김범재·손경배·유지원·심현보·김성·석경민·이태경·윤창현 등)을
+`상황`으로 재배정하고, 중복 역할 2개(및 CASCADE로 딸린 임무들) 삭제.
+→ `scripts/migrations/fix-badges-260723-dedup-situation-room.ts` (idempotent, 커밋됨)
+
+### 3. 재난 미리보기 임무 개수 불일치 수정
+증상: 화재 미리보기 "나의 임무"에 소방파트장(통제 배지)이 16건만 뜨는데, 매뉴얼상 전체는
+38건 — 원인은 `ResponderView.tsx`의 미리보기 로직이 발령 전엔 상황(variant) 미확정이라며
+variant 있는 임무(K급주방/가스구역/UPS실/지하주차장, 22건)를 숨기고 공통 임무 16건만
+보여주고 있었음(의도된 설계였으나 이번에 매뉴얼과 동일하게 전체를 보여주는 쪽으로 변경 확정).
+
+`previewTasks`(ResponderView.tsx:720~)에서 `.filter(dt => !dt.variant)` 제거 →
+미리보기도 재난대응매뉴얼과 동일하게 전체 임무 표시. 실제 발령 후 상황 확정 시 필터링하는
+로직(`rawTasks`, ResponderView.tsx:316, `activeIncident?.variant` 비교)은 그대로 유지 —
+이 변경은 발령 전 미리보기 화면에만 영향.
+
+`npm install`(node_modules 비어있었음) → `npm run build` → `npm run deploy`로
+GitHub Pages(https://atssa-kim.github.io/twin-alarm/) 반영 완료.
