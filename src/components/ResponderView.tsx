@@ -721,8 +721,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     if (!previewMyRole) return [];
     return [previewMyRole].flatMap(r =>
       (r.disaster_tasks ?? [])
-        // 발령 전 미리보기는 상황(variant) 미확정 상태이므로 공통 임무만 보여줌
-        .filter(dt => !dt.variant)
+        // 미리보기는 상황(variant) 미확정 상태이지만, 재난대응매뉴얼과 동일하게 전체 임무를 보여줌
         .sort((a, b) => a.task_idx - b.task_idx)
         .map(dt => ({
           id: `preview_${dt.id}`,
