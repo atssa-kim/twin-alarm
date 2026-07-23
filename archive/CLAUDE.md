@@ -418,6 +418,13 @@ Edge Function·프론트 모두 재배포 완료. 이번 변경은 DB 스키마 
 DB 변경은 `scripts/migrations/rename-tts-function-260724.sql` — 반드시 §7/§9의 SQL과
 함께(또는 이후) 실행. 새 함수는 이미 배포됨.
 
+**(추가, 같은 날) 사용자가 SQL 실행 확인 → 옛 함수 삭제 완료**: `add-tts-emp-nos-260723.sql`/
+`add-tts-must-call-260724.sql`/`fix-escalation-audit-260724.sql` 3개는 라이브 DB 컬럼
+존재 여부로 직접 재확인함(전부 반영됨). `rename-tts-function-260724.sql`(트리거 함수
+본문)은 PostgREST로 직접 조회할 방법이 없어 사용자 확인만으로 신뢰 — `npx supabase
+functions delete escalate-unacked-calls` 실행해서 옛 함수 완전히 제거함. TTS 정리 작업
+(§7~11) 전체 종료.
+
 ### 11. TTS 훈련 대상 재정정 — AdminPanel 필수인원이 아니라 참여인원설정 사람별 체크
 §9~10까지 "훈련도 실제와 똑같이 AdminPanel TTS 필수인원에게 간다"고 구현했는데, 사용자가
 "실제 원했던 건 그게 아니었다"고 정정. 진짜 의도:
