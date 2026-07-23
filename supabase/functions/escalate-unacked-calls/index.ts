@@ -20,6 +20,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // 화재 필수 연락망(2026-07-23): 위 배지·확인여부·30초 대기와 완전히 별개로,
 // 화재 발령/승격 시(훈련 포함) FIRE_MUST_CALL_EMP_NOS 8명에게는 대기 없이 즉시
 // 전화가 갑니다. 배지 대상자와 겹치면 30초 뒤 다시 걸릴 수 있음(중복 허용).
+// 단, 이 8명은 주간 근무 파트장급이라 야간(shift='night')엔 퇴근한 상태 —
+// 야간은 이 즉시발신 대상에서 제외(2026-07-24).
 //
 // 감지기동작→전체화재 승격은 새 발령(INSERT)이 아니라 같은 incident 행의
 // UPDATE라서, 같은 incident_id가 두 번(1.1, 1.2) 에스컬레이션될 수 있음 →
@@ -173,8 +175,9 @@ Deno.serve(async (req) => {
       return new Response('skip: already escalated for this mode', { status: 200, headers: CORS });
     }
 
-    // 화재 필수 연락망 — 배지/확인여부 판단(30초 대기) 이전에 즉시 발신
-    if (disaster === '화재') {
+    // 화재 필수 연락망 — 배지/확인여부 판단(30초 대기) 이전에 즉시 발신.
+    // 이 8명은 주간 근무 파트장급이라 야간엔 퇴근 상태 — 야간(shift='night')은 대상에서 제외(2026-07-24).
+    if (disaster === '화재' && shift !== 'night') {
       const { data: mustCallRows } = await supabase
         .from('employees')
         .select('phone')
