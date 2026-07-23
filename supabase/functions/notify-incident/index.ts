@@ -10,7 +10,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // SMS는 SOLAPI_API_KEY + SOLAPI_API_SECRET + SENDER_PHONE 만으로 즉시 발송
 // 알림톡은 KAKAO_PF_ID + KAKAO_TEMPLATE_ID 추가 설정 후 자동 활성화
 //
-// escalate-unacked-calls(TTS 전화)와 동일한 HMAC 서명·발신 로직을 씀. 대시보드
+// notify-tts-must-call(TTS 전화)와 동일한 HMAC 서명·발신 로직을 씀. 대시보드
 // "Via Editor" 붙여넣기 배포는 파일 하나만 올라가고 상대경로 import를 못 가져오므로
 // 공유 모듈(_shared/solapi.ts)로 빼지 않고 각 함수 파일에 그대로 복사해서 유지함(2026-07-20).
 

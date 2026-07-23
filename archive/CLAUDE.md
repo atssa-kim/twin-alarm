@@ -398,4 +398,24 @@ SQL의 URL 변경까지 필요해서 별도 작업).
 Edge Function·프론트 모두 재배포 완료. 이번 변경은 DB 스키마 추가가 없어(기존 컬럼만 사용)
 새 마이그레이션 파일 없음.
 
+### 10. TTS Edge Function 리네임: escalate-unacked-calls → notify-tts-must-call
+§9에서 "함수 이름이 이제 실제 동작과 안 맞는다"고 지적한 걸 사용자가 "정리"로 승인.
+
+- 새 함수 `supabase/functions/notify-tts-must-call/`를 만들어 §9 코드를 그대로 복사(자기
+  참조 로그 라벨만 이름 갱신), 배포 완료.
+- `scripts/migrations/rename-tts-function-260724.sql` — 트리거 함수
+  `notify_incident_call_escalation()`의 `pg_net.http_post` URL을 새 함수로 재지정하는
+  `CREATE OR REPLACE FUNCTION`. 트리거 자체(이름·바인딩)는 안 건드림 — 함수 본문만 교체.
+  안전을 위해 **옛 함수(`escalate-unacked-calls`)는 아직 삭제하지 않고 배포된 채로 둠** —
+  이 SQL을 실행하기 전까지는 트리거가 계속 옛 함수를 호출하므로 TTS가 끊기지 않고, SQL
+  실행 후에야 새 함수로 넘어가며, 그 이후에 옛 함수를 지워도 안전함(SQL 파일 마지막 주석에
+  `npx supabase functions delete escalate-unacked-calls` 안내 남겨둠 — 사용자가 SQL
+  실행을 확인한 뒤 별도로 요청하면 그때 삭제).
+- 옛 함수 디렉터리는 저장소에서 `git rm`(히스토리엔 남음). README·notify-incident의
+  주석 참조도 새 이름으로 갱신. `incident_call_escalations` 테이블명 자체는 안 바꿈
+  (데이터 마이그레이션 부담 대비 얻는 게 적어서 — 리네임 범위를 함수 이름으로만 한정).
+
+DB 변경은 `scripts/migrations/rename-tts-function-260724.sql` — 반드시 §7/§9의 SQL과
+함께(또는 이후) 실행. 새 함수는 이미 배포됨.
+
 미해결로 남은 것: 화재 야간 30초-미확인자 전화가 현재 대상자 0명입니다(배지 미배정). A~D 4개조 운영 특성상 어떻게 대상을 정할지는 지난 답변에서 드린 대로 검토 중이고, 방향 정해지면 이 부분도 같이 고치겠습니다.

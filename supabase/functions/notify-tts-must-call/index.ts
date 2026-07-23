@@ -1,9 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // ─── SOLAPI 보이스(TTS 전화) 즉시발신 ────────────────────────────────────
-// 2026-07-24 재설계: "30초 대기 후 앱을 안 연 사람에게 전화"(배지 기반 에스컬레이션,
-// incident_acks 확인여부 조회 포함)를 완전히 삭제. 이제 규칙은 딱 하나만 남음:
+// (2026-07-24 함수명 변경: escalate-unacked-calls → notify-tts-must-call.
+// "30초 대기 후 미확인자에게 전화"(에스컬레이션) 방식을 완전히 삭제하고 나니
+// 옛 이름이 실제 동작과 안 맞아서 정리함. git 이력의 escalate-unacked-calls
+// 디렉터리에서 옛 코드/설계 변천사를 볼 수 있음.)
 //
+// 규칙은 딱 하나:
 //   실제상황(mode가 '훈련'으로 시작하지 않음) 재난 발령/승격 시
 //     → 대기 없이 즉시, TTS 필수인원(employee_disaster_badges.tts_must_call=true,
 //       AdminPanel "재난 편제표" 탭에서 재난·사람별로 체크 관리)에게 전화. "TTS 전화 사용"
@@ -18,12 +21,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // 감지기동작→전체화재 승격은 새 발령(INSERT)이 아니라 같은 incident 행의 UPDATE라서,
 // 같은 incident_id가 mode별로 여러 번 처리됨(의도된 동작 — 승격될 때마다 필수인원에게
 // 다시 알림) → incident_call_escalations(incident_id, mode)로 (재난,상황단계) 단위
-// 중복 실행만 방지. 결과(대상수·발신수·에러)도 같이 기록해서 실패해도 나중에 조회 가능.
+// 중복 실행만 방지(테이블명은 옛 설계 흔적이라 안 맞지만, 데이터 마이그레이션 부담 때문에
+// 테이블 자체는 리네임 안 함). 결과(대상수·발신수·에러)도 같이 기록해서 실패해도 나중에 조회 가능.
 //
 // 필요 Supabase Secrets (notify-incident와 동일한 SOLAPI 계정 재사용):
 //   SOLAPI_API_KEY, SOLAPI_API_SECRET, SENDER_PHONE
 //
-// 트리거: incidents AFTER INSERT OR UPDATE (scripts/migrations/update-call-escalation-260716b.sql)
+// 트리거: incidents AFTER INSERT OR UPDATE (scripts/migrations/rename-tts-function-260724.sql —
+// notify_incident_call_escalation() 트리거 함수의 URL을 이 함수로 재지정)
 // pg_net.http_post는 즉시 반환되므로 발령/승격 자체는 지연되지 않음.
 
 const CORS = {
@@ -172,7 +177,7 @@ Deno.serve(async (req) => {
       .insert({ incident_id: incidentId, mode, scope, escalated_at: Date.now() });
     if (claimErr) {
       if (claimErr.code === '23505') {
-        return new Response('skip: already escalated for this mode', { status: 200, headers: CORS });
+        return new Response('skip: already processed for this mode', { status: 200, headers: CORS });
       }
       console.error(`클레임 INSERT 실패(예상 밖 오류, incident=${incidentId}, mode=${mode}):`, claimErr.message);
       return new Response('claim insert failed: ' + claimErr.message, { status: 500, headers: CORS });
@@ -220,7 +225,7 @@ Deno.serve(async (req) => {
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error('escalate-unacked-calls error:', message);
+    console.error('notify-tts-must-call error:', message);
     // 실패해도 흔적이 남도록 best-effort로 기록 — 이것마저 실패하면 조용히 무시(원래 에러가 우선)
     if (supabase && incidentId) {
       await recordResult(supabase, incidentId, mode, { error: message });
