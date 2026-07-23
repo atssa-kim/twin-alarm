@@ -49,16 +49,16 @@ SUPABASE_SERVICE_ROLE_KEY=...       # scripts/ 하위 1회성 스크립트 전�
 
 (단, 위 5번 항목대로 이미 발령된 사고의 임무 화면은 스냅샷이라 의도적으로 실시간 반영 대상이 아닙니다.)
 
-## TTS 전화 에스컬레이션 (2026-07-23 추가)
+## TTS 전화 (2026-07-24 재설계 — 30초 대기·배지 에스컬레이션 전부 삭제)
 
-`supabase/functions/escalate-unacked-calls`가 발령/승격 시 SOLAPI 음성전화를 겁니다.
+`supabase/functions/escalate-unacked-calls`(이름은 예전 그대로지만 지금은 "미확인자 에스컬레이션"이 아니라 "TTS 필수인원 즉시발신" 전용)가 발령/승격 시 SOLAPI 음성전화를 겁니다. 규칙은 딱 하나:
 
-- **야간(shift='night')은 TTS를 아예 쓰지 않습니다 (2026-07-24)**: 야간 근무자는 항상 무전기를 휴대하고 있어 TTS 전화가 불필요하다는 판단 — 함수가 야간이면 바로 종료됩니다. (야간 근무는 4교대(A~D)라 배지만으로 오늘 근무조를 특정하기 어려웠던 문제도 이걸로 자연히 해소.)
-- **TTS 필수인원 (2026-07-24, AdminPanel 체크박스로 관리)**: 실제상황(훈련 아님) 발령/승격 시, 배지·확인여부·30초 대기와 무관하게 `employee_disaster_badges.tts_must_call=true`인 사람에게 즉시 전화가 갑니다. "재난 편제표" 탭에서 배지 배정된 사람마다 "TTS 필수" 체크박스로 재난별 관리 — 코드 수정·재배포 없이 바로 반영됩니다. 예전엔 화재 전용 8명 하드코딩 배열(`FIRE_MUST_CALL_EMP_NOS`)이었던 걸 재난 무관하게 일반화.
-- 그 외에는 배지(재난 편제표에서 배정한 값) 기준으로 30초간 앱을 열어 확인(ack)하지 않은 사람에게만 전화가 갑니다. 훈련은 필수인원 즉시발신 없이, 번거로움을 줄이기 위해 각 조 통제자에게만 30초 후 확인 전화가 갑니다.
-- 지휘본부 발령 폼의 "TTS 전화 사용" 체크박스로 해당 발령 한 건에 한해 전화 자체를 끌 수 있습니다(필수인원 포함 전부 꺼짐).
-- **확인(ack) 기록은 (사고, 직원, 단계) 단위로 남습니다**: `incident_acks` PK가 `(incident_id, emp_no, mode)`라, 감지기동작 단계에서 확인한 게 전체화재 승격 이후까지 "확인됨"으로 잘못 인정되지 않습니다.
-- **처리 결과는 `incident_call_escalations`에 감사(audit) 기록으로 남습니다**: `target_count`/`called_count`/`error`/`completed_at` 컬럼으로 몇 명에게 걸렸는지, 실패했다면 왜 실패했는지 나중에 조회할 수 있습니다. `error IS NOT NULL`인 행이 있으면 그 (사고, 단계)는 전화가 제대로 안 나간 것.
+- **실제상황(훈련 아님)**: 재난 발령/승격 즉시(대기 없이) **TTS 필수인원**에게 전화. "TTS 전화 사용" 체크박스 상태와 무관하게 항상 발신 — 끌 수 없습니다.
+- **훈련**: 발령 폼의 "TTS 전화 사용" 체크박스가 켜져 있을 때만, 실제와 동일하게 TTS 필수인원에게 즉시 발신. 꺼져 있으면(기본값) 훈련은 전화 자체가 안 갑니다. 체크박스는 훈련일 때만 화면에 보입니다(실제는 항상 켜진 것과 같아서 표시 안 함).
+- **야간(shift='night')은 TTS를 아예 쓰지 않습니다**: 야간 근무자는 항상 무전기를 휴대하고 있어 불필요하다는 판단 — 함수가 야간이면 바로 종료됩니다.
+- **TTS 필수인원 관리**: `employee_disaster_badges.tts_must_call=true`인 사람. AdminPanel "재난 편제표" 탭에서 배지 배정된 사람마다 "TTS 필수" 체크박스로 재난별 관리 — 코드 수정·재배포 없이 바로 반영됩니다. 예전 화재 전용 8명 하드코딩 배열(`FIRE_MUST_CALL_EMP_NOS`)은 폐지되고 재난 무관하게 일반화됨.
+- 예전에 있던 "30초 대기 후 앱을 안 연 사람에게 배지(총괄/통제/상황 등) 기준으로 전화" 로직은 2026-07-24에 완전히 삭제했습니다. `incident_acks`(확인 기록)는 여전히 쌓이지만 이 함수는 더 이상 참조하지 않습니다.
+- **처리 결과는 `incident_call_escalations`에 감사(audit) 기록으로 남습니다**: `target_count`/`called_count`/`error`/`completed_at` 컬럼으로 몇 명에게 걸렸는지, 실패했다면 왜 실패했는지 나중에 조회할 수 있습니다.
 - Edge Function 배포: `supabase functions deploy escalate-unacked-calls` (CLI가 프로젝트에 이미 linked되어 있음). 대시보드 에디터로 직접 고치면 다음 CLI 배포 시 덮어써지니 코드는 항상 이 저장소 파일을 기준으로 수정하세요.
 - DB 변경사항은 `scripts/migrations/fix-escalation-audit-260724.sql`과 `scripts/migrations/add-tts-must-call-260724.sql`을 Supabase SQL Editor에서 1회 실행해야 반영됩니다.
 
