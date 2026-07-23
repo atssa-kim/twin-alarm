@@ -108,6 +108,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
   const [orgShift, setOrgShift] = useState<'day' | 'night'>('day');
   // 재난편제표: 배지별 배정 인원(emp_no) — 2026-07-05부터 여기서 직접 배정/해제
   const [badgeAssignments, setBadgeAssignments] = useState<Record<string, string[]>>({});
+  // TTS 필수인원(emp_no) — 이 재난·근무에서 체크된 사람은 실제상황 발령 즉시(대기 없이) 전화(2026-07-24)
+  const [ttsMustCallNos, setTtsMustCallNos] = useState<Set<string>>(new Set());
   const [addPickerBadge, setAddPickerBadge] = useState<string | null>(null);
   const [exportingOrg, setExportingOrg] = useState(false);
   const [addSearch, setAddSearch] = useState('');
@@ -181,6 +183,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
   // 재난·주야 선택 바뀌면 해당 근무의 역할·임무 + 배지별 배정 인원을 새로 조회
   const refreshBadgeAssignments = () => {
     db.getEmployeeBadgesByDisaster(orgDisaster, orgShift).then(setBadgeAssignments).catch(() => setBadgeAssignments({}));
+    db.getTtsMustCallEmpNos(orgDisaster, orgShift).then(nos => setTtsMustCallNos(new Set(nos))).catch(() => setTtsMustCallNos(new Set()));
   };
   useEffect(() => {
     setPreviewBadge(null);
@@ -258,6 +261,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       refreshBadgeAssignments();
       refreshAllEmployeeBadges();
       setAddSearch('');
+    } finally {
+      setBadgeBusy(false);
+    }
+  };
+
+  const handleToggleTtsMustCall = async (empNo: string, next: boolean) => {
+    setBadgeBusy(true);
+    try {
+      await db.setTtsMustCall(empNo, orgDisaster, orgShift, next);
+      refreshBadgeAssignments();
     } finally {
       setBadgeBusy(false);
     }
@@ -502,6 +515,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
               <Download size={13} />{exportingOrg ? '생성 중...' : '전체 조직도 다운로드'}
             </button>
           </div>
+          {orgShift === 'night' && (
+            <div style={{ fontSize: '11px', color: '#64748b', padding: '6px 10px', background: 'rgba(11,37,69,0.04)', borderRadius: '8px' }}>
+              📻 야간은 무전기 상시 휴대로 TTS 전화를 사용하지 않습니다 — 아래 "TTS 필수" 체크는 야간엔 무시됩니다.
+            </div>
+          )}
           <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
           {/* 좌측 세로 메뉴 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '76px', flexShrink: 0 }}>
@@ -562,18 +580,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                       {assignedEmps.length === 0 ? (
                         <div style={{ padding: '10px 14px', fontSize: '12px', color: '#475569' }}>배정된 인원이 없습니다.</div>
                       ) : (
-                        assignedEmps.map(emp => (
-                          <div key={emp.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', flex: 1 }}>{emp.name}</span>
-                            <span style={{ fontSize: '11px', color: '#64748b' }}>{emp.team} · {emp.role}</span>
-                            <button type="button" disabled={badgeBusy} onClick={() => handleUnassignBadge(emp.emp_no, emp.name)} style={{
-                              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
-                              borderRadius: '5px', color: '#ef4444', cursor: 'pointer', padding: '2px 7px', fontSize: '10px',
-                            }}>
-                              제거
-                            </button>
-                          </div>
-                        ))
+                        assignedEmps.map(emp => {
+                          const isMustCall = ttsMustCallNos.has(emp.emp_no);
+                          return (
+                            <div key={emp.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', flex: 1 }}>{emp.name}</span>
+                              <span style={{ fontSize: '11px', color: '#64748b' }}>{emp.team} · {emp.role}</span>
+                              <label style={{
+                                display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer', flexShrink: 0,
+                                padding: '2px 6px', borderRadius: '5px',
+                                border: `1px solid ${isMustCall ? '#ef4444aa' : 'rgba(239,68,68,0.2)'}`,
+                                background: isMustCall ? '#ef444422' : 'transparent',
+                              }}>
+                                <input
+                                  type="checkbox"
+                                  checked={isMustCall}
+                                  disabled={badgeBusy}
+                                  onChange={() => handleToggleTtsMustCall(emp.emp_no, !isMustCall)}
+                                  style={{ width: '12px', height: '12px', accentColor: '#ef4444', cursor: 'pointer' }}
+                                />
+                                <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 800 }}>TTS 필수</span>
+                              </label>
+                              <button type="button" disabled={badgeBusy} onClick={() => handleUnassignBadge(emp.emp_no, emp.name)} style={{
+                                background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+                                borderRadius: '5px', color: '#ef4444', cursor: 'pointer', padding: '2px 7px', fontSize: '10px',
+                              }}>
+                                제거
+                              </button>
+                            </div>
+                          );
+                        })
                       )}
 
                       {/* 인원 추가 */}

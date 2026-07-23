@@ -53,14 +53,14 @@ SUPABASE_SERVICE_ROLE_KEY=...       # scripts/ 하위 1회성 스크립트 전�
 
 `supabase/functions/escalate-unacked-calls`가 발령/승격 시 SOLAPI 음성전화를 겁니다.
 
-- 화재는 배지·확인여부와 무관하게 **필수연락망 8명**(`FIRE_MUST_CALL_EMP_NOS`, 파일 상단)에게 실제상황 즉시 전화가 갑니다(주간만 — 야간은 이 8명이 퇴근 상태라 제외). 담당자를 바꾸려면 이 emp_no 목록만 수정.
-- 그 외에는 배지(재난 편제표에서 배정한 값) 기준으로 30초간 앱을 열어 확인(ack)하지 않은 사람에게만 전화가 갑니다. 훈련은 번거로움을 줄이기 위해 기본적으로 각 조 통제자에게만 확인 전화가 갑니다.
-- **화재 야간 발령 시 "오늘 야간 근무조(A~D)" 선택 필수 (2026-07-24 추가)**: 야간은 4교대라 배지만으로는 오늘 실제 근무 중인 사람을 못 가려서, 지휘본부 발령 폼에서 오늘 근무조를 고르면(`incidents.night_duty_group`) TTS 대상을 그 조(`employees.shift_group`)로만 좁힙니다.
-- 지휘본부 발령 폼의 "TTS 전화 사용" 체크박스로 해당 발령 한 건에 한해 전화 자체를 끌 수 있습니다(필수연락망 포함 전부 꺼짐).
+- **야간(shift='night')은 TTS를 아예 쓰지 않습니다 (2026-07-24)**: 야간 근무자는 항상 무전기를 휴대하고 있어 TTS 전화가 불필요하다는 판단 — 함수가 야간이면 바로 종료됩니다. (야간 근무는 4교대(A~D)라 배지만으로 오늘 근무조를 특정하기 어려웠던 문제도 이걸로 자연히 해소.)
+- **TTS 필수인원 (2026-07-24, AdminPanel 체크박스로 관리)**: 실제상황(훈련 아님) 발령/승격 시, 배지·확인여부·30초 대기와 무관하게 `employee_disaster_badges.tts_must_call=true`인 사람에게 즉시 전화가 갑니다. "재난 편제표" 탭에서 배지 배정된 사람마다 "TTS 필수" 체크박스로 재난별 관리 — 코드 수정·재배포 없이 바로 반영됩니다. 예전엔 화재 전용 8명 하드코딩 배열(`FIRE_MUST_CALL_EMP_NOS`)이었던 걸 재난 무관하게 일반화.
+- 그 외에는 배지(재난 편제표에서 배정한 값) 기준으로 30초간 앱을 열어 확인(ack)하지 않은 사람에게만 전화가 갑니다. 훈련은 필수인원 즉시발신 없이, 번거로움을 줄이기 위해 각 조 통제자에게만 30초 후 확인 전화가 갑니다.
+- 지휘본부 발령 폼의 "TTS 전화 사용" 체크박스로 해당 발령 한 건에 한해 전화 자체를 끌 수 있습니다(필수인원 포함 전부 꺼짐).
 - **확인(ack) 기록은 (사고, 직원, 단계) 단위로 남습니다**: `incident_acks` PK가 `(incident_id, emp_no, mode)`라, 감지기동작 단계에서 확인한 게 전체화재 승격 이후까지 "확인됨"으로 잘못 인정되지 않습니다.
 - **처리 결과는 `incident_call_escalations`에 감사(audit) 기록으로 남습니다**: `target_count`/`called_count`/`error`/`completed_at` 컬럼으로 몇 명에게 걸렸는지, 실패했다면 왜 실패했는지 나중에 조회할 수 있습니다. `error IS NOT NULL`인 행이 있으면 그 (사고, 단계)는 전화가 제대로 안 나간 것.
 - Edge Function 배포: `supabase functions deploy escalate-unacked-calls` (CLI가 프로젝트에 이미 linked되어 있음). 대시보드 에디터로 직접 고치면 다음 CLI 배포 시 덮어써지니 코드는 항상 이 저장소 파일을 기준으로 수정하세요.
-- DB 변경사항은 `scripts/migrations/fix-escalation-audit-260724.sql`을 Supabase SQL Editor에서 1회 실행해야 반영됩니다.
+- DB 변경사항은 `scripts/migrations/fix-escalation-audit-260724.sql`과 `scripts/migrations/add-tts-must-call-260724.sql`을 Supabase SQL Editor에서 1회 실행해야 반영됩니다.
 
 ## 그 외 스크립트
 

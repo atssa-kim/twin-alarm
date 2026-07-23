@@ -351,4 +351,27 @@ TTS 전화 현재 로직 정리 (2026-07-24 수정 반영)
 DB 변경은 `scripts/migrations/fix-escalation-audit-260724.sql` — Supabase SQL Editor에서
 수동 실행 필요(직접 실행 권한 없음). Edge Function·프론트 모두 재배포 완료.
 
+### 8. TTS 정책 재설계 — 야간 TTS 완전 제거 + 필수인원 AdminPanel 체크박스로 일반화
+§7에서 만든 "야간 근무조(A~D) 선택" 기능이 하루도 안 돼서 바로 폐기됨 — 사용자가 "야간엔
+항상 무전기를 휴대하고 있어 TTS가 아예 없어도 된다"고 판단. 세 가지 지시를 반영:
+
+1. **야간은 TTS 자체를 스킵**: `escalate-unacked-calls`가 `shift==='night'`이면 맨 위에서
+   바로 종료(필수인원 즉시발신도, 30초-미확인자 발신도 전혀 안 함). 이로써 §7의
+   `night_duty_group`(4교대 근무조 좁히기)도 자동으로 필요 없어짐 — CommanderDashboard의
+   "오늘 야간 근무조" 선택 UI·상태·`declareIncident` 파라미터까지 전부 되돌림.
+   `incidents.night_duty_group` 컬럼 자체는 무해하게 남겨둠(DROP 안 함, 그냥 안 씀).
+2. **TTS 필수인원을 화재 전용 하드코딩 8명(`FIRE_MUST_CALL_EMP_NOS`)에서 재난 무관
+   일반화 + AdminPanel 체크박스 관리로 전환**: `employee_disaster_badges`에
+   `tts_must_call boolean` 컬럼 추가. AdminPanel "재난 편제표" 탭에서 배지 배정된 사람
+   행마다 "TTS 필수" 체크박스 추가(`handleToggleTtsMustCall` → `db.setTtsMustCall`) —
+   담당자가 코드 수정·재배포 없이 재난별로 직접 관리 가능. 기존 화재 8명은
+   `add-tts-must-call-260724.sql`에서 화재/주간 배지에 그대로 이관(전원 기존 배지 보유
+   확인 후 UPDATE로 안전하게 처리).
+3. **필수인원 즉시발신은 실제상황(훈련 아님)에만 적용**: 훈련은 여전히 §1의 통제-배지
+   30초 대기 방식만 사용, "TTS 전화 사용" 체크박스로 훈련/실제 공통 on-off.
+
+DB 변경은 `scripts/migrations/add-tts-must-call-260724.sql` 추가 실행 필요(위 §7 SQL도
+여전히 필요 — ack/감사 컬럼 부분은 이번 변경과 무관하게 유효). Edge Function·프론트
+모두 재배포 완료.
+
 미해결로 남은 것: 화재 야간 30초-미확인자 전화가 현재 대상자 0명입니다(배지 미배정). A~D 4개조 운영 특성상 어떻게 대상을 정할지는 지난 답변에서 드린 대로 검토 중이고, 방향 정해지면 이 부분도 같이 고치겠습니다.

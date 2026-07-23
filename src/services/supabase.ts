@@ -20,7 +20,6 @@ export interface Incident {
   shift?: string; // 'day' | 'night' — 화재만 지휘관이 발령 시 수동 선택, 나머지 재난은 항상 'day'
   variant?: string | null; // 상황 확정 태그(예: 'K급주방'|'가스구역'|'배터리') — null이면 미확정(공통만 표시)
   tts_call_enabled?: boolean; // 발령 시 "TTS 전화 사용" 체크박스 — false면 무응답자 전화 에스컬레이션 안 함 (기본 true)
-  night_duty_group?: string | null; // 화재 야간 발령 시 지정한 오늘 근무조(A|B|C|D) — TTS 대상을 이 조로 좁힘
 }
 
 // 훈련 발령 시 참여인원을 특정 대원으로 제한한 경우(drill_emp_nos), 그 인원만 알람·임무 대상.
@@ -101,7 +100,7 @@ export interface DutyMatrixRow {
 // Database helper functions
 export const db = {
   // 1. Declare active incident
-  async declareIncident(disaster: string, mode: string, location: string, scope: string, declaredBy: string, drillEmpNos: string | null = null, shift: string = 'day', ttsCallEnabled: boolean = true, nightDutyGroup: string | null = null) {
+  async declareIncident(disaster: string, mode: string, location: string, scope: string, declaredBy: string, drillEmpNos: string | null = null, shift: string = 'day', ttsCallEnabled: boolean = true) {
     const incidentId = `inc_${Date.now()}`;
     const incident: Incident = {
       id: incidentId,
@@ -115,7 +114,6 @@ export const db = {
       drill_emp_nos: drillEmpNos,
       shift,
       tts_call_enabled: ttsCallEnabled,
-      night_duty_group: nightDutyGroup,
     };
 
     // Close any previous incidents just in case
@@ -387,6 +385,30 @@ export const db = {
     const { error } = await supabase
       .from('employee_disaster_badges')
       .delete()
+      .eq('emp_no', empNo)
+      .eq('disaster', disaster)
+      .eq('shift', shift);
+    if (error) throw error;
+  },
+
+  // TTS 필수인원 관리 (2026-07-24) — 재난 편제표에서 배지 배정된 사람 중 실제상황 발령 즉시
+  // (30초 대기 없이) 전화가 갈 사람을 재난별로 지정. 예전엔 코드에 하드코딩된 화재 전용
+  // 8명 목록(FIRE_MUST_CALL_EMP_NOS)이었는데, AdminPanel 체크박스로 재난 무관하게 관리하도록 전환.
+  async getTtsMustCallEmpNos(disaster: string, shift: string = 'day'): Promise<string[]> {
+    const { data, error } = await supabase
+      .from('employee_disaster_badges')
+      .select('emp_no')
+      .eq('disaster', disaster)
+      .eq('shift', shift)
+      .eq('tts_must_call', true);
+    if (error) throw error;
+    return (data ?? []).map(r => r.emp_no);
+  },
+
+  async setTtsMustCall(empNo: string, disaster: string, shift: string, value: boolean): Promise<void> {
+    const { error } = await supabase
+      .from('employee_disaster_badges')
+      .update({ tts_must_call: value })
       .eq('emp_no', empNo)
       .eq('disaster', disaster)
       .eq('shift', shift);

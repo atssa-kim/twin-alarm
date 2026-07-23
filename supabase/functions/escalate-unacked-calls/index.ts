@@ -6,27 +6,27 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // 30초는 골든타임(3분) 안에서 최대한 빨리 잡기 위한 값 — 짧을수록 정상적으로
 // 반응 중인 사람에게도 전화가 걸릴 가능성이 커지는 트레이드오프가 있음(2026-07-16 논의).
 //
-// 대상자 범위 (2026-07-16b, 2026-07-20 수정, 2026-07-20c 훈련 범위 추가, 2026-07-24 야간 정리):
-//   훈련(mode가 '훈련'으로 시작)                        → 통제(각 조 통제자)만 — 훈련마다 전 대원에게
-//     전화까지 걸리면 번거로우니 확인 전화는 조 대표자에게만 감. (2026-07-23: 참여인원설정에서
-//     사람별로 TTS 수신자를 따로 고르는 기능을 시도했다가, 실제 상황엔 영향 없는 훈련 전용
-//     기능인데도 UI만 복잡해져서 도로 걷어냄 — 필요해지면 이 파일 git 이력의 2026-07-23 커밋 참고)
-//   화재 감지기동작(scope='fire_initial') · 주간         → 총괄/통제/출동
-//   화재 전체화재, 감지기동작 단계를 이미 거친 경우 · 주간 → 총괄/통제/출동을 "제외한" 나머지 전 배지
-//   화재 전체화재를 감지기동작 없이 곧바로 발령한 경우 · 주간 → 전 배지(제외 없음) — 총괄/통제/출동이
-//     한 번도 에스컬레이션 대상이 된 적 없으므로 여기서 빠지면 아무도 안 걸림(2026-07-20 발견된 버그)
-//   화재 · 야간(모든 단계)                               → 총괄/통제/출동 구분 없이 그 재난·야간에 배정된
-//     전 배지(현재는 현장/대피) 대상. 야간엔 그 배지 체계가 아예 없어(주간 전용 파트장 개념) 위
-//     주간 로직을 그대로 적용하면 감지기동작 단계가 0명으로 비게 되는 문제가 있었음(2026-07-24 수정).
-//     추가로 incidents.night_duty_group(A|B|C|D)이 지정돼 있으면 그 조 소속(employees.shift_group)
-//     으로만 좁힘 — 4교대라 비번인 3개조까지 전화가 가던 문제 해결.
-//   그 외 8개 재난                                       → 총괄/통제/상황 (지휘연락급)
+// 야간(shift='night')은 TTS를 아예 쓰지 않습니다(2026-07-24) — 야간 근무자는 항상
+// 무전기를 휴대하고 있어 TTS 전화 자체가 불필요하다는 판단. 필수인원 즉시발신·30초
+// 미확인자 발신 전부 스킵하고 함수가 바로 종료됩니다.
 //
-// 화재 필수 연락망(2026-07-23): 위 배지·확인여부·30초 대기와 완전히 별개로,
-// 화재 발령/승격 시(훈련 포함) FIRE_MUST_CALL_EMP_NOS 8명에게는 대기 없이 즉시
-// 전화가 갑니다. 배지 대상자와 겹치면 30초 뒤 다시 걸릴 수 있음(중복 허용).
-// 단, 이 8명은 주간 근무 파트장급이라 야간(shift='night')엔 퇴근한 상태 —
-// 야간은 이 즉시발신 대상에서 제외(2026-07-24).
+// 대상자 범위 (주간, 2026-07-24 정리):
+//   훈련(mode가 '훈련'으로 시작)                 → 통제(각 조 통제자)만, 30초 대기 후 미확인자에게만.
+//     필수인원 즉시발신은 훈련엔 적용 안 됨(실제상황 전용) — 훈련마다 필수인원한테까지 전화가
+//     가면 번거로우므로.
+//   화재 감지기동작(scope='fire_initial')        → 총괄/통제/출동
+//   화재 전체화재, 감지기동작 단계를 이미 거친 경우 → 총괄/통제/출동을 "제외한" 나머지 전 배지
+//   화재 전체화재를 감지기동작 없이 곧바로 발령한 경우 → 전 배지(제외 없음) — 총괄/통제/출동이
+//     한 번도 에스컬레이션 대상이 된 적 없으므로 여기서 빠지면 아무도 안 걸림(2026-07-20 발견된 버그)
+//   그 외 8개 재난                                → 총괄/통제/상황 (지휘연락급)
+//
+// TTS 필수인원(2026-07-24 — 하드코딩 배열 폐지, AdminPanel 체크박스로 관리):
+//   실제상황(훈련 아님) 발령/승격 시, 배지·확인여부·30초 대기와 완전히 별개로
+//   employee_disaster_badges.tts_must_call=true인 사람에게 대기 없이 즉시 전화가 갑니다.
+//   재난 편제표(AdminPanel) 탭에서 배지 배정된 사람마다 "TTS 필수" 체크박스로 재난별 관리.
+//   배지 대상자와 겹치면 30초 뒤 다시 걸릴 수 있음(중복 허용). 예전엔 화재 전용 8명
+//   하드코딩 배열(FIRE_MUST_CALL_EMP_NOS)이었는데, 재난 무관하게 일반화하고 담당자가
+//   코드 수정 없이 체크박스로 바꿀 수 있게 변경.
 //
 // 감지기동작→전체화재 승격은 새 발령(INSERT)이 아니라 같은 incident 행의
 // UPDATE라서, 같은 incident_id가 두 번(1.1, 1.2) 에스컬레이션될 수 있음 →
@@ -44,12 +44,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const CALL_DELAY_MS = 30_000;
 const COMMAND_BADGES = ['총괄', '통제', '상황'];
 const FIRE_INITIAL_BADGES = ['총괄', '통제', '출동'];
-
-// 화재 필수 연락망 — 배지·확인여부·30초 대기와 무관하게 화재 발령/승격 즉시 무조건 전화(주간만)
-// (2026-07-23 추가): 김견수·김기창·손남열·이길호·김정훈·김성진·길성용·김재석
-const FIRE_MUST_CALL_EMP_NOS = [
-  'E-4001', 'E-0001', 'E-2001', 'E-3001', 'E-5007', 'E-7005', 'E-7004', 'E-9001',
-];
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -169,6 +163,12 @@ Deno.serve(async (req) => {
     if (type === 'UPDATE' && record?.mode === old_record?.mode) {
       return new Response('mode unchanged', { status: 200, headers: CORS });
     }
+    const shift: string = record.shift || 'day';
+    if (shift === 'night') {
+      // 야간은 무전기 상시 휴대로 TTS 자체를 사용하지 않음(2026-07-24)
+      return new Response('night shift — TTS not used', { status: 200, headers: CORS });
+    }
+
     mode = record.mode || '';
     const isTraining = mode.startsWith('훈련');
     if (record.tts_call_enabled === false) {
@@ -178,13 +178,8 @@ Deno.serve(async (req) => {
     incidentId = record.id;
     const disaster: string = record.disaster || '';
     const location: string = record.location || '';
-    const shift: string = record.shift || 'day';
     const scope: string = record.scope || '';
     const isFireInitial = disaster === '화재' && scope === 'fire_initial';
-    const nightDutyGroup: string | null =
-      shift === 'night' && typeof record.night_duty_group === 'string' && record.night_duty_group
-        ? record.night_duty_group
-        : null;
 
     supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -205,23 +200,28 @@ Deno.serve(async (req) => {
       return new Response('claim insert failed: ' + claimErr.message, { status: 500, headers: CORS });
     }
 
-    // 화재 필수 연락망 — 배지/확인여부 판단(30초 대기) 이전에 즉시 발신.
-    // 이 8명은 주간 근무 파트장급이라 야간엔 퇴근 상태 — 야간(shift='night')은 대상에서 제외(2026-07-24).
+    // TTS 필수인원 — 배지/확인여부 판단(30초 대기) 이전에 즉시 발신. 실제상황(훈련 아님)에만
+    // 적용 — 훈련마다 필수인원까지 전화가 가면 번거로움(2026-07-24, AdminPanel 체크박스 관리로 전환).
     let mustCallCount = 0;
-    if (disaster === '화재' && shift !== 'night') {
-      const { data: mustCallRows } = await supabase
-        .from('employees')
-        .select('phone')
-        .in('emp_no', FIRE_MUST_CALL_EMP_NOS)
-        .not('phone', 'is', null);
-      const mustCallPhones = (mustCallRows ?? []).map((e: { phone: string }) => e.phone).filter(Boolean);
-      const immediateText = isTraining
-        ? `훈련상황입니다. 화재 훈련. ${location}. 확인 바랍니다.`
-        : `화재 발생. ${location}. 즉시 확인 바랍니다.`;
-      const mustCallResult = await sendVoiceCalls(mustCallPhones, immediateText);
-      mustCallCount = mustCallResult.sent;
-      if (!mustCallResult.ok && mustCallPhones.length > 0) {
-        console.error(`필수연락망 발신 실패(incident=${incidentId}):`, mustCallResult.error);
+    if (!isTraining) {
+      const { data: mustCallBadgeRows } = await supabase
+        .from('employee_disaster_badges')
+        .select('emp_no')
+        .eq('disaster', disaster)
+        .eq('shift', 'day')
+        .eq('tts_must_call', true);
+      const mustCallEmpNos = [...new Set((mustCallBadgeRows ?? []).map((r: { emp_no: string }) => r.emp_no))];
+      const { data: mustCallEmpRows } = mustCallEmpNos.length > 0
+        ? await supabase.from('employees').select('phone').in('emp_no', mustCallEmpNos).not('phone', 'is', null)
+        : { data: [] as { phone: string }[] };
+      const mustCallPhones = (mustCallEmpRows ?? []).map((e: { phone: string }) => e.phone).filter(Boolean);
+      if (mustCallPhones.length > 0) {
+        const immediateText = `${disaster} 발생. ${location}. 즉시 확인 바랍니다.`;
+        const mustCallResult = await sendVoiceCalls(mustCallPhones, immediateText);
+        mustCallCount = mustCallResult.sent;
+        if (!mustCallResult.ok) {
+          console.error(`필수인원 발신 실패(incident=${incidentId}):`, mustCallResult.error);
+        }
       }
     }
 
@@ -241,8 +241,7 @@ Deno.serve(async (req) => {
     }
 
     // 화재 전체화재 단계라면, 감지기동작 단계가 "이 사건에서 실제로 먼저 처리됐는지" 확인.
-    // 2026-07-24: mode 문자열에 "감지기"가 포함되는지(LIKE) 대신, 그 단계에서 실제로 저장해둔
-    // scope='fire_initial' 값으로 판정 — mode 이름 짓는 규칙이 바뀌어도 안 깨짐.
+    // scope='fire_initial' 값으로 판정(mode 문자열 매칭 대신 — 2026-07-24).
     let fireInitialAlreadyHandled = false;
     if (!isTraining && disaster === '화재' && !isFireInitial) {
       const { data: priorInitial } = await supabase
@@ -254,8 +253,7 @@ Deno.serve(async (req) => {
       fireInitialAlreadyHandled = !!priorInitial;
     }
 
-    // 대상 배지 범위 결정. 화재 야간은 총괄/통제/출동 배지 체계 자체가 없으므로(주간 전용
-    // 파트장 개념) 이 좁은 필터를 적용하지 않고, 그 재난·야간에 배정된 배지를 그대로 대상으로 함.
+    // 대상 배지 범위 결정 (야간은 함수 상단에서 이미 걸러짐 — shift는 항상 'day')
     let badgeQuery = supabase
       .from('employee_disaster_badges')
       .select('emp_no')
@@ -264,14 +262,14 @@ Deno.serve(async (req) => {
     if (isTraining) {
       // 훈련은 전화까지 걸리면 번거로우니 각 조 통제자에게만 확인 전화
       badgeQuery = badgeQuery.in('badge', ['통제']);
-    } else if (isFireInitial && shift !== 'night') {
+    } else if (isFireInitial) {
       badgeQuery = badgeQuery.in('badge', FIRE_INITIAL_BADGES);
-    } else if (disaster === '화재' && shift !== 'night' && fireInitialAlreadyHandled) {
+    } else if (disaster === '화재' && fireInitialAlreadyHandled) {
       // 감지기동작 단계에서 이미 다룬 3배지를 제외한 나머지 전원
       badgeQuery = badgeQuery.not('badge', 'in', `(${FIRE_INITIAL_BADGES.join(',')})`);
     } else if (disaster === '화재') {
-      // 야간(모든 단계) 또는 감지기동작 없이 곧바로 전체화재로 발령된 경우(주간) —
-      // 제외하지 않고 그 shift에 배정된 전 배지를 대상으로 함
+      // 감지기동작 없이 곧바로 전체화재로 발령된 경우 — 총괄/통제/출동도 아직 아무 데도
+      // 안 걸렸으므로 제외하지 않고 전 배지를 대상으로 함
     } else {
       badgeQuery = badgeQuery.in('badge', COMMAND_BADGES);
     }
@@ -284,20 +282,7 @@ Deno.serve(async (req) => {
     ]);
     if (badgeErr) throw new Error('employee_disaster_badges 조회 오류: ' + badgeErr.message);
     if (ackErr) throw new Error('incident_acks 조회 오류: ' + ackErr.message);
-    let targetEmpNos = [...new Set((badgeRows ?? []).map((r: { emp_no: string }) => r.emp_no))];
-
-    // 화재 야간 + 오늘 근무조 지정됨 — 그 조(A/B/C/D) 소속으로만 좁힘(2026-07-24).
-    // 4교대라 배지만으로는 "오늘 실제로 근무 중인 사람"을 못 가려서, 비번인 나머지 3개조까지
-    // 전화가 가던 문제 해결. 지정 안 돼 있으면(구형 발령 등) 기존처럼 전체 대상 유지.
-    if (nightDutyGroup && targetEmpNos.length > 0) {
-      const { data: groupRows, error: groupErr } = await supabase
-        .from('employees')
-        .select('emp_no')
-        .eq('shift_group', nightDutyGroup)
-        .in('emp_no', targetEmpNos);
-      if (groupErr) throw new Error('근무조 필터 조회 오류: ' + groupErr.message);
-      targetEmpNos = (groupRows ?? []).map((r: { emp_no: string }) => r.emp_no);
-    }
+    const targetEmpNos = [...new Set((badgeRows ?? []).map((r: { emp_no: string }) => r.emp_no))];
 
     if (targetEmpNos.length === 0) {
       await recordResult(supabase, incidentId, mode, { must_call_count: mustCallCount, target_count: 0, called_count: 0 });
