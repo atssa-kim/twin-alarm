@@ -252,3 +252,23 @@ variant 있는 임무(K급주방/가스구역/UPS실/지하주차장, 22건)를 
 
 `npm install`(node_modules 비어있었음) → `npm run build` → `npm run deploy`로
 GitHub Pages(https://atssa-kim.github.io/twin-alarm/) 반영 완료.
+
+### 4. 훈련 참여인원설정에 사람별 "TTS 전화 받기" 체크박스 추가
+기존엔 훈련 중 TTS 무응답자 전화가 항상 배지(통제)로만 걸렸고, "훈련 참여인원 설정"에서
+선택한 참여인원(drill_emp_nos)과는 완전히 무관했음(참여인원을 좁혀도 통제 배지 전원에게
+전화가 감). 요청에 따라 **참여 여부와 독립적인** 별도 지정 방식으로 구현:
+
+- `EmployeeGroupPicker`(CommanderDashboard.tsx) 각 직원 행에 참여 체크박스와 별개로
+  "TTS" 체크박스 추가, 툴바에 "📞 파트장 전체 TTS"(role==='파트장' 일괄 체크) 버튼 추가.
+- 발령 시(`ttsEmps`)·2차 소집 승격 시(`escalateTtsEmps`) 각각 상태 관리, 콤마구분 문자열로
+  `incidents.tts_emp_nos`에 저장(`declareIncident`/`escalateIncident` 신규 파라미터,
+  `src/services/supabase.ts`).
+- `escalate-unacked-calls`(Edge Function): 훈련이고 `tts_emp_nos`가 지정돼 있으면 배지 조회를
+  건너뛰고 그 목록만 대상으로 함. 미지정 시 기존 배지(통제) 기준 동작 그대로 유지(하위호환).
+- DB: `incidents.tts_emp_nos text` 컬럼 필요 —
+  `scripts/migrations/add-tts-emp-nos-260723.sql`. **직접 실행 권한(DB 비밀번호)이 없어
+  Supabase SQL Editor에서 수동 실행 필요** — 실행 전까지는 컬럼이 없어도 안전하게 기존
+  배지 기준 동작으로 폴백됨(트리거가 `row_to_json(NEW)`로 행 전체를 넘기므로 컬럼 없으면
+  `record.tts_emp_nos`가 `undefined`).
+- Edge Function은 `supabase functions deploy escalate-unacked-calls`로 배포 완료. 프론트는
+  `npm run build && npm run deploy`로 GitHub Pages 반영 완료.
