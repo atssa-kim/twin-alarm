@@ -6,11 +6,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // 30초는 골든타임(3분) 안에서 최대한 빨리 잡기 위한 값 — 짧을수록 정상적으로
 // 반응 중인 사람에게도 전화가 걸릴 가능성이 커지는 트레이드오프가 있음(2026-07-16 논의).
 //
-// 대상자 범위 (2026-07-16b, 2026-07-20 수정, 2026-07-20c 훈련 범위 추가, 2026-07-23 훈련 개별지정 추가):
-//   훈련 + incidents.tts_emp_nos 지정됨                  → 훈련 참여인원설정에서 사람별로 체크한
-//     그 목록만(배지 조회 없이 그대로) — 참여 여부와 독립적으로 "TTS 받을 사람"만 따로 고를 수 있음
-//   훈련(mode가 '훈련'으로 시작) + tts_emp_nos 미지정      → 통제(각 조 통제자)만 — 훈련마다 전 대원에게
-//     전화까지 걸리면 번거로우니 확인 전화는 조 대표자에게만 감(기존 동작, 하위호환)
+// 대상자 범위 (2026-07-16b, 2026-07-20 수정, 2026-07-20c 훈련 범위 추가):
+//   훈련(mode가 '훈련'으로 시작)                        → 통제(각 조 통제자)만 — 훈련마다 전 대원에게
+//     전화까지 걸리면 번거로우니 확인 전화는 조 대표자에게만 감. (2026-07-23: 참여인원설정에서
+//     사람별로 TTS 수신자를 따로 고르는 기능을 시도했다가, 실제 상황엔 영향 없는 훈련 전용
+//     기능인데도 UI만 복잡해져서 도로 걷어냄 — 필요해지면 이 파일 git 이력의 2026-07-23 커밋 참고)
 //   화재 감지기동작(scope='fire_initial')               → 총괄/통제/출동
 //   화재 전체화재, 감지기동작 단계를 이미 거친 경우      → 총괄/통제/출동을 "제외한" 나머지 전 배지
 //   화재 전체화재를 감지기동작 없이 곧바로 발령한 경우   → 전 배지(제외 없음) — 총괄/통제/출동이
@@ -214,13 +214,7 @@ Deno.serve(async (req) => {
       fireInitialAlreadyHandled = !!priorInitial;
     }
 
-    // 훈련 참여인원설정에서 사람별로 "TTS 전화 받기"를 지정한 경우, 배지 조회 없이
-    // 그 목록을 그대로 대상으로 함(참여 여부와 독립적인 별도 지정).
-    const explicitTtsEmpNos: string[] | null = (isTraining && typeof record.tts_emp_nos === 'string' && record.tts_emp_nos.length > 0)
-      ? [...new Set(record.tts_emp_nos.split(',').filter(Boolean))]
-      : null;
-
-    // 대상 배지 범위 결정 (explicitTtsEmpNos가 있으면 이 쿼리는 쓰지 않음)
+    // 대상 배지 범위 결정
     let badgeQuery = supabase
       .from('employee_disaster_badges')
       .select('emp_no')
@@ -243,16 +237,13 @@ Deno.serve(async (req) => {
     // 대상 배지 조회와, 이미 이 mode(상황 단계)에서 앱을 열어 확인(ack)한 사람 조회는 서로
     // 독립적이므로 병렬 실행. ack는 mode까지 일치시켜서 — 감지기동작 단계에서 확인한 기록이
     // 전체화재 승격 이후까지 "확인됨"으로 잘못 인정되지 않도록 함.
-    const badgeResultPromise: Promise<{ data: { emp_no: string }[] | null; error: { message: string } | null }> =
-      explicitTtsEmpNos ? Promise.resolve({ data: null, error: null }) : badgeQuery;
-    const [badgeResult, { data: ackRows, error: ackErr }] = await Promise.all([
-      badgeResultPromise,
+    const [{ data: badgeRows, error: badgeErr }, { data: ackRows, error: ackErr }] = await Promise.all([
+      badgeQuery,
       supabase.from('incident_acks').select('emp_no').eq('incident_id', incidentId).eq('mode', mode),
     ]);
-    if (!explicitTtsEmpNos && badgeResult.error) throw new Error('employee_disaster_badges 조회 오류: ' + badgeResult.error.message);
+    if (badgeErr) throw new Error('employee_disaster_badges 조회 오류: ' + badgeErr.message);
     if (ackErr) throw new Error('incident_acks 조회 오류: ' + ackErr.message);
-    const targetEmpNos = explicitTtsEmpNos
-      ?? [...new Set((badgeResult.data ?? []).map(r => r.emp_no))];
+    const targetEmpNos = [...new Set((badgeRows ?? []).map((r: { emp_no: string }) => r.emp_no))];
     if (targetEmpNos.length === 0) {
       return new Response(JSON.stringify({ called: 0, reason: 'no targets' }), {
         status: 200, headers: { ...CORS, 'Content-Type': 'application/json' },

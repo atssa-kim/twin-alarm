@@ -285,3 +285,21 @@ GitHub Pages(https://atssa-kim.github.io/twin-alarm/) 반영 완료.
 `team`을 다른 파트장과 동일한 규칙(`'운영파트장'`)으로 정정, `scripts/seed-employees.ts`도
 라이브 상태에 맞춰 곽우람 행 제거 + 박세훈 team/role/is_commander 갱신(다음에 스크립트를
 재실행해도 되돌아가지 않도록). 프론트 코드 변경 없어 재배포는 불필요.
+
+### 6. TTS 전화 로직 정리 + 사람별 TTS 체크박스 기능 제거
+사용자 요청으로 TTS 전화 대상 규칙을 화재(훈련/실제 × 감지기동작/전체, 주/야간)·기타 8개
+재난·"TTS 전화 사용" 체크박스와의 관계까지 정리해서 설명. 이 과정에서 **화재 야간(night)
+30초-미확인자 전화가 현재 아무도 대상이 안 되는 문제를 발견**함 — `employee_disaster_badges`의
+화재/night 배지가 `현장`·`대피`뿐이고 `총괄`/`통제`/`출동`/`상황` 이름으로 배정된 사람이 없어서
+(day는 정상 배정), FIRE_INITIAL_BADGES/COMMAND_BADGES 배지 조회가 항상 0명으로 나옴. 필수연락망
+8명 즉시발신은 주/야간 무관하게 정상 동작하므로 완전 무대응은 아니지만, 확인 안 한 나머지
+인원에게는 야간엔 전화가 안 감. **이번엔 손대지 않음 — 필요시 별도로 요청받아 처리.**
+
+또한 §4에서 만들었던 "참여인원설정 사람별 TTS 체크박스"(`tts_emp_nos`) 기능은, `isTraining &&`
+로 완전히 훈련 전용으로 게이트돼 있어 실제 상황엔 전혀 영향이 없음을 재확인 → 사용자 지시로
+**전체 제거**. `EmployeeGroupPicker`의 TTS 체크박스·"📞 파트장 TTS" 버튼(및 그 대상 판정용
+`PART_LEADER_TEAMS`)·`ttsEmps`/`escalateTtsEmps` 상태·`declareIncident`/`escalateIncident`의
+`ttsEmpNos` 인자·`Incident.tts_emp_nos` 타입 필드를 모두 되돌리고, `escalate-unacked-calls`도
+배지 조회만 쓰는 이전 로직으로 복원 후 재배포. `incidents.tts_emp_nos` DB 컬럼(SQL 마이그레이션
+`add-tts-emp-nos-260723.sql`)은 실행했더라도 그냥 안 쓰는 nullable 컬럼으로 남아 무해하므로
+DROP은 안 함. README.md의 관련 문단도 제거.
