@@ -20,6 +20,7 @@ export interface Incident {
   shift?: string; // 'day' | 'night' — 화재만 지휘관이 발령 시 수동 선택, 나머지 재난은 항상 'day'
   variant?: string | null; // 상황 확정 태그(예: 'K급주방'|'가스구역'|'배터리') — null이면 미확정(공통만 표시)
   tts_call_enabled?: boolean; // 발령 시 "TTS 전화 사용" 체크박스 — false면 무응답자 전화 에스컬레이션 안 함 (기본 true)
+  night_duty_group?: string | null; // 화재 야간 발령 시 지정한 오늘 근무조(A|B|C|D) — TTS 대상을 이 조로 좁힘
 }
 
 // 훈련 발령 시 참여인원을 특정 대원으로 제한한 경우(drill_emp_nos), 그 인원만 알람·임무 대상.
@@ -100,7 +101,7 @@ export interface DutyMatrixRow {
 // Database helper functions
 export const db = {
   // 1. Declare active incident
-  async declareIncident(disaster: string, mode: string, location: string, scope: string, declaredBy: string, drillEmpNos: string | null = null, shift: string = 'day', ttsCallEnabled: boolean = true) {
+  async declareIncident(disaster: string, mode: string, location: string, scope: string, declaredBy: string, drillEmpNos: string | null = null, shift: string = 'day', ttsCallEnabled: boolean = true, nightDutyGroup: string | null = null) {
     const incidentId = `inc_${Date.now()}`;
     const incident: Incident = {
       id: incidentId,
@@ -114,6 +115,7 @@ export const db = {
       drill_emp_nos: drillEmpNos,
       shift,
       tts_call_enabled: ttsCallEnabled,
+      night_duty_group: nightDutyGroup,
     };
 
     // Close any previous incidents just in case
@@ -257,7 +259,7 @@ export const db = {
         .from('incident_acks')
         .upsert(
           { incident_id: incidentId, emp_no: empNo, mode, acked_at: Date.now() },
-          { onConflict: 'incident_id,emp_no' }
+          { onConflict: 'incident_id,emp_no,mode' }
         );
     } catch (e) {
       console.warn('[ackIncident] 실패:', e);

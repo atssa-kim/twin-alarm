@@ -273,6 +273,8 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const [fireSubMode, setFireSubMode] = useState<'initial' | 'full'>('initial');
   // 화재 전용 주간/야간 — 지휘관이 발령 시 직접 선택 (다른 재난은 항상 'day')
   const [fireShift, setFireShift] = useState<'day' | 'night'>('day');
+  // 화재 야간 발령 시 오늘 실제 근무 중인 조(A~D) — TTS 대상을 그 조로 좁히기 위함(2026-07-24)
+  const [nightDutyGroup, setNightDutyGroup] = useState<'A' | 'B' | 'C' | 'D' | null>(null);
   // 실제상황 발령 시 30초 무응답자 TTS 전화 사용 여부 (기본 켜짐, 필요 시 해제)
   const [ttsCallEnabled, setTtsCallEnabled] = useState(true);
   const [location, setLocation] = useState('');
@@ -459,6 +461,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
     e.preventDefault();
     if (!location.trim()) return alert('위치를 입력하세요.');
     if (selectedMode === '훈련' && selectedEmps.size === 0) return alert('참여인원을 선택해주세요.');
+    if (isFireDisaster && fireShift === 'night' && !nightDutyGroup) return alert('오늘 야간 근무조(A~D)를 선택해주세요.');
 
     const isInitial = isFireDisaster && fireSubMode === 'initial';
     const modeLabel = isFireDisaster
@@ -489,7 +492,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
 
       const incident = await db.declareIncident(
         selectedDisasterKey, modeLabel, location.trim(), scope, currentUser.empNo, drillEmpNos, shift,
-        ttsCallEnabled
+        ttsCallEnabled, isFireDisaster && shift === 'night' ? nightDutyGroup : null
       );
 
       const bulkTasks: Omit<MemberTask, 'updated_at' | 'done_by'>[] = [];
@@ -610,6 +613,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
     try {
       await db.closeIncident(activeIncident.id);
       setSelectedEmps(new Set());
+      setNightDutyGroup(null);
       setShowParticipants(false);
     } catch (err: any) {
       alert('상황 종료 중 오류가 발생했습니다: ' + err.message);
@@ -872,7 +876,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                 <button
                                   key={opt.key}
                                   type="button"
-                                  onClick={e => { e.stopPropagation(); setFireShift(opt.key); }}
+                                  onClick={e => { e.stopPropagation(); setFireShift(opt.key); if (opt.key === 'day') setNightDutyGroup(null); }}
                                   style={{
                                     flex: 1, padding: '13px 0', borderRadius: '10px', cursor: 'pointer',
                                     fontSize: '13px', fontWeight: 800,
@@ -886,6 +890,32 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                                 </button>
                               ))}
                             </div>
+                            {fireShift === 'night' && (
+                              <div>
+                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', margin: '2px 0 4px' }}>
+                                  오늘 야간 근무조 (TTS 전화 대상을 이 조로 좁힘)
+                                </div>
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                  {(['A', 'B', 'C', 'D'] as const).map(g => (
+                                    <button
+                                      key={g}
+                                      type="button"
+                                      onClick={e => { e.stopPropagation(); setNightDutyGroup(g); }}
+                                      style={{
+                                        flex: 1, padding: '10px 0', borderRadius: '8px', cursor: 'pointer',
+                                        fontSize: '12px', fontWeight: 800,
+                                        background: nightDutyGroup === g ? color + '2e' : '#ffffff',
+                                        border: `1px solid ${nightDutyGroup === g ? color + 'aa' : 'rgba(11,37,69,0.12)'}`,
+                                        color: nightDutyGroup === g ? color : '#64748b',
+                                        transition: 'all 0.15s',
+                                      }}
+                                    >
+                                      {g}조
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

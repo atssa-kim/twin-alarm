@@ -303,3 +303,52 @@ GitHub Pages(https://atssa-kim.github.io/twin-alarm/) 반영 완료.
 배지 조회만 쓰는 이전 로직으로 복원 후 재배포. `incidents.tts_emp_nos` DB 컬럼(SQL 마이그레이션
 `add-tts-emp-nos-260723.sql`)은 실행했더라도 그냥 안 쓰는 nullable 컬럼으로 남아 무해하므로
 DROP은 안 함. README.md의 관련 문단도 제거.
+
+TTS 전화 현재 로직 정리 (2026-07-24 수정 반영)
+1. 화재
+감지기동작	화재확정(전체)
+훈련(주간만)	mode=훈련/감지기 — 필수연락망 8명 즉시발신 + 30초 후 미확인 통제만	mode=훈련/전체 — 동일
+실제·주간	mode=실제/감지기(scope=fire_initial) — 필수연락망 8명 즉시발신 + 30초 후 미확인 총괄/통제/출동	mode=실제/화재 — 필수연락망 8명 즉시발신 + 30초 후 미확인 총괄/통제/출동 제외한 나머지 전 배지(감지기 단계 생략 시엔 전 배지)
+실제·야간	필수연락망 8명 즉시발신 제외(주간 근무자라 퇴근 상태) — 30초 후 미확인 배지 대상자에게만 전화. 단 총괄/통제/출동/상황 배지 보유자가 현재 없어(현장·대피만 배정됨) 사실상 아무도 안 걸림(기존부터 있던 별도 이슈, 미해결)	동일
+주간 공통: 필수연락망 8명은 훈련/실제 구분 없이 항상 즉시 전화. 야간은 필수연락망 제외(이번에 수정).
+
+2. 기타 8개 재난
+항상 주간만 존재. mode가 훈련이면 통제만, 실제면 총괄/통제/상황(지휘연락급) 대상으로 30초 후 미확인자에게 전화. 필수연락망 개념 없음(화재 전용).
+
+### 7. TTS 에스컬레이션 전체 코드 리뷰 + 발견된 문제 일괄 수정
+위 §6에서 "화재 실제·야간은 총괄/통제/출동/상황 배지가 없어 사실상 아무도 안 걸림"이라고
+적었는데, **다시 정밀하게 코드를 추적해보니 그 설명이 부정확했음** — `fireInitialAlreadyHandled`
+(감지기동작 이미 거침) 분기와 "감지기동작 없이 바로 전체화재" 분기는 애초에 FIRE_INITIAL_BADGES로
+좁히지 않아서 야간에도 `현장`/`대피` 18명이 걸리고 있었음. 진짜 0명이었던 건 `isFireInitial`
+(감지기동작) 단계 하나뿐. 정정.
+
+전체 코드 리뷰로 추가 발견한 문제들, 전부 수정:
+
+1. **[심각] `incident_acks` 단계별 확인 격리가 실제로는 안 됨**: `ackIncident()`의
+   `onConflict: 'incident_id,emp_no'`에 mode가 빠져있어서, 승격되어 mode가 바뀌면 앱이
+   열려있기만 해도(사람이 아무것도 안 해도) 자동으로 새 단계 "확인됨"으로 덮어써짐 — 세 군데
+   주석(supabase.ts/App.tsx/fix-escalation-bugs-260720.sql)이 전부 "mode별로 분리된다"고
+   설명하는데 실제로는 안 그랬음(PK가 (incident_id,emp_no)뿐이라 mode 컬럼은 그냥 최신값으로
+   갱신될 뿐). PK를 `(incident_id, emp_no, mode)`로 변경, `onConflict`도 맞춤.
+2. **[중간] 에스컬레이션 실패 시 무한 침묵**: `(incident_id, mode)` 클레임을 30초 대기 **전**에
+   선점해서, 클레임 이후 어떤 이유로든 실패하면(쿼리 에러, 타임아웃 등) 재시도도 실패 알림도
+   없이 완전히 조용히 사라짐. `incident_call_escalations`에 `scope`/`must_call_count`/
+   `target_count`/`called_count`/`error`/`completed_at` 감사 컬럼 추가, 매 종료 경로(성공/실패/
+   대상없음/전원확인/사고종료)에서 `recordResult()`로 기록하도록 수정. 클레임 INSERT 자체가
+   실패한 경우도 unique_violation(23505, 진짜 중복)과 그 외 에러(진짜 실패)를 구분해서 로깅.
+3. **[경미] `fireInitialAlreadyHandled` 판정이 `mode LIKE '%감지기%'` 문자열 매칭**: mode
+   네이밍이 바뀌면 조용히 깨질 수 있어서, `incident_call_escalations.scope='fire_initial'`
+   비교로 교체(위 감사 컬럼에 scope도 같이 저장).
+4. **[경미] SOLAPI 발신 성공/실패가 로그에만 남음**: `sendSolapiMessages`/`sendVoiceCalls`가
+   결과(`{sent, ok, error}`)를 반환하도록 바꿔서 위 감사 컬럼에 기록되게 함.
+5. **화재 야간 배지 필터 재정비 + 오늘 근무조(A~D) 좁히기**: `isFireInitial`/
+   `fireInitialAlreadyHandled` 분기를 `shift !== 'night'`로 한정해서, 야간은 항상
+   "그 shift에 배정된 전 배지"를 대상으로 하도록 통일(감지기동작 단계도 이제 0명이 아님).
+   추가로 `incidents.night_duty_group`(A|B|C|D) 컬럼 신설 — 지휘본부가 화재 야간 발령 시
+   오늘 실제 근무조를 고르면(CommanderDashboard.tsx, 필수 입력) TTS 대상을 그 조
+   (`employees.shift_group`)로만 좁혀서, 4교대 중 비번인 3개조까지 전화가 가던 문제 해결.
+
+DB 변경은 `scripts/migrations/fix-escalation-audit-260724.sql` — Supabase SQL Editor에서
+수동 실행 필요(직접 실행 권한 없음). Edge Function·프론트 모두 재배포 완료.
+
+미해결로 남은 것: 화재 야간 30초-미확인자 전화가 현재 대상자 0명입니다(배지 미배정). A~D 4개조 운영 특성상 어떻게 대상을 정할지는 지난 답변에서 드린 대로 검토 중이고, 방향 정해지면 이 부분도 같이 고치겠습니다.
