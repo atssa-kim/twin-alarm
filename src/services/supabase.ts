@@ -19,7 +19,8 @@ export interface Incident {
   drill_emp_nos?: string | null; // 훈련 승격 시 선택 대원 emp_no (콤마 구분)
   shift?: string; // 'day' | 'night' — 화재만 지휘관이 발령 시 수동 선택, 나머지 재난은 항상 'day'
   variant?: string | null; // 상황 확정 태그(예: 'K급주방'|'가스구역'|'배터리') — null이면 미확정(공통만 표시)
-  tts_call_enabled?: boolean; // 발령 시 "TTS 전화 사용" 체크박스 — false면 무응답자 전화 에스컬레이션 안 함 (기본 true)
+  tts_emp_nos?: string | null; // 훈련 참여인원설정에서 사람별로 체크한 TTS 수신자 emp_no (콤마 구분).
+  // 훈련은 이 목록에게만 즉시 발신, 비어있으면 아무도 전화 안 받음(2026-07-24)
 }
 
 // 훈련 발령 시 참여인원을 특정 대원으로 제한한 경우(drill_emp_nos), 그 인원만 알람·임무 대상.
@@ -100,7 +101,7 @@ export interface DutyMatrixRow {
 // Database helper functions
 export const db = {
   // 1. Declare active incident
-  async declareIncident(disaster: string, mode: string, location: string, scope: string, declaredBy: string, drillEmpNos: string | null = null, shift: string = 'day', ttsCallEnabled: boolean = true) {
+  async declareIncident(disaster: string, mode: string, location: string, scope: string, declaredBy: string, drillEmpNos: string | null = null, shift: string = 'day', ttsEmpNos: string | null = null) {
     const incidentId = `inc_${Date.now()}`;
     const incident: Incident = {
       id: incidentId,
@@ -113,7 +114,7 @@ export const db = {
       scope,
       drill_emp_nos: drillEmpNos,
       shift,
-      tts_call_enabled: ttsCallEnabled,
+      tts_emp_nos: ttsEmpNos,
     };
 
     // Close any previous incidents just in case
@@ -127,21 +128,43 @@ export const db = {
       .from('incidents')
       .insert(incident);
 
-    if (error) throw error;
+    if (error) {
+      // tts_emp_nos 컬럼 마이그레이션(add-tts-emp-nos-260723.sql) 미실행 시 발령 자체가
+      // 막히지 않도록 안전장치 — 컬럼 없다는 오류(PGRST204)면 그 필드만 빼고 재시도.
+      // 이 경우 훈련 TTS는 안 가지만(마이그레이션 전까지) 발령/임무 생성은 정상 진행됨.
+      if (error.code === 'PGRST204' && ttsEmpNos !== null) {
+        console.warn('[declareIncident] tts_emp_nos 컬럼 없음 — 필드 제외하고 재시도. add-tts-emp-nos-260723.sql 실행 필요.');
+        const { tts_emp_nos, ...fallback } = incident;
+        const { error: retryError } = await supabase.from('incidents').insert(fallback);
+        if (retryError) throw retryError;
+        return incident;
+      }
+      throw error;
+    }
     return incident;
   },
 
   // 2. Escalate incident mode
-  async escalateIncident(incidentId: string, toMode: string, toScope: string, drillEmpNos?: string | null, ttsCallEnabled?: boolean) {
+  async escalateIncident(incidentId: string, toMode: string, toScope: string, drillEmpNos?: string | null, ttsEmpNos?: string | null) {
     const update: Record<string, any> = { mode: toMode, scope: toScope };
     if (drillEmpNos !== undefined) update.drill_emp_nos = drillEmpNos;
-    if (ttsCallEnabled !== undefined) update.tts_call_enabled = ttsCallEnabled;
+    if (ttsEmpNos !== undefined) update.tts_emp_nos = ttsEmpNos;
     const { error } = await supabase
       .from('incidents')
       .update(update)
       .eq('id', incidentId);
 
-    if (error) throw error;
+    if (error) {
+      // tts_emp_nos 컬럼 마이그레이션 미실행 시 승격 자체가 막히지 않도록 안전장치
+      if (error.code === 'PGRST204' && ttsEmpNos !== undefined) {
+        console.warn('[escalateIncident] tts_emp_nos 컬럼 없음 — 필드 제외하고 재시도. add-tts-emp-nos-260723.sql 실행 필요.');
+        const { tts_emp_nos, ...fallback } = update;
+        const { error: retryError } = await supabase.from('incidents').update(fallback).eq('id', incidentId);
+        if (retryError) throw retryError;
+        return;
+      }
+      throw error;
+    }
   },
 
   // 2-b. 상황 확정(variant) 설정 — null이면 공통으로 되돌림(오조작 복구)

@@ -6,14 +6,16 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // 옛 이름이 실제 동작과 안 맞아서 정리함. git 이력의 escalate-unacked-calls
 // 디렉터리에서 옛 코드/설계 변천사를 볼 수 있음.)
 //
-// 규칙은 딱 하나:
+// 규칙은 딱 하나로 통일하되, 대상자 소스는 훈련/실제가 다름(2026-07-24 재정정):
 //   실제상황(mode가 '훈련'으로 시작하지 않음) 재난 발령/승격 시
 //     → 대기 없이 즉시, TTS 필수인원(employee_disaster_badges.tts_must_call=true,
-//       AdminPanel "재난 편제표" 탭에서 재난·사람별로 체크 관리)에게 전화. "TTS 전화 사용"
-//       체크박스 상태와 무관하게 항상 발신 — 실제 상황은 끌 수 없음.
+//       AdminPanel "재난 편제표" 탭에서 재난·사람별로 체크 관리)에게 전화.
 //   훈련
-//     → "TTS 전화 사용" 체크박스가 켜져 있을 때만, 위와 동일하게(TTS 필수인원에게) 즉시 발신.
-//       꺼져 있으면 훈련은 전화 자체를 안 함.
+//     → 대기 없이 즉시, incidents.tts_emp_nos(지휘본부 "훈련 참여인원설정" 화면에서
+//       사람별로 체크한 TTS 즉시발신 대상, 참여 여부와 독립)에 있는 사람에게만 전화.
+//       AdminPanel의 TTS 필수인원(실제상황용 고정 명단)과는 별개 — 훈련은 매번 다른 사람을
+//       테스트하고 싶을 수 있어서 그때그때 참여인원설정 화면에서 고름. 아무도 안 체크했으면
+//       (tts_emp_nos 비어있음) 그 훈련은 전화 자체가 안 감 — 별도 on/off 체크박스는 없음.
 //
 // 야간(shift='night')은 여전히 TTS를 쓰지 않음 — 야간 근무자는 항상 무전기를 휴대하고
 // 있어 TTS 전화가 불필요하다는 판단(2026-07-24, 유지).
@@ -154,11 +156,6 @@ Deno.serve(async (req) => {
     mode = record.mode || '';
     const isTraining = mode.startsWith('훈련');
 
-    // 실제상황은 체크박스 상태와 무관하게 항상 발신. 훈련은 체크박스가 켜져 있을 때만.
-    if (isTraining && record.tts_call_enabled === false) {
-      return new Response('training tts disabled at declare time', { status: 200, headers: CORS });
-    }
-
     incidentId = record.id;
     const disaster: string = record.disaster || '';
     const location: string = record.location || '';
@@ -171,10 +168,18 @@ Deno.serve(async (req) => {
     );
 
     // (incident_id, mode) 단위로 먼저 선점 — 유니크 제약 위반(23505)이면 이미 처리된 것.
-    // 그 외 에러는 진짜 실패이므로 구분해서 로깅.
-    const { error: claimErr } = await supabase
+    // 그 외 에러는 진짜 실패이므로 구분해서 로깅. scope 컬럼은 fix-escalation-audit-260724.sql
+    // 실행 전엔 없을 수 있어(PGRST204) 그 경우 scope 없이 재시도 — 마이그레이션 전에도 TTS
+    // 발신 자체는 막히지 않게 함(스킵 판정 정확도만 살짝 낮아짐).
+    let claimErr = (await supabase
       .from('incident_call_escalations')
-      .insert({ incident_id: incidentId, mode, scope, escalated_at: Date.now() });
+      .insert({ incident_id: incidentId, mode, scope, escalated_at: Date.now() })).error;
+    if (claimErr?.code === 'PGRST204') {
+      console.warn(`incident_call_escalations.scope 컬럼 없음 — 없이 재시도. fix-escalation-audit-260724.sql 실행 필요.`);
+      claimErr = (await supabase
+        .from('incident_call_escalations')
+        .insert({ incident_id: incidentId, mode, escalated_at: Date.now() })).error;
+    }
     if (claimErr) {
       if (claimErr.code === '23505') {
         return new Response('skip: already processed for this mode', { status: 200, headers: CORS });
@@ -183,22 +188,34 @@ Deno.serve(async (req) => {
       return new Response('claim insert failed: ' + claimErr.message, { status: 500, headers: CORS });
     }
 
-    // TTS 필수인원 조회 — 재난·주간 기준(AdminPanel "재난 편제표"에서 배지 배정 인원마다 체크)
-    const { data: mustCallBadgeRows, error: badgeErr } = await supabase
-      .from('employee_disaster_badges')
-      .select('emp_no')
-      .eq('disaster', disaster)
-      .eq('shift', 'day')
-      .eq('tts_must_call', true);
-    if (badgeErr) throw new Error('employee_disaster_badges 조회 오류: ' + badgeErr.message);
-    const mustCallEmpNos = [...new Set((mustCallBadgeRows ?? []).map((r: { emp_no: string }) => r.emp_no))];
+    // 대상 emp_no 목록 결정 — 훈련은 참여인원설정에서 사람별로 체크한 tts_emp_nos를 그대로 씀
+    // (배지 조회 없이), 실제는 AdminPanel "재난 편제표"의 TTS 필수인원(tts_must_call=true) 배지 조회.
+    let targetEmpNos: string[];
+    if (isTraining) {
+      targetEmpNos = typeof record.tts_emp_nos === 'string' && record.tts_emp_nos.length > 0
+        ? [...new Set(record.tts_emp_nos.split(',').filter(Boolean))]
+        : [];
+    } else {
+      const { data: mustCallBadgeRows, error: badgeErr } = await supabase
+        .from('employee_disaster_badges')
+        .select('emp_no')
+        .eq('disaster', disaster)
+        .eq('shift', 'day')
+        .eq('tts_must_call', true);
+      if (badgeErr?.code === 'PGRST204') {
+        console.error('employee_disaster_badges.tts_must_call 컬럼 없음 — add-tts-must-call-260724.sql 미실행. 대상 0명으로 처리.');
+      } else if (badgeErr) {
+        throw new Error('employee_disaster_badges 조회 오류: ' + badgeErr.message);
+      }
+      targetEmpNos = [...new Set((mustCallBadgeRows ?? []).map((r: { emp_no: string }) => r.emp_no))];
+    }
 
     let phones: string[] = [];
-    if (mustCallEmpNos.length > 0) {
+    if (targetEmpNos.length > 0) {
       const { data: empRows, error: empErr } = await supabase
         .from('employees')
         .select('phone')
-        .in('emp_no', mustCallEmpNos)
+        .in('emp_no', targetEmpNos)
         .not('phone', 'is', null);
       if (empErr) throw new Error('employees 조회 오류: ' + empErr.message);
       phones = (empRows ?? []).map((e: { phone: string }) => e.phone).filter(Boolean);
@@ -211,16 +228,16 @@ Deno.serve(async (req) => {
         : `${disaster} 발생. ${location}. 즉시 확인 바랍니다.`;
     const result = await sendVoiceCalls(phones, text);
     if (!result.ok && phones.length > 0) {
-      console.error(`TTS 필수인원 발신 실패(incident=${incidentId}, mode=${mode}):`, result.error);
+      console.error(`TTS 발신 실패(incident=${incidentId}, mode=${mode}):`, result.error);
     }
 
     await recordResult(supabase, incidentId, mode, {
-      target_count: mustCallEmpNos.length,
+      target_count: targetEmpNos.length,
       called_count: result.sent,
       error: result.ok ? null : (result.error ?? '발신 실패'),
     });
 
-    return new Response(JSON.stringify({ called: result.sent, targets: mustCallEmpNos.length, ok: result.ok }), {
+    return new Response(JSON.stringify({ called: result.sent, targets: targetEmpNos.length, ok: result.ok }), {
       status: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   } catch (err: unknown) {

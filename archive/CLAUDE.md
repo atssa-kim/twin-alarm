@@ -418,4 +418,38 @@ Edge Function·프론트 모두 재배포 완료. 이번 변경은 DB 스키마 
 DB 변경은 `scripts/migrations/rename-tts-function-260724.sql` — 반드시 §7/§9의 SQL과
 함께(또는 이후) 실행. 새 함수는 이미 배포됨.
 
+### 11. TTS 훈련 대상 재정정 — AdminPanel 필수인원이 아니라 참여인원설정 사람별 체크
+§9~10까지 "훈련도 실제와 똑같이 AdminPanel TTS 필수인원에게 간다"고 구현했는데, 사용자가
+"실제 원했던 건 그게 아니었다"고 정정. 진짜 의도:
+
+- **훈련**: 지휘본부 "훈련 참여인원 설정" 화면에서 **사람별로 체크한 대상**에게 즉시 발신
+  (제가 §7 이전 세션에서 만들었다가 "실제 상황에 영향 없어 복잡하다"는 이유로 삭제했던
+  바로 그 기능 — 다만 그때는 30초-대기-배지 로직과 공존해서 복잡했던 거고, 이제 30초 로직
+  자체가 없으니 단순히 "체크된 사람=즉시 대상"이 됨). 훈련마다 테스트하고 싶은 사람이
+  다를 수 있어서, 실제상황용 고정 명단(AdminPanel TTS 필수인원)과는 별도로 매번 고름.
+- **실제상황**: AdminPanel TTS 필수인원 그대로 유지(안 바뀜).
+- **"TTS 전화 사용" 마스터 체크박스는 완전 삭제**: 훈련은 참여인원설정에서 아무도 안
+  체크하면 자연히 전화가 안 가므로 별도 on/off 스위치가 불필요해짐.
+
+되돌린 것(§9 삭제 때 지웠던 것 재구현): `EmployeeGroupPicker`에 사람별 TTS 체크박스
+재추가(`ttsEmps`/`escalateTtsEmps` 상태), `incidents.tts_emp_nos`·`declareIncident`/
+`escalateIncident`의 `ttsEmpNos` 인자 복원. `notify-tts-must-call`은 `isTraining`이면
+`record.tts_emp_nos`를 그대로(배지 조회 없이) 대상으로 쓰고, 아니면 기존처럼
+`employee_disaster_badges.tts_must_call` 조회. `ttsCallEnabled`/`tts_call_enabled`
+관련 코드는 프론트에서 전부 제거(DB 컬럼 자체는 안 씀, 무해하게 방치).
+
+DB 스키마 변경 없음(§7의 `tts_emp_nos` 컬럼을 그대로 재사용 — 삭제한 적 없어서 이미 있음,
+없다면 `scripts/migrations/add-tts-emp-nos-260723.sql` 실행 필요). Edge Function·프론트
+모두 재배포 완료.
+
+**⚠️ 라이브 DB 점검 결과, 오늘(§7·§10·이번) SQL 마이그레이션 3개가 전부 미실행 상태였음**
+(`tts_emp_nos`/`tts_must_call`/`incident_call_escalations` 감사컬럼 전부 없음 확인).
+`tts_emp_nos`는 `declareIncident`/`escalateIncident`의 `insert`/`update` payload에 들어가는
+필드라 컬럼이 없으면 **발령/승격 자체가 실패**하는 심각한 문제 — 안전장치로
+`declareIncident`/`escalateIncident`에 PGRST204(컬럼 없음) 감지 시 그 필드만 빼고 재시도하는
+폴백 추가. `notify-tts-must-call`의 클레임 INSERT(`scope` 컬럼)·TTS 필수인원 배지 조회
+(`tts_must_call` 컬럼)에도 동일하게 컬럼 없으면 조용히 건너뛰는 폴백 추가 — 마이그레이션
+전이라도 앱이 안 깨지지만, TTS 전화 자체는 해당 마이그레이션 실행 전까진 안 나감.
+**§7/§10(add-tts-must-call)/이번(add-tts-emp-nos) SQL 전부 아직 미실행 — 최우선 실행 필요.**
+
 미해결로 남은 것: 화재 야간 30초-미확인자 전화가 현재 대상자 0명입니다(배지 미배정). A~D 4개조 운영 특성상 어떻게 대상을 정할지는 지난 답변에서 드린 대로 검토 중이고, 방향 정해지면 이 부분도 같이 고치겠습니다.

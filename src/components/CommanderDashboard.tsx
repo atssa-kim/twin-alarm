@@ -103,10 +103,14 @@ interface EmployeeGroupPickerProps {
   wrapperBorderColor: string;
   footerSuffix?: string;
   showTotalPrefix?: boolean;
+  // 훈련 중 TTS 즉시발신 대상 — 제공 시에만 각 행에 별도 체크박스로 렌더링 (참여 여부와 독립)
+  ttsSelected?: Set<string>;
+  setTtsSelected?: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
 
 const EmployeeGroupPicker: React.FC<EmployeeGroupPickerProps> = ({
   employees, disasterKey, selected, setSelected, openAccordions, setOpenAccordions, wrapperBorderColor, footerSuffix, showTotalPrefix = true,
+  ttsSelected, setTtsSelected,
 }) => {
   return (
     <div style={{ marginTop: '6px', border: `1px solid ${wrapperBorderColor}`, borderRadius: '10px', overflow: 'hidden', background: 'rgba(11,37,69,0.03)' }}>
@@ -176,15 +180,36 @@ const EmployeeGroupPicker: React.FC<EmployeeGroupPickerProps> = ({
 
         const mkEmpRow = (emp: EmployeeDB, c: string) => {
           const checked = selected.has(emp.emp_no);
+          const ttsChecked = ttsSelected?.has(emp.emp_no) ?? false;
           return (
-            <div key={emp.emp_no} onClick={() => setSelected(prev => {
-              const next = new Set(prev); next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no); return next;
-            })} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '5px 4px', cursor: 'pointer' }}>
-              <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? c : 'rgba(11,37,69,0.18)'}`, background: checked ? c + '33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {checked && <span style={{ color: c, fontSize: '9px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
+            <div key={emp.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '5px 4px' }}>
+              <div onClick={() => setSelected(prev => {
+                const next = new Set(prev); next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no); return next;
+              })} style={{ display: 'flex', alignItems: 'center', gap: '9px', flex: 1, minWidth: 0, cursor: 'pointer' }}>
+                <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? c : 'rgba(11,37,69,0.18)'}`, background: checked ? c + '33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {checked && <span style={{ color: c, fontSize: '9px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
+                </div>
+                <span style={{ fontSize: '12px', flex: 1, color: checked ? 'var(--text-main)' : 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.name}</span>
+                <span style={{ fontSize: '10px', color: '#475569', flexShrink: 0 }}>{emp.role}</span>
               </div>
-              <span style={{ fontSize: '12px', flex: 1, color: checked ? 'var(--text-main)' : 'var(--text-muted)' }}>{emp.name}</span>
-              <span style={{ fontSize: '10px', color: '#475569' }}>{emp.role}</span>
+              {setTtsSelected && (
+                <label onClick={e => e.stopPropagation()} style={{
+                  display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer', flexShrink: 0,
+                  padding: '2px 5px', borderRadius: '5px',
+                  border: `1px solid ${ttsChecked ? '#ef4444aa' : 'rgba(239,68,68,0.25)'}`,
+                  background: ttsChecked ? '#ef444422' : 'transparent',
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={ttsChecked}
+                    onChange={() => setTtsSelected(prev => {
+                      const next = new Set(prev); next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no); return next;
+                    })}
+                    style={{ width: '12px', height: '12px', accentColor: '#ef4444', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 800 }}>TTS</span>
+                </label>
+              )}
             </div>
           );
         };
@@ -250,6 +275,11 @@ const EmployeeGroupPicker: React.FC<EmployeeGroupPickerProps> = ({
 
       <div style={{ padding: '5px 12px 7px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>
         {showTotalPrefix ? '총 ' : ''}<strong style={{ color: 'var(--text-main)' }}>{selected.size}명</strong> 선택{footerSuffix || ''}
+        {setTtsSelected && (
+          <span style={{ marginLeft: '8px', color: '#ef4444' }}>
+            📞 TTS <strong>{ttsSelected!.size}명</strong>
+          </span>
+        )}
       </div>
     </div>
   );
@@ -273,8 +303,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const [fireSubMode, setFireSubMode] = useState<'initial' | 'full'>('initial');
   // 화재 전용 주간/야간 — 지휘관이 발령 시 직접 선택 (다른 재난은 항상 'day')
   const [fireShift, setFireShift] = useState<'day' | 'night'>('day');
-  // 실제상황 발령 시 30초 무응답자 TTS 전화 사용 여부 (기본 켜짐, 필요 시 해제)
-  const [ttsCallEnabled, setTtsCallEnabled] = useState(true);
   const [location, setLocation] = useState('');
   const [loading, setLoading] = useState(false);
   const [showVoicePicker, setShowVoicePicker] = useState(false);
@@ -284,9 +312,12 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const [showParticipants, setShowParticipants] = useState(false);
   const [selectedEmps, setSelectedEmps] = useState<Set<string>>(new Set());
   const [openAccordions, setOpenAccordions] = useState<Set<string>>(new Set());
+  // 훈련 중 TTS 즉시발신 대상 — 체크된 사람에게만 감(2026-07-24, 참여 여부와 독립)
+  const [ttsEmps, setTtsEmps] = useState<Set<string>>(new Set());
 
   // 전체훈련 승격 시 나머지 대원 선택
   const [escalateEmps, setEscalateEmps] = useState<Set<string>>(new Set());
+  const [escalateTtsEmps, setEscalateTtsEmps] = useState<Set<string>>(new Set());
   const [showEscalatePanel, setShowEscalatePanel] = useState(false);
 
   // 대원 출동현황 아코디언
@@ -478,6 +509,10 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
       const drillEmpNos = selectedMode === '훈련' && selectedEmps.size > 0
         ? [...selectedEmps].join(',')
         : null;
+      // 훈련 참여인원설정에서 사람별로 체크한 TTS 즉시발신 대상 — 비어있으면 아무도 전화 안 받음
+      const ttsEmpNos = selectedMode === '훈련' && ttsEmps.size > 0
+        ? [...ttsEmps].join(',')
+        : null;
       const allRoles = await db.getDisasterRolesWithTasks(selectedDisasterKey, shift);
       if (!allRoles.length) throw new Error('임무 데이터가 없습니다. 재난대응메뉴얼에서 이 재난·근무의 역할을 먼저 등록하세요.');
 
@@ -488,7 +523,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
 
       const incident = await db.declareIncident(
         selectedDisasterKey, modeLabel, location.trim(), scope, currentUser.empNo, drillEmpNos, shift,
-        ttsCallEnabled
+        ttsEmpNos
       );
 
       const bulkTasks: Omit<MemberTask, 'updated_at' | 'done_by'>[] = [];
@@ -517,9 +552,11 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
         await db.setTrainingParticipants(incident.id, selected, []);
         // 승격 패널 선택을 직전 훈련 참여인원과 동일하게 이어받음 + 패널 자동 오픈
         setEscalateEmps(new Set(selectedEmps));
+        setEscalateTtsEmps(new Set(ttsEmps));
         setShowEscalatePanel(true);
       } else {
         setEscalateEmps(new Set());
+        setEscalateTtsEmps(new Set());
         setShowEscalatePanel(false);
       }
 
@@ -544,6 +581,10 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
     const drillEmpNos = isTraining && escalateEmps.size > 0
       ? [...escalateEmps].join(',')
       : null;
+    // 훈련 참여인원설정에서 사람별로 체크한 TTS 즉시발신 대상
+    const ttsEmpNos = isTraining && escalateTtsEmps.size > 0
+      ? [...escalateTtsEmps].join(',')
+      : null;
 
     const participantDesc = isTraining
       ? (escalateEmps.size > 0 ? `선택 대원 ${escalateEmps.size}명` : '나머지 전원')
@@ -553,7 +594,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
 
     setLoading(true);
     try {
-      await db.escalateIncident(activeIncident.id, newMode, newScope, drillEmpNos, ttsCallEnabled);
+      await db.escalateIncident(activeIncident.id, newMode, newScope, drillEmpNos, ttsEmpNos);
 
       // 선택 대원을 responders에 추가 (훈련 + 선택 대원 있을 때)
       if (isTraining && escalateEmps.size > 0) {
@@ -609,6 +650,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
     try {
       await db.closeIncident(activeIncident.id);
       setSelectedEmps(new Set());
+      setTtsEmps(new Set());
       setShowParticipants(false);
     } catch (err: any) {
       alert('상황 종료 중 오류가 발생했습니다: ' + err.message);
@@ -894,27 +936,6 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
               </div>
             </div>
 
-            {/* 발령 전 TTS 전화 사용 여부 — 훈련에서만 표시. 실제상황은 이 체크박스와 무관하게
-                항상 TTS 필수인원에게 즉시 발신되므로(끌 수 없음) 실제에서는 보여줄 필요가 없음(2026-07-24). */}
-            {selectedMode === '훈련' && (
-              <label style={{
-                display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
-                padding: '10px 12px', borderRadius: '10px',
-                border: '1.5px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.06)',
-              }}>
-                <input
-                  type="checkbox"
-                  checked={ttsCallEnabled}
-                  onChange={e => setTtsCallEnabled(e.target.checked)}
-                  style={{ width: '16px', height: '16px', accentColor: '#ef4444', cursor: 'pointer' }}
-                />
-                <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#475569' }}>
-                  📞 TTS 전화 사용 (통화료 발생) — 켜면 TTS 필수인원에게 즉시 발신
-                  {isFireDisaster && fireShift === 'night' && ' (야간은 무전기 사용 — TTS 미발신)'}
-                </span>
-              </label>
-            )}
-
             {/* 위치 */}
             <div>
               <label htmlFor="location-input">재난 발생 위치</label>
@@ -954,6 +975,8 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                     openAccordions={openAccordions}
                     setOpenAccordions={setOpenAccordions}
                     wrapperBorderColor="rgba(99,102,241,0.2)"
+                    ttsSelected={ttsEmps}
+                    setTtsSelected={setTtsEmps}
                   />
                 )}
               </div>
@@ -1411,6 +1434,8 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
                           wrapperBorderColor="rgba(165,180,252,0.2)"
                           footerSuffix=" (선택 대원에게만 알람 발송)"
                           showTotalPrefix={false}
+                          ttsSelected={escalateTtsEmps}
+                          setTtsSelected={setEscalateTtsEmps}
                         />
                       )}
                     </div>
