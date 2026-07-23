@@ -112,7 +112,7 @@ ${timeline || '  (기록 없음)'}
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('generate-report error:', message);
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({ error: 'internal error' }), {
       status: 500,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });

@@ -27,3 +27,6 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# DB backups — 개인정보(직원 전화번호 등) 포함, 커밋하지 않음
+backups/

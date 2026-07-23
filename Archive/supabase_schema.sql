@@ -117,6 +117,68 @@ ALTER TABLE public.push_subscriptions DISABLE ROW LEVEL SECURITY;
 -- Supabase SQL Editor 에서 한 번 실행하세요.
 ALTER TABLE public.incidents ADD COLUMN IF NOT EXISTS drill_emp_nos TEXT DEFAULT NULL;
 
+-- 10-1. duty_matrix (재난×근무×반×배지×부서 임무 매트릭스 — "일원화" 마스터, 2026-07-03)
+--     원본: 트윈타워_재난대응_조직도_일원화_260703.pdf 를 그대로 옮긴 표 (scripts/seed-duty-matrix.ts 로 적재)
+--     주의: 아직 employees/employee_disaster_badges 와 자동 연동되지 않은 조회 전용 마스터입니다.
+--           지휘연락반(주간, 9개 재난 전체 통일) 배지는 총괄=센터장/통제=재난별 파트장/상황=상황실 3분류로 확정(2026-07-04).
+--           그 외 배지 체계가 기존 disaster_roles.badge 와 다를 수 있어, 실시간 임무 배정
+--           (ResponderView/CommanderDashboard)에 연결하려면 disa_app 쪽 정합 작업이 별도로 필요합니다.
+CREATE TABLE IF NOT EXISTS public.duty_matrix (
+    id         SERIAL PRIMARY KEY,
+    disaster   TEXT NOT NULL,        -- incidents.disaster / employee_disaster_badges.disaster 와 동일 key 체계
+    controller TEXT,                 -- 통제자(주간) 직책명, 예: '소방파트장'
+    shift      TEXT NOT NULL CHECK (shift IN ('주간', '야간')),
+    division   TEXT NOT NULL,        -- 반: 지휘연락반(9개 재난×주간/야간 통일, 가운뎃점 없음) /
+                                      --     현장대응반 / 대피유도반 / 대피·지원반 / 지원반
+    badge      TEXT NOT NULL,        -- 조(Badge): 상황 / 조치 / 복구 / 유도 / 응급 / 경계 / 출동 / 방호 / 관리 등
+    dept_code  TEXT                  -- 부서구분: 소방/전기/기계/건축1/건축2/보안1/보안2/야전기/교대전기 등 (PDF 미기재 시 NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_duty_matrix_lookup ON public.duty_matrix(disaster, shift, dept_code);
+ALTER TABLE public.duty_matrix DISABLE ROW LEVEL SECURITY;
+
+-- 10-2. employees 세분화 컬럼 — 부서구분(dept_code)·교대조(shift_group)
+--     dept_code: duty_matrix.dept_code 매칭용, team보다 세분화 (예: 건축파트→건축현장/건축사무 구분,
+--                교대 상황실 인원→야전기/교대전기 등). 아직 값이 채워지지 않았다면 team으로 대체 사용.
+--     shift_group: NULL(상시주간) | 'A' | 'B' | 'C' | 'D' — role 텍스트의 "(A조·...)" 패턴을 정식 컬럼화
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS dept_code TEXT;
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS shift_group TEXT;
+
+-- 11. disaster_roles 에 shift(근무구분) 컬럼 추가 (2026-07-05)
+--     배경: disa_app은 화재만 주간/야간/상황실(BMS) 3개 화면을 갖고 있는데, 기존엔
+--     UNIQUE(disaster, badge) 제약 때문에 야간·BMS 화면의 badge(예: '통제')가 주간의
+--     같은 이름 badge와 DB에서 같은 행을 가리켜서, disa_app이 야간/BMS 임무를 편집해도
+--     twin-alarm에 자동 반영되도록 두면 주간 데이터를 덮어쓸 위험이 있었음 — 그래서
+--     disa_app 쪽에서 야간/BMS 저장을 의도적으로 막아뒀었고, 이게 "disa_app 수정이
+--     twin-alarm에 반영 안 되는" 원인이었습니다.
+--     조치: shift 컬럼(day|night|bms)을 추가해 같은 이름의 badge라도 근무별로 다른 행으로
+--     분리 저장. 기존 행은 전부 shift='day'로 채워지고, twin-alarm 실행 로직
+--     (getDisasterRolesWithTasks 등)은 shift='day' 행만 조회하도록 코드도 함께 수정했으므로
+--     이 마이그레이션 자체만으로는 기존 발령·임무배정 동작이 바뀌지 않습니다.
+ALTER TABLE public.disaster_roles ADD COLUMN IF NOT EXISTS shift TEXT NOT NULL DEFAULT 'day';
+ALTER TABLE public.disaster_roles DROP CONSTRAINT IF EXISTS disaster_roles_disaster_badge_key;
+ALTER TABLE public.disaster_roles ADD CONSTRAINT disaster_roles_disaster_shift_badge_key UNIQUE (disaster, shift, badge);
+
+-- 12. incidents 에 shift(근무구분) 컬럼 추가 (2026-07-05)
+--     화재만 주간/야간 임무가 다르므로(11번 항목), 실제 발령 시 어느 shift의 disaster_roles를
+--     쓸지 알아야 합니다. 자동 시각판정 대신 지휘관이 발령 화면에서 주간/야간을 직접 선택하도록
+--     함(휴일 판정 등 부정확한 자동화를 피하기 위한 의도적 선택 — 2026-07-05 결정).
+--     기존 행은 전부 shift='day'로 채워지며, 화재 외 재난은 항상 'day' 고정이라
+--     이 마이그레이션 자체만으로는 기존 발령 동작이 바뀌지 않습니다.
+ALTER TABLE public.incidents ADD COLUMN IF NOT EXISTS shift TEXT NOT NULL DEFAULT 'day';
+
+-- 13. employee_disaster_badges 에 shift(근무구분) 축 추가 (2026-07-08)
+--     모든 재난에 주간/야간 배지 배정을 구분해서 관리하기 위한 확장. 기존엔 PK가
+--     (emp_no, disaster)라 재난당 배지 1개뿐이었는데, 이제 (emp_no, disaster, shift)로
+--     바뀌어 같은 사람이 같은 재난에서 주간/야간 배지를 각각 가질 수 있습니다.
+--     기존 행은 전부 shift='day'로 채워지며, twin-alarm AdminPanel의 재난 편제표 탭에
+--     주/야 토글이 추가되어 근무별로 배지·인원을 따로 배정/조회합니다.
+--     주의: 화재를 제외한 8개 재난은 disaster_roles에 아직 야간 역할 자체가 없으므로,
+--     야간 탭에서 배지를 배정해도 disaster_roles에 해당 역할이 없으면 임무가 비어 보입니다
+--     (재난대응메뉴얼=disa_app에서 그 재난의 야간 역할을 먼저 만들어야 함).
+ALTER TABLE public.employee_disaster_badges ADD COLUMN IF NOT EXISTS shift TEXT NOT NULL DEFAULT 'day';
+ALTER TABLE public.employee_disaster_badges DROP CONSTRAINT IF EXISTS employee_disaster_badges_pkey;
+ALTER TABLE public.employee_disaster_badges ADD PRIMARY KEY (emp_no, disaster, shift);
+
 -- 10. FCM 알람 트리거 (pg_net 확장 필요 — Dashboard → Database → Extensions → pg_net 활성화)
 --     [PROJECT_REF] 와 [ANON_KEY] 를 실제 값으로 교체 후 실행
 -- CREATE OR REPLACE FUNCTION notify_incident_fcm()

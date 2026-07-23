@@ -4,18 +4,35 @@ import { type Employee, Login } from './components/Login';
 import { CommanderDashboard } from './components/CommanderDashboard';
 import { ResponderView } from './components/ResponderView';
 import { COPDashboard } from './components/COPDashboard';
-import { triggerEmergencyAlert, stopAllAlerts, unlockAudio } from './utils/audio';
-import { db, type EmployeeDB } from './services/supabase';
+import { triggerEmergencyAlert, announceTTS, stopAllAlerts, unlockAudio } from './utils/audio';
+import { db, type EmployeeDB, isIncidentParticipant } from './services/supabase';
 import { requestNotificationPermission, onForegroundMessage } from './services/notifications';
 import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Bell, BellOff, Megaphone, Settings } from 'lucide-react';
 import { AdminPanel } from './components/AdminPanel';
+import { VARIANT_LABELS } from './components/CommanderDashboard';
+
+// 알람 중복 방지 Set을 localStorage에 영구 저장 — 앱 재생성(재로딩)해도 이미 경보한
+// 재난은 다시 울리지 않도록 함 (기존엔 useRef뿐이라 재생성 시 항상 초기화되어 재발화됨)
+const loadPersistedSet = (key: string): Set<string> => {
+  try { return new Set(JSON.parse(localStorage.getItem(key) || '[]')); } catch { return new Set(); }
+};
+const savePersistedSet = (key: string, set: Set<string>) => {
+  try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* 저장 공간 없음 등 무시 */ }
+};
+const ALERTED_INCIDENT_KEY = 'tt_alerted_incident_ids';
+const ALERTED_MODE_KEY = 'tt_alerted_mode_keys';
+const SOUND_ENABLED_KEY = 'tt_sound_enabled';
+const CURRENT_VIEW_KEY = 'tt_current_view';
 
 const App: React.FC = () => {
   const { activeIncident, responders, tasks, loading, disasterRoles } = useRealtime();
   const [currentUser, setCurrentUser] = useState<Employee | null>(null);
   const [employees, setEmployees] = useState<EmployeeDB[]>([]);
   const [currentView, setCurrentView] = useState<'cmd' | 'responder' | 'cop' | 'admin'>('responder');
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    const saved = localStorage.getItem(SOUND_ENABLED_KEY);
+    return saved === null ? true : saved === 'true';
+  });
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>(
     'Notification' in window ? Notification.permission : 'denied'
   );
@@ -23,9 +40,9 @@ const App: React.FC = () => {
   const [selectedVoiceName, setSelectedVoiceName] = useState<string>(() => {
     return localStorage.getItem('tt_selected_voice') || '';
   });
-  // 경보 중복 방지 — Set 기반 (탭 전환 후 복귀해도 재발령 없음)
-  const alertedIncidentIds = useRef<Set<string>>(new Set());
-  const alertedModeKeys = useRef<Set<string>>(new Set());
+  // 경보 중복 방지 — localStorage에 영구 저장 (앱 재생성해도 이미 경보한 재난은 재발화 안 함)
+  const alertedIncidentIds = useRef<Set<string>>(loadPersistedSet(ALERTED_INCIDENT_KEY));
+  const alertedModeKeys = useRef<Set<string>>(loadPersistedSet(ALERTED_MODE_KEY));
   // SW postMessage 중복 방지 — disaster|location|mode 조합으로 중복 차단 (dedup Set 클리어 안 함)
   const swAlertedKeys = useRef<Set<string>>(new Set());
   // 알림 탭으로 앱 재진입 시 TTS 강제 재생 플래그
@@ -121,6 +138,8 @@ const App: React.FC = () => {
       alertedIncidentIds.current.clear();
       alertedModeKeys.current.clear();
       swAlertedKeys.current.clear();
+      savePersistedSet(ALERTED_INCIDENT_KEY, alertedIncidentIds.current);
+      savePersistedSet(ALERTED_MODE_KEY, alertedModeKeys.current);
       pendingAlertRef.current = true;   // activeIncident 로드 후 TTS 즉시 재생
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -137,6 +156,15 @@ const App: React.FC = () => {
     }
   }, [activeIncident?.id, activeIncident?.mode, currentUser?.empNo, soundEnabled]);
 
+  // 0-b-2. activeIncident+currentUser 로드되면 "확인(ack)" 기록 — TTS 전화 에스컬레이션이
+  // 이 사람을 무응답자로 오판해 불필요하게 전화 걸지 않도록, 앱을 열어본 시점에 남긴다.
+  // mode도 같이 남겨서, 감지기동작 단계에서 확인한 게 전체화재 승격 이후까지 "확인됨"으로
+  // 잘못 인정되지 않도록 함(승격되면 mode가 바뀌므로 이 effect가 다시 실행되어 갱신됨).
+  useEffect(() => {
+    if (!activeIncident || !currentUser) return;
+    db.ackIncident(activeIncident.id, currentUser.empNo, activeIncident.mode);
+  }, [activeIncident?.id, activeIncident?.mode, currentUser?.empNo]);
+
   // 0-c. 화면 복귀 시 AudioContext 재활성화 (백그라운드 복귀 후 사이렌 묵음 방지)
   useEffect(() => {
     const handleVisibility = () => {
@@ -152,18 +180,33 @@ const App: React.FC = () => {
   }, [activeIncident?.id]);
 
   // 1. Session persistence for login
+  // 재생성(재로딩) 시 마지막으로 보고 있던 화면을 유지 — 없거나 이 사용자 권한에 안 맞으면
+  // 기존처럼 역할 기본값(지휘관→지휘본부, 대원→나의 임무)으로 되돌아감
   useEffect(() => {
     const savedUser = localStorage.getItem('tt_user_session');
     if (savedUser) {
       try {
         const parsedUser = JSON.parse(savedUser) as Employee;
         setCurrentUser(parsedUser);
-        setCurrentView(parsedUser.isCommander ? 'cmd' : 'responder' as 'cmd' | 'responder' | 'cop' | 'admin');
+        const savedView = localStorage.getItem(CURRENT_VIEW_KEY);
+        const validViews: ('cmd' | 'responder' | 'cop' | 'admin')[] = parsedUser.isCommander
+          ? ['cmd', 'responder', 'cop', 'admin']
+          : ['responder'];
+        if (savedView && (validViews as string[]).includes(savedView)) {
+          setCurrentView(savedView as 'cmd' | 'responder' | 'cop' | 'admin');
+        } else {
+          setCurrentView(parsedUser.isCommander ? 'cmd' : 'responder');
+        }
       } catch (e) {
         localStorage.removeItem('tt_user_session');
       }
     }
   }, []);
+
+  // currentView가 바뀔 때마다 저장 — 다음 재생성 시 그대로 복원
+  useEffect(() => {
+    localStorage.setItem(CURRENT_VIEW_KEY, currentView);
+  }, [currentView]);
 
   const handleLogin = async (user: Employee) => {
     setCurrentUser(user);
@@ -259,6 +302,8 @@ const App: React.FC = () => {
     const handler = (event: MessageEvent) => {
       if (event.data?.type !== 'BACKGROUND_ALERT') return;
       if (!soundEnabled) return;
+      // 서버(FCM 발송)에서 이미 대상자를 걸러 보내지만, 클라이언트에서도 한 번 더 확인
+      if (currentUser && activeIncident && !isIncidentParticipant(activeIncident, currentUser.empNo)) return;
       const { disaster, location, mode } = event.data;
       const key = `${disaster}|${location}|${mode}`;
       if (swAlertedKeys.current.has(key)) return; // 이미 처리한 알림
@@ -267,6 +312,8 @@ const App: React.FC = () => {
       if (activeIncident) {
         alertedIncidentIds.current.add(activeIncident.id);
         alertedModeKeys.current.add(`${activeIncident.id}__${activeIncident.mode}`);
+        savePersistedSet(ALERTED_INCIDENT_KEY, alertedIncidentIds.current);
+        savePersistedSet(ALERTED_MODE_KEY, alertedModeKeys.current);
       }
       triggerEmergencyAlert(disaster || '재난', location || '', mode || '실제');
       vibrateAlert();
@@ -279,10 +326,14 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!activeIncident || !currentUser) return;
     if (alertedIncidentIds.current.has(activeIncident.id)) return;
+    // 훈련 발령을 특정 대원으로 제한한 경우, 선택 안 된 대원에게는 알람을 울리지 않음
+    if (!isIncidentParticipant(activeIncident, currentUser.empNo)) return;
 
     alertedIncidentIds.current.add(activeIncident.id);
     // 초기 mode도 Set에 등록해 effect 3의 중복 방지
     alertedModeKeys.current.add(`${activeIncident.id}__${activeIncident.mode}`);
+    savePersistedSet(ALERTED_INCIDENT_KEY, alertedIncidentIds.current);
+    savePersistedSet(ALERTED_MODE_KEY, alertedModeKeys.current);
 
     if (soundEnabled) {
       triggerEmergencyAlert(activeIncident.disaster, activeIncident.location, activeIncident.mode);
@@ -295,13 +346,31 @@ const App: React.FC = () => {
     if (!activeIncident || !currentUser) return;
     const key = `${activeIncident.id}__${activeIncident.mode}`;
     if (alertedModeKeys.current.has(key)) return;
+    // 훈련 발령을 특정 대원으로 제한한 경우, 선택 안 된 대원에게는 알람을 울리지 않음
+    if (!isIncidentParticipant(activeIncident, currentUser.empNo)) return;
 
     alertedModeKeys.current.add(key);
+    savePersistedSet(ALERTED_MODE_KEY, alertedModeKeys.current);
     if (soundEnabled) {
       triggerEmergencyAlert(activeIncident.disaster, activeIncident.location, activeIncident.mode);
       vibrateAlert();
     }
   }, [activeIncident?.mode, currentUser?.empNo]);
+
+  // 4. 상황 확정(variant) 알림 — 공통으로 되돌리는 경우(null)는 조용히 처리, TTS는 재생하지 않음
+  useEffect(() => {
+    if (!activeIncident || !currentUser || !activeIncident.variant) return;
+    const key = `${activeIncident.id}__variant__${activeIncident.variant}`;
+    if (alertedModeKeys.current.has(key)) return;
+    if (!isIncidentParticipant(activeIncident, currentUser.empNo)) return;
+
+    alertedModeKeys.current.add(key);
+    savePersistedSet(ALERTED_MODE_KEY, alertedModeKeys.current);
+    if (soundEnabled) {
+      const label = (VARIANT_LABELS[activeIncident.variant] ?? activeIncident.variant).replace(/^\S+\s+/, '');
+      announceTTS(`${activeIncident.disaster} 상황이 ${label}로 확정되었습니다. 임무를 확인하세요.`);
+    }
+  }, [activeIncident?.variant, currentUser?.empNo]);
 
   // Loading Screen
   if (loading) {
@@ -312,7 +381,7 @@ const App: React.FC = () => {
         justifyContent: 'center',
         alignItems: 'center',
         height: '100vh',
-        background: '#090d16',
+        background: 'var(--navy)',
         color: '#f8fafc',
         fontFamily: 'var(--font-body)'
       }}>
@@ -353,13 +422,13 @@ const App: React.FC = () => {
       <header className="topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {activeIncident ? (
-            <ShieldAlert size={20} color="var(--color-fire)" />
+            <ShieldAlert size={20} color="#f87171" />
           ) : (
-            <Shield size={20} color="var(--color-green)" />
+            <Shield size={20} color="#34d399" />
           )}
           <a
             href="https://atssa-kim.github.io/disa_app/"
-            target="_blank"
+            target="disa_app_window"
             rel="noopener noreferrer"
             className="topbar-title"
             style={{ textDecoration: 'none', cursor: 'pointer' }}
@@ -373,10 +442,11 @@ const App: React.FC = () => {
           <button
             onClick={handleEnableNotif}
             style={{
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              padding: '2px 4px',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
-              color: notifPerm === 'granted' ? '#22c55e' : notifPerm === 'denied' ? '#ef4444' : '#f59e0b',
+              background: notifPerm === 'granted' ? '#fef3c7' : notifPerm === 'denied' ? '#fee2e2' : '#fef3c7',
+              border: 'none', borderRadius: '999px', cursor: 'pointer',
+              padding: '5px 10px',
+              display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '5px',
+              color: notifPerm === 'granted' ? '#92400e' : notifPerm === 'denied' ? '#991b1b' : '#92400e',
             }}
             title={
               notifPerm === 'granted' ? '알림 활성화됨' :
@@ -384,8 +454,8 @@ const App: React.FC = () => {
                                         '탭하여 알림 허용'
             }
           >
-            {notifPerm === 'granted' ? <Bell size={18} /> : <BellOff size={18} />}
-            <span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1 }}>
+            {notifPerm === 'granted' ? <Bell size={14} /> : <BellOff size={14} />}
+            <span style={{ fontSize: '11px', fontWeight: 800, lineHeight: 1 }}>
               {notifPerm === 'granted' ? '활성' : notifPerm === 'denied' ? '차단' : '알림'}
             </span>
           </button>
@@ -395,20 +465,21 @@ const App: React.FC = () => {
             onClick={() => {
               const next = !soundEnabled;
               setSoundEnabled(next);
+              localStorage.setItem(SOUND_ENABLED_KEY, String(next));
               unlockAudio();
               if (!next) stopAllAlerts();
             }}
             style={{
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              padding: '2px 4px',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
-              color: soundEnabled ? '#ef4444' : 'var(--text-muted)',
-              opacity: soundEnabled ? 1 : 0.5,
+              background: soundEnabled ? '#ffedd5' : 'rgba(255,255,255,0.1)',
+              border: 'none', borderRadius: '999px', cursor: 'pointer',
+              padding: '5px 10px',
+              display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '5px',
+              color: soundEnabled ? '#9a3412' : 'var(--on-navy-muted)',
             }}
             title={soundEnabled ? '육성 안내 켜짐' : '육성 안내 꺼짐'}
           >
-            <Megaphone size={18} />
-            <span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1 }}>
+            <Megaphone size={14} />
+            <span style={{ fontSize: '11px', fontWeight: 800, lineHeight: 1 }}>
               {soundEnabled ? '음성' : '음소거'}
             </span>
           </button>
@@ -419,14 +490,14 @@ const App: React.FC = () => {
             onClick={handleLogout}
             style={{
               background: 'transparent', border: 'none',
-              color: 'var(--color-fire)', cursor: 'pointer',
+              color: '#f87171', cursor: 'pointer',
               padding: '2px 4px',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
             }}
             title="로그아웃"
           >
             <LogOut size={18} />
-            <span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1, color: 'var(--color-fire)' }}>exit</span>
+            <span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1, color: '#f87171' }}>exit</span>
           </button>
         </div>
       </header>
@@ -434,8 +505,7 @@ const App: React.FC = () => {
       {/* Top Navigation Menu (topbar 바로 아래 고정) */}
       <nav style={{
         display: 'flex',
-        background: 'rgba(15, 23, 42, 0.9)',
-        backdropFilter: 'blur(12px)',
+        background: 'var(--navy)',
         border: '1px solid rgba(255, 255, 255, 0.08)',
         borderRadius: '16px',
         height: '56px',
@@ -450,10 +520,12 @@ const App: React.FC = () => {
         <button
           onClick={() => setCurrentView('cmd')}
           style={{
-            flex: '1 1 0', minWidth: '68px', background: 'transparent', border: 'none',
-            color: currentView === 'cmd' ? '#3b82f6' : 'var(--text-muted)',
+            flex: '1 1 0', minWidth: '68px',
+            background: currentView === 'cmd' ? 'var(--on-navy)' : 'transparent',
+            border: 'none', borderRadius: '10px', margin: '0 2px',
+            color: currentView === 'cmd' ? 'var(--navy)' : 'var(--on-navy-muted)',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
-            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: '6px 0',
           }}
         >
           <LayoutDashboard size={17} />
@@ -462,10 +534,12 @@ const App: React.FC = () => {
         <button
           onClick={() => setCurrentView('responder')}
           style={{
-            flex: '1 1 0', minWidth: '68px', background: 'transparent', border: 'none',
-            color: currentView === 'responder' ? '#3b82f6' : 'var(--text-muted)',
+            flex: '1 1 0', minWidth: '68px',
+            background: currentView === 'responder' ? 'var(--on-navy)' : 'transparent',
+            border: 'none', borderRadius: '10px', margin: '0 2px',
+            color: currentView === 'responder' ? 'var(--navy)' : 'var(--on-navy-muted)',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
-            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: '6px 0',
           }}
         >
           <ClipboardCheck size={17} />
@@ -474,10 +548,12 @@ const App: React.FC = () => {
         <button
           onClick={() => setCurrentView('cop')}
           style={{
-            flex: '1 1 0', minWidth: '68px', background: 'transparent', border: 'none',
-            color: currentView === 'cop' ? '#3b82f6' : 'var(--text-muted)',
+            flex: '1 1 0', minWidth: '68px',
+            background: currentView === 'cop' ? 'var(--on-navy)' : 'transparent',
+            border: 'none', borderRadius: '10px', margin: '0 2px',
+            color: currentView === 'cop' ? 'var(--navy)' : 'var(--on-navy-muted)',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
-            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+            gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: '6px 0',
           }}
         >
           <Radio size={17} />
@@ -487,10 +563,12 @@ const App: React.FC = () => {
           <button
             onClick={() => setCurrentView('admin')}
             style={{
-              flex: '1 1 0', minWidth: '68px', background: 'transparent', border: 'none',
-              color: currentView === 'admin' ? '#3b82f6' : 'var(--text-muted)',
+              flex: '1 1 0', minWidth: '68px',
+              background: currentView === 'admin' ? 'var(--on-navy)' : 'transparent',
+              border: 'none', borderRadius: '10px', margin: '0 2px',
+              color: currentView === 'admin' ? 'var(--navy)' : 'var(--on-navy-muted)',
               display: 'flex', flexDirection: 'column', alignItems: 'center',
-              gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+              gap: '3px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: '6px 0',
             }}
           >
             <Settings size={17} />

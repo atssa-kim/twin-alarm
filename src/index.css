@@ -17,26 +17,32 @@
 :root {
   --font-display: 'LG Smart UI', sans-serif;
   --font-body: 'LG Smart UI', sans-serif;
-  
-  /* Modern premium dark-themed color palette */
-  --bg-app: #090d16;
-  --bg-card: rgba(20, 26, 46, 0.6);
-  --bg-card-hover: rgba(28, 36, 62, 0.8);
-  --border-glow: rgba(59, 130, 246, 0.15);
-  --border-glow-hover: rgba(59, 130, 246, 0.3);
-  
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
+
+  /* 세이프티 네이비 — 밝은 본문 + 짙은 네이비 크롬 */
+  --bg-app: #f3f5f9;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f7f9fc;
+  --border-glow: #e1e6ee;
+  --border-glow-hover: #c7d2e0;
+
+  --text-main: #16233a;
+  --text-muted: #66748c;
   --text-dark: #0f172a;
-  
+
+  /* 네이비 크롬(상단바/내비) 전용 토큰 */
+  --navy: #0b2545;
+  --navy-soft: #173463;
+  --on-navy: #f5f7fb;
+  --on-navy-muted: #93a4c2;
+
   /* Emergency specific accent colors */
-  --color-fire: #ef4444;
-  --color-power: #f59e0b;
-  --color-water: #3b82f6;
-  --color-green: #10b981;
-  --color-purple: #8b5cf6;
-  
-  --shadow-premium: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --color-fire: #dc2626;
+  --color-power: #d9820a;
+  --color-water: #2563eb;
+  --color-green: #0f9d63;
+  --color-purple: #6d5bd0;
+
+  --shadow-premium: 0 8px 28px 0 rgba(16, 34, 64, 0.12);
   --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -54,14 +60,11 @@ html {
 }
 
 body {
-  background: radial-gradient(circle at top right, #111827, #030712);
+  background: var(--bg-app);
   color: var(--text-main);
   font-family: var(--font-body);
   min-height: 100vh;
   min-height: 100dvh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
   overflow-x: hidden;
   overscroll-behavior-x: none;
 }
@@ -70,19 +73,16 @@ img, svg, video, canvas, audio, iframe, embed, object {
   max-width: 100%;
 }
 
-/* App container — 뷰포트 폭의 90%로 고정, 모든 메뉴 동일 폭 보장 */
+/* App container — 화면(뷰포트)을 항상 꽉 채움. 화면 폭과 무관하게 좌우 여백 없음 */
 #app {
-  width: 90vw;
-  max-width: 90vw;
+  width: 100%;
+  max-width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
   background: var(--bg-app);
   display: flex;
   flex-direction: column;
   position: relative;
-  box-shadow: var(--shadow-premium);
-  border-left: 1px solid rgba(255, 255, 255, 0.05);
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
   overflow-x: hidden;
   overflow-y: auto;
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -90,23 +90,9 @@ img, svg, video, canvas, audio, iframe, embed, object {
   -ms-overflow-style: none;
 }
 
-@media (min-width: 481px) {
-  #app {
-    width: 90vw;
-    max-width: 480px;   /* 데스크톱에서 너무 넓어지지 않도록 480px 상한 유지 */
-    min-height: 900px;
-    height: 90dvh;
-    border-radius: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    margin: 20px 0;
-  }
-}
-
-/* Top bar with glassmorphism */
+/* Top bar — 짙은 네이비 크롬 */
 .topbar {
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--navy);
   padding: 14px 20px 14px;
   padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
   display: flex;
@@ -123,9 +109,7 @@ img, svg, video, canvas, audio, iframe, embed, object {
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.5px;
-  background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--on-navy);
 }
 
 /* Badges */
@@ -136,23 +120,23 @@ img, svg, video, canvas, audio, iframe, embed, object {
   border-radius: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
 .badge-live {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  border-color: rgba(16, 185, 129, 0.3);
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.1);
+  background: #0f9d63;
+  color: #ffffff;
+  border-color: #0f9d63;
+  box-shadow: 0 0 12px rgba(15, 157, 99, 0.35);
 }
 
 .badge-demo {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-  border-color: rgba(245, 158, 11, 0.3);
+  background: #d9820a;
+  color: #ffffff;
+  border-color: #d9820a;
 }
 
 /* Content Area */
@@ -174,7 +158,7 @@ img, svg, video, canvas, audio, iframe, embed, object {
   padding: 20px;
   width: 100%;
   box-sizing: border-box;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 12px rgba(16, 34, 64, 0.06);
   transition: var(--transition-smooth);
 }
 
@@ -187,11 +171,11 @@ img, svg, video, canvas, audio, iframe, embed, object {
 /* Forms */
 label {
   font-family: var(--font-display);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-main);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
   margin-bottom: 8px;
   display: block;
 }
@@ -201,21 +185,26 @@ input, select {
   max-width: 100%;
   min-width: 0;
   height: 48px;
-  background: rgba(10, 15, 30, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #f8fafc;
+  border: 1px solid var(--border-glow);
   border-radius: 12px;
   padding: 0 16px;
   font-size: 15px;
+  font-weight: 700;
   color: var(--text-main);
   outline: none;
   font-family: inherit;
   transition: var(--transition-smooth);
 }
 
+input::placeholder {
+  color: #9aa7bd;
+}
+
 input:focus, select:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
-  background: rgba(15, 23, 42, 0.9);
+  border-color: var(--color-water);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+  background: #ffffff;
 }
 
 /* Buttons */
@@ -237,36 +226,37 @@ input:focus, select:focus {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  box-shadow: 0 4px 14px rgba(29, 78, 216, 0.28);
 }
 .btn-primary:hover {
-  filter: brightness(1.1);
-  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+  filter: brightness(1.08);
+  box-shadow: 0 6px 20px rgba(29, 78, 216, 0.36);
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3);
+  background: linear-gradient(135deg, #ef4444 0%, #c62828 100%);
+  box-shadow: 0 4px 14px rgba(198, 40, 40, 0.3);
 }
 .btn-danger:hover {
-  filter: brightness(1.1);
-  box-shadow: 0 6px 20px rgba(220, 38, 38, 0.4);
+  filter: brightness(1.08);
+  box-shadow: 0 6px 20px rgba(198, 40, 40, 0.38);
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #eef1f6;
+  border: 1px solid var(--border-glow);
+  color: var(--text-main);
 }
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: #e4e9f1;
 }
 
 /* Switcher / Segmented Control */
 .segmented-control {
   display: flex;
-  background: rgba(10, 15, 30, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #eef1f6;
+  border: 1px solid var(--border-glow);
   border-radius: 12px;
   padding: 4px;
   gap: 4px;
@@ -286,9 +276,9 @@ input:focus, select:focus {
 }
 
 .segmented-btn.active {
-  background: rgba(255, 255, 255, 0.08);
+  background: #ffffff;
   color: var(--text-main);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(16, 34, 64, 0.12);
 }
 
 /* Progress bar */
@@ -307,7 +297,7 @@ input:focus, select:focus {
 
 .progress-track {
   height: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: #e7ebf2;
   border-radius: 6px;
   overflow: hidden;
   position: relative;
@@ -327,27 +317,27 @@ input:focus, select:focus {
   gap: 10px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(10, 15, 30, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: #f7f9fc;
+  border: 1px solid var(--border-glow);
   margin-bottom: 6px;
   cursor: pointer;
   transition: var(--transition-smooth);
 }
 
 .task-item:hover {
-  background: rgba(15, 23, 42, 0.6);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: #eef2f8;
+  border-color: var(--border-glow-hover);
 }
 
 .task-item.done {
-  opacity: 0.6;
+  opacity: 0.65;
 }
 
 .checkbox-visual {
   width: 20px;
   height: 20px;
   border-radius: 6px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  border: 2px solid #c7d2e0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -384,9 +374,8 @@ input:focus, select:focus {
   margin-bottom: 16px;
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(185, 28, 28, 0.25) 100%);
-  border-color: rgba(239, 68, 68, 0.3);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(220, 38, 38, 0.14) 100%);
 }
 
 .banner-title {
@@ -407,8 +396,8 @@ input:focus, select:focus {
 }
 
 .cop-stat-card {
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: #f7f9fc;
+  border: 1px solid var(--border-glow);
   border-radius: 14px;
   padding: 16px;
   text-align: center;
@@ -440,8 +429,8 @@ input:focus, select:focus {
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: #f7f9fc;
+  border: 1px solid var(--border-glow);
   border-radius: 10px;
 }
 
@@ -472,11 +461,11 @@ input:focus, select:focus {
 }
 
 .accordion-header:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(11, 37, 69, 0.04);
 }
 
 .accordion-header:active {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(11, 37, 69, 0.08);
 }
 
 /* Custom Scrollbars — #app 외부(데스크톱 body 등)만 적용 */
@@ -487,11 +476,11 @@ input:focus, select:focus {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(11, 37, 69, 0.15);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(11, 37, 69, 0.28);
 }
 
 /* ── #app 내부 모든 스크롤바 제거 ──────────────────────────────────────

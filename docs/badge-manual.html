@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>재난대응 배지 관리 매뉴얼</title>
+<style>
+  :root {
+    --paper: #f6f3ea;
+    --paper-raised: #fffdf8;
+    --ink: #16202f;
+    --navy: #16324f;
+    --navy-deep: #0d1f36;
+    --amber: #a35e0a;
+    --amber-soft: #f1dfc4;
+    --amber-ink: #6b3d06;
+    --line: #ddd4bd;
+    --muted: #746b58;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #10161f;
+      --paper-raised: #171f2b;
+      --ink: #eae7dd;
+      --navy: #8fb2de;
+      --navy-deep: #b9d3f0;
+      --amber: #dea254;
+      --amber-soft: #34291a;
+      --amber-ink: #f0c68a;
+      --line: #2b3444;
+      --muted: #97a0ab;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #10161f;
+    --paper-raised: #171f2b;
+    --ink: #eae7dd;
+    --navy: #8fb2de;
+    --navy-deep: #b9d3f0;
+    --amber: #dea254;
+    --amber-soft: #34291a;
+    --amber-ink: #f0c68a;
+    --line: #2b3444;
+    --muted: #97a0ab;
+  }
+  :root[data-theme="light"] {
+    --paper: #f6f3ea;
+    --paper-raised: #fffdf8;
+    --ink: #16202f;
+    --navy: #16324f;
+    --navy-deep: #0d1f36;
+    --amber: #a35e0a;
+    --amber-soft: #f1dfc4;
+    --amber-ink: #6b3d06;
+    --line: #ddd4bd;
+    --muted: #746b58;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+
+  header.doc {
+    border-bottom: 3px solid var(--navy);
+    padding-bottom: 22px;
+    margin-bottom: 34px;
+  }
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber-ink);
+    margin-bottom: 10px;
+  }
+  h1 {
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    margin: 0 0 8px;
+    color: var(--navy-deep);
+    text-wrap: balance;
+  }
+  .doc-sub {
+    font-size: 14.5px;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  nav.toc {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 22px;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 40px;
+    font-size: 13.5px;
+  }
+  nav.toc a {
+    color: var(--navy);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+  nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--navy); }
+  nav.toc span.n { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
+
+  section { margin-bottom: 46px; scroll-margin-top: 20px; }
+  h2 {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--navy-deep);
+    margin: 0 0 6px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  h2 .num {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--amber-ink);
+    background: var(--amber-soft);
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-weight: 700;
+  }
+  .lede {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0 0 20px;
+    max-width: 62ch;
+  }
+  p { margin: 0 0 14px; }
+  h3 {
+    font-size: 14.5px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 22px 0 10px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--navy);
+    color: var(--paper-raised);
+    white-space: nowrap;
+  }
+  .chip.amber { background: var(--amber-soft); color: var(--amber-ink); border: 1px solid var(--amber); }
+  .chip.ghost { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
+
+  .badge-groups { display: flex; flex-direction: column; gap: 14px; }
+  .badge-group {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .badge-group-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .badge-group-head strong { font-size: 14.5px; color: var(--navy-deep); }
+  .badge-group-head .count { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .badge-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .badge-group p.desc { font-size: 13px; color: var(--muted); margin: 0; }
+  .badge-group table.examples {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 12.5px;
+  }
+  .badge-group table.examples td {
+    padding: 5px 0;
+    border-top: 1px solid var(--line);
+    vertical-align: top;
+  }
+  .badge-group table.examples td:first-child {
+    width: 92px;
+    font-family: var(--mono);
+    color: var(--navy);
+    font-weight: 600;
+  }
+  .badge-group table.examples td:last-child { color: var(--muted); }
+
+  ol.steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    counter-reset: step;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  ol.steps li {
+    counter-increment: step;
+    position: relative;
+    padding: 14px 16px 14px 52px;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+  }
+  ol.steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 14px;
+    top: 14px;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--paper-raised);
+    background: var(--navy);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  ol.steps li strong { display: block; font-size: 14px; color: var(--ink); margin-bottom: 3px; }
+  ol.steps li span.detail { font-size: 13px; color: var(--muted); }
+
+  .callout {
+    border-left: 3px solid var(--amber);
+    background: var(--amber-soft);
+    border-radius: 0 8px 8px 0;
+    padding: 13px 16px;
+    margin: 10px 0;
+    font-size: 13.5px;
+    color: var(--amber-ink);
+  }
+  .callout strong { display: block; margin-bottom: 3px; font-size: 13px; }
+  .callout ul { margin: 6px 0 0; padding-left: 18px; }
+  .callout li { margin-bottom: 4px; }
+
+  .table-scroll { overflow-x: auto; }
+  table.ref {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 480px;
+  }
+  table.ref th {
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+    padding: 8px 10px;
+    border-bottom: 2px solid var(--navy);
+  }
+  table.ref td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  table.ref tr:last-child td { border-bottom: none; }
+
+  footer.doc {
+    margin-top: 56px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  code.inline {
+    font-family: var(--mono);
+    font-size: 0.9em;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  @media (max-width: 560px) {
+    nav.toc { grid-template-columns: 1fr; }
+    .wrap { padding: 36px 16px 72px; }
+    h1 { font-size: 25px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="doc">
+    <div class="eyebrow">트윈타워 재난대응 시스템 · 운영 문서</div>
+    <h1>배지 관리 매뉴얼</h1>
+    <p class="doc-sub">disa_app(임무 편집)과 twin-alarm(현장 실행)이 공유하는 배지 체계 — 무엇이 있고, 어떻게 늘리는가. 2026-07-16 기준.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#what"><span class="n">1</span>배지란 무엇인가</a>
+    <a href="#list"><span class="n">2</span>사용 가능한 배지 23종</a>
+    <a href="#numbered"><span class="n">3</span>번호 배지(1~4) 사용 원칙</a>
+    <a href="#howto"><span class="n">4</span>새 배지 추가하는 절차</a>
+    <a href="#caution"><span class="n">5</span>주의사항</a>
+    <a href="#nonstandard"><span class="n">6</span>목록 밖 배지 3종</a>
+  </nav>
+
+  <section id="what">
+    <h2><span class="num">01</span>배지란 무엇인가</h2>
+    <p class="lede">한 사람에게 붙는 "이번 재난에서 이 사람이 할 일" 표식입니다.</p>
+    <p>disa_app에서 재난별 역할(role)마다 배지를 지정하고 임무를 채워두면, twin-alarm에서 직원 한 명 한 명에게 그 배지를 배정하는 순간 — 재난이 발령됐을 때 그 사람 화면에 해당 임무 목록이 자동으로 뜹니다. 배지는 두 앱을 잇는 유일한 연결 고리이고, DB에는 정해진 목록이 없는 <strong>자유 문자열</strong>입니다. 아래 23종은 "현재 우리가 합의해서 쓰기로 한" 표준일 뿐, 늘리는 데 구조적 제약은 없습니다.</p>
+  </section>
+
+  <section id="list">
+    <h2><span class="num">02</span>사용 가능한 배지 23종</h2>
+    <p class="lede">역할에 따라 6개 그룹으로 나눴습니다. 실제 disaster_roles에 등록된 예시를 함께 적었습니다.</p>
+
+    <div class="badge-groups">
+
+      <div class="badge-group">
+        <div class="badge-group-head"><strong>지휘연락급</strong><span class="count">3종</span></div>
+        <div class="badge-list">
+          <span class="chip">총괄</span><span class="chip">통제</span><span class="chip">상황</span>
+        </div>
+        <table class="examples">
+          <tr><td>총괄</td><td>센터장 — 전 재난 공통, 재난당 보통 1명</td></tr>
+          <tr><td>통제</td><td>그 재난의 담당 파트장(예: 정전→전기파트장, 가스누출→기계파트장)</td></tr>
+          <tr><td>상황</td><td>상황실 당직조장 — 재난 대부분에 존재</td></tr>
+        </table>
+      </div>
+
+      <div class="badge-group">
+        <div class="badge-group-head"><strong>화재 전용</strong><span class="count">1종</span></div>
+        <div class="badge-list"><span class="chip">출동</span></div>
+        <table class="examples">
+          <tr><td>출동</td><td>비상출동조(전기·소방파트) — 화재 감지기동작 시 1차로 소집되는 인원</td></tr>
+        </table>
+      </div>
+
+      <div class="badge-group">
+        <div class="badge-group-head"><strong>대응 계열</strong><span class="count">5종</span></div>
+        <div class="badge-list">
+          <span class="chip">대응</span><span class="chip amber">대응1</span><span class="chip amber">대응2</span><span class="chip amber">대응3</span><span class="chip amber">대응4</span>
+        </div>
+        <table class="examples">
+          <tr><td>대응</td><td>가스누출·승강기·정전·태풍/홍수 — 각 재난별 현장 대응조 (혼성 인원, 세분화 불필요)</td></tr>
+          <tr><td>대응1 / 대응2</td><td>지진(전기·건축파트 / 기계·미화·주차파트), 폭설(운영·소방·건축 / 전기·기계·품질) — 인원이 많아 파트별로 조를 나눈 경우</td></tr>
+          <tr><td>대응3 / 대응4</td><td>아직 미사용 — 필요 시 disa_app에서 바로 역할 생성 가능</td></tr>
+        </table>
+      </div>
+
+      <div class="badge-group">
+        <div class="badge-group-head"><strong>유도 계열</strong><span class="count">5종</span></div>
+        <div class="badge-list">
+          <span class="chip">유도</span><span class="chip amber">유도1</span><span class="chip amber">유도2</span><span class="chip amber">유도3</span><span class="chip amber">유도4</span>
+        </div>
+        <table class="examples">
+          <tr><td>유도</td><td>가스누출·누수·지진·테러 등 — 대피 유도조 (주로 보안파트)</td></tr>
+          <tr><td>유도1~4</td><td>아직 미사용 — 대피 동선이 여러 구역으로 나뉘는 재난에서 구역별로 쪼갤 때 사용</td></tr>
+        </table>
+      </div>
+
+      <div class="badge-group">
+        <div class="badge-group-head"><strong>지원 계열</strong><span class="count">5종</span></div>
+        <div class="badge-list">
+          <span class="chip">지원</span><span class="chip amber">지원1</span><span class="chip amber">지원2</span><span class="chip amber">지원3</span><span class="chip amber">지원4</span>
+        </div>
+        <table class="examples">
+          <tr><td>지원</td><td>누수(관리조)·승강기·정전(유도·지원반)·태풍/홍수 — 후방 지원·관리 업무</td></tr>
+          <tr><td>지원1 / 지원2</td><td>폭설 — 미화협력(지원1) / 보안·주차협력(지원2)</td></tr>
+          <tr><td>지원3 / 지원4</td><td>아직 미사용</td></tr>
+        </table>
+      </div>
+
+      <div class="badge-group">
+        <div class="badge-group-head"><strong>기타 전문조</strong><span class="count">4종</span></div>
+        <div class="badge-list">
+          <span class="chip">응급</span><span class="chip">방호</span><span class="chip">경계</span><span class="chip">복구</span>
+        </div>
+        <table class="examples">
+          <tr><td>응급</td><td>구조·응급 처치조 (재난별로 담당 파트 상이)</td></tr>
+          <tr><td>방호</td><td>화재 — 방호조(건축현장)</td></tr>
+          <tr><td>경계</td><td>화재 — 경계조(보안2)</td></tr>
+          <tr><td>복구</td><td>화재·누수 — 사후 복구조</td></tr>
+        </table>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="numbered">
+    <h2><span class="num">03</span>번호 배지(1~4) 사용 원칙</h2>
+    <p class="lede">대응/유도/지원 세 계열만 번호를 붙일 수 있습니다. 언제, 왜 나누는지 기준입니다.</p>
+
+    <h3>언제 나누는가</h3>
+    <p>한 배지에 묶을 인원이 너무 많거나, 소속 파트가 뚜렷이 갈릴 때만 나눕니다. 예를 들어 지진 대응조는 <code class="inline">전기·건축파트</code>와 <code class="inline">기계·미화·주차파트</code>가 임무 자체가 달라서 <span class="chip amber" style="font-size:11px;">대응1</span> / <span class="chip amber" style="font-size:11px;">대응2</span>로 쪼갰습니다. 인원이 적거나 임무가 동일하면 굳이 나누지 말고 그냥 <span class="chip" style="font-size:11px;">대응</span>을 쓰세요 — 배지가 늘어날수록 disa_app에서 관리할 역할 수도 그만큼 늘어납니다.</p>
+
+    <h3>번호가 자동으로 연동되는 기능</h3>
+    <div class="callout">
+      <strong>조장 자동 현장처리</strong>
+      화재에서 <code class="inline">출동</code>·<code class="inline">대응</code>(대응1~4 포함)·<code class="inline">구조</code> 배지를 가진 파트장이 임무를 체크하면, 같은 조원 중 "출동중"이던 사람이 자동으로 "현장"으로 바뀝니다. 이 판정은 배지 이름의 <strong>앞글자만 보고(접두어 매칭)</strong> 인식하므로, 대응1이든 대응2든 대응99를 새로 만들어도 코드를 손댈 필요 없이 그대로 동작합니다.
+    </div>
+  </section>
+
+  <section id="howto">
+    <h2><span class="num">04</span>새 배지 추가하는 절차</h2>
+    <p class="lede">대응3·지원3·유도3처럼 이미 목록에 있는 번호를 실제로 쓰기 시작할 때 — 코드 수정 없이 아래만 하면 됩니다.</p>
+    <ol class="steps">
+      <li>
+        <strong>disa_app에서 새 역할 생성</strong>
+        <span class="detail">재난대응메뉴얼 → 해당 재난 → 임무수정 → 새 역할 추가. 배지 드롭다운에 이미 대응1~4/유도1~4/지원1~4가 준비돼 있습니다.</span>
+      </li>
+      <li>
+        <strong>임무 입력</strong>
+        <span class="detail">그 조가 수행할 임무를 순서대로 채웁니다. 기존 같은 계열(예: 대응1) 역할을 복사해서 시작하면 빠릅니다.</span>
+      </li>
+      <li>
+        <strong>twin-alarm 관리자패널에서 인원 배정</strong>
+        <span class="detail">해당 재난·근무 화면에서 새 배지를 가질 직원을 선택해 배정합니다. 한 사람은 재난+근무당 배지를 1개만 가질 수 있습니다(아래 5번 참고).</span>
+      </li>
+      <li>
+        <strong>동작 확인</strong>
+        <span class="detail">배정된 직원 계정으로 twin-alarm에 로그인해 "나의 임무"에 새 역할의 임무가 정상적으로 뜨는지 확인합니다. 훈련 발령으로 테스트하면 실제 알림 없이 확인 가능합니다.</span>
+      </li>
+    </ol>
+  </section>
+
+  <section id="caution">
+    <h2><span class="num">05</span>주의사항</h2>
+    <div class="callout">
+      <strong>이것만은 꼭</strong>
+      <ul>
+        <li><strong>직원 1명 = 재난 1개 + 근무(주/야간) 1개당 배지 1개.</strong> "대응1"이면서 동시에 "대응2"일 수 없습니다 — 조를 옮기려면 기존 배정을 지우고 새로 배정하세요.</li>
+        <li><strong>이름은 한 글자도 다르면 안 됩니다.</strong> <code class="inline">대응1</code>과 <code class="inline">대응 1</code>(띄어쓰기 포함)은 시스템이 완전히 다른 배지로 취급합니다.</li>
+        <li><strong>색상은 배지가 아니라 역할(role)마다 따로 저장됩니다.</strong> 같은 <code class="inline">대응1</code>이라도 지진과 폭설에서 색이 다를 수 있습니다 — 정상입니다.</li>
+        <li>화재 한정으로 <code class="inline">총괄·통제·출동</code> 3개 배지는 TTS 전화 에스컬레이션(30초 무응답 시 자동 전화)의 1차 대상이고, 나머지 전 배지는 화재상황 전체승격 시 2차 대상입니다. 대응/지원/유도를 세분화해도 이 로직은 그대로 적용됩니다.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="nonstandard">
+    <h2><span class="num">06</span>목록 밖 배지 3종</h2>
+    <p class="lede">과거에 만들어져 지금 표준 23종에는 없지만, 실제 데이터에 남아있는 배지입니다.</p>
+    <div class="table-scroll">
+      <table class="ref">
+        <tr><th>배지</th><th>쓰이는 곳</th><th>비고</th></tr>
+        <tr><td><span class="chip ghost">대피</span></td><td>화재 · 야간</td><td>대피지원(보안/미화)</td></tr>
+        <tr><td><span class="chip ghost">연락</span></td><td>화재 · 야간</td><td>연락·제어</td></tr>
+        <tr><td><span class="chip ghost">현장</span></td><td>화재 · 야간</td><td>현장대응(BMS·전기·보안·운전)</td></tr>
+      </table>
+    </div>
+    <p style="font-size:13px; color:var(--muted); margin-top:12px;">기존 역할을 <em>수정</em>하는 건 문제없지만, disa_app 드롭다운에는 안 뜨기 때문에 이 이름으로 <em>새 역할</em>은 못 만듭니다. 표준 배지 중 하나로 이름을 맞추는 걸 권장하며, 필요하면 그대로 유지해도 시스템 동작에는 지장이 없습니다.</p>
+  </section>
+
+  <footer class="doc">
+    <span>twin-alarm · disa_app 공용 문서</span>
+    <span>배지 정의는 <code class="inline">disa_app/index.html</code>의 <code class="inline">BADGE_OPTIONS</code>이 기준입니다</span>
+  </footer>
+
+</div>
+</body>
+</html>

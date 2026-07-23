@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { type Incident, type Responder, type MemberTask, type DisasterRole, type DisasterTask, db } from '../services/supabase';
+import { type Incident, type Responder, type MemberTask, type DisasterRole, type DisasterTask, db, supabase, isIncidentParticipant } from '../services/supabase';
 import { type Employee } from './Login';
-import { Check, ShieldAlert, MapPin, Award, CheckSquare, ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, ShieldAlert, MapPin, Award, CheckSquare, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
 import { unlockAudio } from '../utils/audio';
-import { DISASTERS } from '../data/disasters';
+import { DISASTERS, FIRE_INITIAL_BADGES } from '../data/disasters';
+import { findEquipmentLocation } from '../data/equipmentLocations';
 
 interface ResponderViewProps {
   activeIncident: Incident | null;
@@ -40,6 +41,56 @@ function groupTasks(tasks: MemberTask[]): TaskGroup[] {
 
 const stripPrefix = (label: string) => label.replace(/^[◇◆┖└]\s*/, '');
 
+// 화재: 이 배지(또는 "대응1"처럼 번호가 붙은 세분화 배지 포함)의 조장(파트장)이 임무를 체크하면,
+// 이미 출동체크한 조원도 자동으로 현장 처리. 접두어 매칭이라 대응1~4처럼 세분화돼도 코드
+// 수정 없이 그대로 동작함. 대상은 원래부터 출동/대응/구조 3계열뿐이며, 유도/지원 계열은
+// 포함되지 않음(2026-07-20 기준 — 필요하면 배지 추가 검토).
+const FIRE_LEADER_AUTO_BADGE_PREFIXES = ['출동', '대응', '구조'];
+function isFireLeaderAutoBadge(badge: string): boolean {
+  return FIRE_LEADER_AUTO_BADGE_PREFIXES.some(p => badge.startsWith(p));
+}
+
+// 비상장구 목록은 1단계(출동)에 이미 표시되므로, 다른 단계의 임무 문구에서는 중복되지 않게 제거
+function stripEquipmentClause(text: string): string {
+  return text.replace(/비상장(?:구|비)[_:\s]*[^\n]+?\s*(?:휴대|지참|착용)\s*(?:후)?\s*/, '').trim();
+}
+
+// 임무 전체가 "비상장구_..." 하나로만 이루어진 줄인지 판별 — 뒤에 붙는 동사(휴대/지참/착용)나
+// "-화재층 출동" 같은 부가 문구 유무와 무관하게, 모두 1단계 비상장구 안내로 모으기 위함
+function isEquipmentOnlyTask(label: string): boolean {
+  return /^비상장(?:구|비)[_:\s]/.test(stripPrefix(label));
+}
+
+// "행동)... / 무전)..." 패턴을 행동요령 / 무전 예시로 분리 (없으면 radio는 null)
+function splitRadio(label: string): { instruction: string; radio: string | null } {
+  const clean = stripPrefix(label);
+  const m = clean.match(/^(?:행동\))?(.*?)\s*\/\s*무전\)\s*(.*)$/);
+  if (m && m[2]) return { instruction: m[1].trim(), radio: m[2].trim() };
+  return { instruction: clean.replace(/^행동\)\s*/, ''), radio: null };
+}
+
+// 임무 텍스트에서 "비상장구_A,B,C (휴대/지참/착용 | -지역 출동 등)" 패턴을 장비 목록으로 추출.
+// 뒤에 붙는 동사가 없는 경우("...-화재층 출동")도 인식하도록 두 패턴 모두 제거를 시도.
+function parseEquipmentList(label: string): string[] {
+  const clean = stripPrefix(label);
+  const m = clean.match(/^비상장(?:구|비)[_:\s]*(.+)$/);
+  if (!m) return [];
+  let rest = m[1];
+  rest = rest.replace(/\s*(?:휴대|지참|착용)\s*(?:후)?\s*.*$/, '');
+  rest = rest.replace(/[-–]\s*[^,·]*(?:출동|이동|현장).*$/, '');
+  return rest.split(/[,·]/).map(s => s.trim()).filter(Boolean);
+}
+
+// ── 단계별 임무수행: 체크박스 1줄 ──────────────────────────────
+const StepCheckRow: React.FC<{ checked: boolean; label: string; onClick: () => void; big?: boolean }> = ({ checked, label, onClick, big }) => (
+  <div className={`task-item ${checked ? 'done' : ''}`} onClick={onClick} style={{ padding: '16px' }}>
+    <div className="checkbox-visual" style={{ width: big ? '30px' : '26px', height: big ? '30px' : '26px', flexShrink: 0 }}>
+      <Check size={big ? 20 : 18} strokeWidth={3} />
+    </div>
+    <div className="task-label" style={{ fontSize: big ? '21px' : '17px', fontWeight: 800 }}>{label}</div>
+  </div>
+);
+
 // disa_app 과 동일한 번호 계산 (task_idx 순서 기준)
 function computeTaskNumMap(tasks: MemberTask[]): Record<string, string> {
   const map: Record<string, string> = {};
@@ -56,6 +107,113 @@ function computeTaskNumMap(tasks: MemberTask[]): Record<string, string> {
   return map;
 }
 
+// 실제 임무 체크리스트(목록뷰, 파란 테마)와 자가 수행률 미리보기(다른 배지 미리보기, 보라 테마)가
+// 거의 동일한 아코디언 구조라 공통 컴포넌트로 추출함(2026-07-20). 색상만 theme으로 넘겨받는다.
+interface TaskChecklistTheme {
+  headerBg: string;
+  headerBorder: string;
+  chevronColor: string;
+  labelColor: string;
+  bodyBorder: string;
+}
+
+const TaskChecklistBody: React.FC<{
+  groups: TaskGroup[];
+  numMap: Record<string, string>;
+  openGroups: Set<string>;
+  onToggleGroup: (id: string) => void;
+  onToggleTask: (task: MemberTask) => void;
+  theme: TaskChecklistTheme;
+}> = ({ groups, numMap, openGroups, onToggleGroup, onToggleTask, theme }) => (
+  <>
+    {groups.map((group, gi) => {
+      if (group.type === 'standalone') {
+        const task = group.task;
+        const num = numMap[task.id] ?? String(gi + 1).padStart(2, '0');
+        return (
+          <div key={task.id} className={`task-item ${task.done ? 'done' : ''}`} onClick={() => onToggleTask(task)}>
+            <div className="checkbox-visual"><Check size={14} strokeWidth={3} /></div>
+            <div className="task-label">
+              <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{num}</span>
+              {stripPrefix(task.label)}
+            </div>
+          </div>
+        );
+      }
+
+      const isOpen = openGroups.has(group.header.id);
+      const doneCount = group.children.filter(c => c.done).length;
+      const total = group.children.length;
+      const headerNum = numMap[group.header.id] ?? String(gi + 1).padStart(2, '0');
+
+      return (
+        <div key={group.header.id}>
+          <div
+            onClick={() => onToggleGroup(group.header.id)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '11px 14px',
+              background: theme.headerBg, border: `1px solid ${theme.headerBorder}`,
+              borderRadius: isOpen ? '10px 10px 0 0' : '10px',
+              cursor: 'pointer', userSelect: 'none',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+              {isOpen
+                ? <ChevronDown size={15} color={theme.chevronColor} style={{ flexShrink: 0 }} />
+                : <ChevronRight size={15} color={theme.chevronColor} style={{ flexShrink: 0 }} />
+              }
+              <span style={{
+                fontSize: '13px', fontWeight: 700, color: theme.labelColor,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                <span style={{ color: theme.chevronColor, fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {headerNum}</span>
+                {stripPrefix(group.header.label)}
+              </span>
+            </div>
+            <span style={{
+              fontSize: '11px', fontWeight: 700, flexShrink: 0, marginLeft: '8px',
+              color: doneCount === total && total > 0 ? '#059669' : '#64748b',
+            }}>
+              {doneCount}/{total}
+            </span>
+          </div>
+
+          {isOpen && (
+            <div style={{
+              border: `1px solid ${theme.bodyBorder}`, borderTop: 'none',
+              borderRadius: '0 0 10px 10px', overflow: 'hidden',
+              marginBottom: gi < groups.length - 1 ? '2px' : '0',
+            }}>
+              {group.children.map((child, ci) => {
+                const childNum = numMap[child.id] ?? `${gi + 1}-${ci + 1}`;
+                return (
+                  <div
+                    key={child.id}
+                    className={`task-item ${child.done ? 'done' : ''}`}
+                    onClick={() => onToggleTask(child)}
+                    style={{
+                      borderRadius: 0,
+                      borderBottom: ci < group.children.length - 1 ? '1px solid rgba(11,37,69,0.045)' : 'none',
+                      paddingLeft: '20px', marginBottom: 0,
+                    }}
+                  >
+                    <div className="checkbox-visual"><Check size={14} strokeWidth={3} /></div>
+                    <div className="task-label">
+                      <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{childNum}</span>
+                      {stripPrefix(child.label)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    })}
+  </>
+);
+
 export const ResponderView: React.FC<ResponderViewProps> = ({
   activeIncident,
   responders,
@@ -69,6 +227,10 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   const [optimisticDone, setOptimisticDone] = useState<Record<string, boolean>>({});
   const [optimisticStatus, setOptimisticStatus] = useState<Responder['status'] | null>(null);
   const [showChecklist, setShowChecklist] = useState(true);
+  const [viewMode, setViewMode] = useState<'list' | 'step'>('list');
+  const [stepIndex, setStepIndex] = useState(0);
+  const [stepDetailOpen, setStepDetailOpen] = useState<Set<number>>(new Set());
+  const [openEquipment, setOpenEquipment] = useState<string | null>(null);
   const incidentIdRef = useRef<string | null>(null);
 
   // ── 미리보기 모드 (발령 전 재난 임무 조회) ──────────────────
@@ -81,7 +243,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
 
   useEffect(() => {
     if (!activeIncident) { setMyBadge(null); return; }
-    db.getEmployeeBadge(currentUser.empNo, activeIncident.disaster)
+    db.getEmployeeBadge(currentUser.empNo, activeIncident.disaster, activeIncident.shift ?? 'day')
       .then(badge => setMyBadge(badge))
       .catch(() => setMyBadge(null));
   }, [activeIncident?.id, currentUser.empNo]);
@@ -95,26 +257,38 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
       setPreviewOpenGroups(new Set());
       return;
     }
-    setPreviewLoading(true);
-    Promise.all([
-      db.getDisasterRolesWithTasks(previewDisaster),
-      db.getEmployeeBadge(currentUser.empNo, previewDisaster),
-    ]).then(([roles, badge]) => {
-      setPreviewRoles(roles);
-      setPreviewBadge(badge);
-      setPreviewLocalDone({});
-      // 모든 그룹 기본 펼침
-      const headers = new Set<string>(
-        roles
-          .flatMap(r => r.disaster_tasks ?? [])
-          .filter(t => t.label.startsWith('◇') || t.label.startsWith('◆'))
-          .map(t => `preview_${t.id}`)
-      );
-      setPreviewOpenGroups(headers);
-    }).catch(() => {
-      setPreviewRoles([]);
-      setPreviewBadge(null);
-    }).finally(() => setPreviewLoading(false));
+    const load = () => {
+      setPreviewLoading(true);
+      Promise.all([
+        db.getDisasterRolesWithTasks(previewDisaster),
+        db.getEmployeeBadge(currentUser.empNo, previewDisaster),
+      ]).then(([roles, badge]) => {
+        setPreviewRoles(roles);
+        setPreviewBadge(badge);
+        setPreviewLocalDone({});
+        // 모든 그룹 기본 펼침
+        const headers = new Set<string>(
+          roles
+            .flatMap(r => r.disaster_tasks ?? [])
+            .filter(t => t.label.startsWith('◇') || t.label.startsWith('◆'))
+            .map(t => `preview_${t.id}`)
+        );
+        setPreviewOpenGroups(headers);
+      }).catch(() => {
+        setPreviewRoles([]);
+        setPreviewBadge(null);
+      }).finally(() => setPreviewLoading(false));
+    };
+    load();
+
+    // 재난대응메뉴얼(외부 앱)에서 임무를 수정/삭제하면 미리보기에 실시간 반영
+    const channel = supabase
+      .channel(`preview-disaster-roles-${previewDisaster}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'disaster_roles' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'disaster_tasks' }, load)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [previewDisaster, activeIncident, currentUser.empNo]);
 
   const currentResponder = responders.find(r => r.emp_no === currentUser.empNo);
@@ -127,18 +301,19 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     }
   }, [currentResponder?.status]);
 
-  const myRole = myBadge
-    ? (disasterRoles.find(r => r.badge === myBadge) ?? null)
-    : null;
+  // 훈련 발령을 특정 대원으로 제한한 경우, 선택 안 된 대원에게는 임무를 보여주지 않음
+  const isParticipant = !activeIncident || isIncidentParticipant(activeIncident, currentUser.empNo);
 
-  // 상황실은 감지기·화재 두 역할 임무를 모두 표시
-  const situationRoleNames = (myBadge === '상황실' || myBadge === '상황실/화재')
-    ? new Set(disasterRoles.filter(r => r.badge === '상황실' || r.badge === '상황실/화재').map(r => r.role))
+  const myRole = (myBadge && isParticipant)
+    ? (disasterRoles.find(r => r.badge === myBadge) ?? null)
     : null;
 
   const rawTasks = myRole
     ? tasks
-        .filter(t => situationRoleNames ? situationRoleNames.has(t.role) : t.role === myRole.role)
+        .filter(t => t.role === myRole.role)
+        // 상황 확정(variant): 공통 임무(variant 없음)는 항상 표시, variant 있는 임무는 그 상황이
+        // 확정된 경우에만 표시. phase 개념 도입 없이 단일 태그 비교로만 처리.
+        .filter(t => !t.variant || t.variant === activeIncident?.variant)
         .sort((a, b) => a.task_idx - b.task_idx)
     : [];
 
@@ -159,6 +334,286 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
 
   const taskGroups = useMemo(() => groupTasks(myTasks), [myTasks]);
   const taskNumMap = useMemo(() => computeTaskNumMap(myTasks), [myTasks]);
+
+  // 단계별 보기 전용: "비상장구_..." 임무는 몇 개든 전부 1단계로 모으고, 나머지 임무로만 단계를 구성
+  const equipmentTasks = useMemo(() => myTasks.filter(t => isEquipmentOnlyTask(t.label)), [myTasks]);
+  const stepTaskGroups = useMemo(
+    () => groupTasks(myTasks.filter(t => !isEquipmentOnlyTask(t.label))),
+    [myTasks]
+  );
+
+  // ── 단계별 임무수행: 출동(1단계, 단독 전체화면) → 임무1 → 임무2 → ... → (마지막 임무 + 복귀) ──
+  // 현장도착은 별도 체크박스 없이, 출동 후 임무를 하나 체크하면 자동으로 처리됨(상태 '현장').
+  const STEP_PAGE_SIZE = 3;
+
+  type StepFlowItem = {
+    group: TaskGroup | null;   // null인 건 출동/정보 전용 1단계뿐
+    showDispatch: boolean;
+    showReturn: boolean;
+    showInfo?: boolean;        // 상황실 전용: 체크박스 없이 경보내용·비상장구만 보여주는 1단계
+  };
+
+  const isSituationRoomForStep = myBadge === '상황';
+
+  const stepFlow = useMemo<StepFlowItem[]>(() => {
+    if (isSituationRoomForStep) {
+      return [
+        { group: null, showDispatch: false, showReturn: false, showInfo: true },
+        ...stepTaskGroups.map(group => ({ group, showDispatch: false, showReturn: false })),
+      ];
+    }
+    if (stepTaskGroups.length === 0) {
+      return [{ group: null, showDispatch: true, showReturn: false }];
+    }
+    const items: StepFlowItem[] = [
+      { group: null, showDispatch: true, showReturn: false },
+    ];
+    stepTaskGroups.forEach((group, i) => {
+      items.push({
+        group,
+        showDispatch: false,
+        showReturn: i === stepTaskGroups.length - 1,
+      });
+    });
+    return items;
+  }, [stepTaskGroups, isSituationRoomForStep]);
+
+  const isGroupDone = (group: TaskGroup): boolean =>
+    group.type === 'standalone' ? group.task.done : group.children.every(c => c.done);
+
+  const isDispatched = responderStatus === '출동중' || responderStatus === '현장' || responderStatus === '복귀';
+  const isReturned = responderStatus === '복귀';
+
+  const isStepDone = (item: StepFlowItem): boolean => {
+    if (item.showInfo) return true; // 체크할 항목이 없는 정보 전용 카드
+    if (item.showDispatch) return isDispatched;
+    let ok = true;
+    if (item.group) ok = ok && isGroupDone(item.group);
+    if (item.showReturn) ok = ok && isReturned;
+    return ok;
+  };
+
+  const handleGroupCheck = (group: TaskGroup) => {
+    if (group.type === 'standalone') {
+      handleTaskToggle(group.task);
+    } else if (!isGroupDone(group)) {
+      group.children.forEach(c => { if (!c.done) handleTaskToggle(c); });
+    }
+  };
+
+  // 출동 체크박스 — 클릭할 때마다 체크/해제 토글
+  const toggleDispatch = () => {
+    // 체크박스이므로 현장/복귀까지 진행된 뒤에도 다시 누르면 완전히 해제(미응답)됨
+    if (isDispatched) updateStatus('미응답');
+    else updateStatus('출동중');
+  };
+
+  // 다음 임무 버튼 클릭 시 아직 안 된 항목이 있으면 무엇을 체크해야 하는지 알려줌
+  const getMissingMessage = (item: StepFlowItem): string | null => {
+    const missing: string[] = [];
+    if (item.showDispatch && !isDispatched) missing.push('출동체크');
+    if (item.group && !isGroupDone(item.group)) missing.push('임무 체크');
+    if (item.showReturn && !isReturned) missing.push('복귀완료');
+    if (missing.length === 0) return null;
+    return `${missing.join(', ')}를 먼저 체크해주세요.`;
+  };
+
+  // 이전/다음 임무 — 1단계씩이 아니라 페이지(STEP_PAGE_SIZE) 단위로 이동
+  const goPrevPage = () => {
+    if (stepIndex <= 0) return;
+    const prevStart = stepIndex - STEP_PAGE_SIZE;
+    setStepIndex(prevStart <= 0 ? 0 : prevStart);
+  };
+  const goNextPage = () => {
+    if (stepIndex === 0) {
+      // 1단계(출동)만 체크해야 다음으로 넘어감
+      const msg = getMissingMessage(stepFlow[0]);
+      if (msg) { alert(msg); return; }
+      setStepIndex(1);
+      return;
+    }
+    // 2단계 이후는 체크 여부와 상관없이 다음 페이지로 이동
+    setStepIndex(stepIndex + STEP_PAGE_SIZE);
+  };
+
+  // 재난 변경 또는 단계별 진입 시, 현재 진행 상태에 맞는 페이지부터 시작
+  useEffect(() => {
+    if (viewMode !== 'step') return;
+    if (isSituationRoomForStep) { setStepIndex(0); return; }
+    if (!isDispatched) { setStepIndex(0); return; }
+    const firstUndone = stepFlow.findIndex((it, i) => i >= 1 && !isStepDone(it));
+    if (firstUndone === -1) { setStepIndex(stepFlow.length); return; }
+    const offset = (firstUndone - 1) % STEP_PAGE_SIZE;
+    setStepIndex(Math.max(1, firstUndone - offset));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, activeIncident?.id]);
+
+  // 1단계(출동)의 비상장구 목록 — "비상장구_..." 임무는 몇 번째에 있든 전부 모아서 표시
+  const equipmentList = equipmentTasks.flatMap(t => parseEquipmentList(t.label));
+  // 여러 개여도 하나의 그룹처럼 묶어 기존 체크 로직(isGroupDone/handleGroupCheck)을 그대로 재사용
+  const equipmentGroup: TaskGroup | null =
+    equipmentTasks.length === 0 ? null :
+    equipmentTasks.length === 1 ? { type: 'standalone', task: equipmentTasks[0] } :
+    { type: 'group', header: equipmentTasks[0], children: equipmentTasks.slice(1) };
+
+  // 단계별 임무수행 카드 1개 렌더 — 1단계(출동) 단독 화면과 2단계 이후 페이지 뷰에서 공용으로 사용
+  const renderStepCard = (item: StepFlowItem, i: number, isActive: boolean) => {
+    const groupHeader = item.group ? (item.group.type === 'standalone' ? item.group.task : item.group.header) : null;
+    const rawSplit = groupHeader ? splitRadio(groupHeader.label) : { instruction: '', radio: null };
+    // 비상장구 문구는 1단계에 이미 표시되므로, 임무 단계(1단계가 아닌 곳)에서는 중복 제거
+    const instruction = item.showDispatch ? rawSplit.instruction : stripEquipmentClause(rawSplit.instruction);
+    const radio = rawSplit.radio;
+    const hasDetail = !!(item.group && item.group.type === 'group' && item.group.children.length > 0);
+    const detailOpen = stepDetailOpen.has(i);
+
+    return (
+      <div
+        key={i}
+        style={{
+          display: 'flex', flexDirection: 'column', gap: '12px',
+          border: `1px solid ${isActive ? 'rgba(59,130,246,0.4)' : 'rgba(11,37,69,0.09)'}`,
+          background: isActive ? 'rgba(59,130,246,0.06)' : 'rgba(11,37,69,0.03)',
+          borderRadius: '14px', padding: '16px', flexShrink: 0,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <CheckSquare size={18} color="var(--color-green)" />
+          <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', flex: 1 }}>
+            {i + 1}단계 / {stepFlow.length}단계
+          </span>
+          {hasDetail && (
+            <button
+              type="button"
+              onClick={() => setStepDetailOpen(prev => {
+                const next = new Set(prev);
+                next.has(i) ? next.delete(i) : next.add(i);
+                return next;
+              })}
+              style={{
+                fontSize: '11px', fontWeight: 700, padding: '5px 9px', borderRadius: '7px',
+                background: 'rgba(139,92,246,0.12)', color: '#7c3aed',
+                border: '1px solid rgba(139,92,246,0.3)', cursor: 'pointer',
+              }}
+            >
+              세부임무 {detailOpen ? '▲' : '▼'}
+            </button>
+          )}
+        </div>
+
+        {(item.showDispatch || item.showInfo) && (
+          <>
+            <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px', padding: '14px 16px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: '#b91c1c', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                🚨 경보내용
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: 800, lineHeight: 1.4 }}>
+                {activeIncident!.location}에서 {activeIncident!.disaster} 발생!
+              </div>
+            </div>
+            {equipmentList.length > 0 && (
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+                  🎒 비상장구 (탭하면 보관 위치 표시)
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {equipmentList.map(eq => (
+                    <button
+                      key={eq}
+                      type="button"
+                      onClick={() => setOpenEquipment(prev => prev === eq ? null : eq)}
+                      style={{
+                        fontSize: '13px', fontWeight: 700, padding: '7px 12px', borderRadius: '20px',
+                        background: openEquipment === eq ? 'rgba(96,165,250,0.18)' : 'rgba(11,37,69,0.05)',
+                        border: `1px solid ${openEquipment === eq ? 'rgba(96,165,250,0.4)' : 'rgba(11,37,69,0.12)'}`,
+                        color: openEquipment === eq ? '#2563eb' : 'var(--text-main)', cursor: 'pointer',
+                      }}
+                    >
+                      {eq}
+                    </button>
+                  ))}
+                </div>
+                {openEquipment && equipmentList.includes(openEquipment) && (() => {
+                  const found = findEquipmentLocation(activeIncident!.disaster, openEquipment);
+                  return (
+                    <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-muted)', background: 'rgba(11,37,69,0.045)', borderRadius: '10px', padding: '10px 12px' }}>
+                      {found ? (
+                        <>📍 {openEquipment} 보관위치: <strong style={{ color: 'var(--text-main)' }}>{found.loc}</strong>
+                          {found.spec !== '-' && <span> ({found.spec})</span>}
+                        </>
+                      ) : (
+                        <>📍 {openEquipment}: disa_app 비상장비 목록에 이 재난 카테고리로 등록된 위치가 없습니다.</>
+                      )}
+                    </div>
+                  );
+                })()}
+                {equipmentGroup && (
+                  <StepCheckRow
+                    checked={isGroupDone(equipmentGroup)}
+                    label="비상장구 확인 완료"
+                    onClick={() => handleGroupCheck(equipmentGroup)}
+                  />
+                )}
+              </div>
+            )}
+            {item.showDispatch && (
+              <>
+                <div style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                  비상장구를 갖추고 <strong style={{ color: 'var(--text-main)' }}>{activeIncident!.location}</strong>으로 출동하세요!
+                </div>
+                <StepCheckRow checked={isDispatched} label="출동체크" onClick={toggleDispatch} big />
+              </>
+            )}
+          </>
+        )}
+
+        {groupHeader && item.group && (
+          <>
+            <StepCheckRow
+              checked={isGroupDone(item.group)}
+              label={instruction}
+              onClick={() => handleGroupCheck(item.group!)}
+            />
+            {hasDetail && detailOpen && item.group.type === 'group' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '14px' }}>
+                {item.group.children.map(child => (
+                  <div key={child.id} style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    · {stripPrefix(child.label)}
+                  </div>
+                ))}
+              </div>
+            )}
+            {radio && (
+              <div>
+                <div style={{
+                  fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)',
+                  textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px',
+                }}>
+                  📻 무전 예시
+                </div>
+                <div style={{
+                  background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)',
+                  borderRadius: '12px', padding: '13px 15px',
+                }}>
+                  <div style={{ fontSize: '15px', lineHeight: 1.55, fontStyle: 'italic', color: 'var(--text-main)' }}>
+                    &ldquo;{radio}&rdquo;
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {item.showReturn && (
+          <>
+            <div style={{ fontSize: '17px', fontWeight: 700 }}>
+              임무완료하였습니다. 복귀하시고
+            </div>
+            <StepCheckRow checked={isReturned} label="복귀완료" onClick={() => updateStatus('복귀')} />
+          </>
+        )}
+      </div>
+    );
+  };
 
   // 재난 발령/변경 시 전체 그룹 펼침
   useEffect(() => {
@@ -208,6 +663,22 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     }
   };
 
+  // 화재 조장 자동 카운트: 같은 배지를 가진 팀원 중 '출동중'인 사람을 '현장'으로 일괄 승격
+  const promoteDispatchedTeammates = async (badge: string) => {
+    if (!activeIncident) return;
+    try {
+      const empNos = await db.getEmployeeNosByBadge(activeIncident.disaster, badge, activeIncident.shift ?? 'day');
+      const teammates = responders.filter(r =>
+        empNos.includes(r.emp_no) && r.emp_no !== currentUser.empNo && r.status === '출동중'
+      );
+      for (const mate of teammates) {
+        await db.setResponderStatus(activeIncident.id, mate.emp_no, mate.name, mate.team, mate.role, '현장');
+      }
+    } catch (err) {
+      console.warn('[조장 자동 카운트] 실패:', err);
+    }
+  };
+
   const handleTaskToggle = async (task: MemberTask) => {
     if (task.done) {
       const checker = task.done_by ?? '다른 대원';
@@ -226,10 +697,13 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     setOptimisticDone(prev => ({ ...prev, [task.id]: true }));
     try {
       await db.toggleTaskDone(task.id, true, currentUser.name);
-      // 2개 이상 체크 완료 시 → 자동 현장 도착 처리 (상황실 제외)
-      if (!isSituationRoom && responderStatus !== '현장' && responderStatus !== '복귀') {
-        const newDoneCount = completedTasksCount + 1;
-        if (newDoneCount >= 2) updateStatus('현장');
+      // 출동체크 후 임무를 하나라도 체크하면 → 자동으로 "현장 임무수행중" 처리 (상황실 제외)
+      if (!isSituationRoom && responderStatus === '출동중') {
+        updateStatus('현장');
+      }
+      // 화재: 출동/대응/구조 배지의 조장이 체크하면, 이미 출동체크한 조원도 자동으로 현장 처리
+      if (activeIncident?.disaster === '화재' && myBadge && isFireLeaderAutoBadge(myBadge) && currentUser.role.includes('파트장')) {
+        promoteDispatchedTeammates(myBadge);
       }
     } catch (err: any) {
       // 실패 시 롤백
@@ -245,12 +719,10 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
 
   const previewTasks: MemberTask[] = useMemo(() => {
     if (!previewMyRole) return [];
-    const isSituation = previewBadge === '상황실' || previewBadge === '상황실/화재';
-    const matchingRoles = isSituation
-      ? previewRoles.filter(r => r.badge === '상황실' || r.badge === '상황실/화재')
-      : [previewMyRole];
-    return matchingRoles.flatMap(r =>
+    return [previewMyRole].flatMap(r =>
       (r.disaster_tasks ?? [])
+        // 발령 전 미리보기는 상황(variant) 미확정 상태이므로 공통 임무만 보여줌
+        .filter(dt => !dt.variant)
         .sort((a, b) => a.task_idx - b.task_idx)
         .map(dt => ({
           id: `preview_${dt.id}`,
@@ -288,11 +760,10 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     .replace('파트장', '파트')
     .replace(/^보안[123]$/, '보안파트');
 
-  const isSituationRoom = myBadge === '상황실' || myBadge === '상황실/화재';
+  const isSituationRoom = myBadge === '상황';
   const roleColor = isSituationRoom ? '#facc15' : (myRole?.bc ?? undefined);
 
   // 화재 감지기동작 시 초기출동조 여부 판단
-  const FIRE_INITIAL_BADGES = new Set(['총괄', '상황실', '통제', '출동']);
   const isFireInitial = activeIncident?.disaster === '화재' && activeIncident?.scope === 'fire_initial';
   const isWaitingForEscalation = isFireInitial && myBadge !== null && !FIRE_INITIAL_BADGES.has(myBadge ?? '');
 
@@ -318,7 +789,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
               background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)',
               borderRadius: '20px', padding: '4px 14px', marginBottom: '10px'
             }}>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: '#60a5fa' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#2563eb' }}>
                 {displayTeam} · {currentUser.name}
               </span>
               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>({currentUser.role})</span>
@@ -349,7 +820,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                 style={{
                   width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '8px',
                   background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)',
-                  color: '#34d399', padding: '8px 16px', borderRadius: '10px',
+                  color: '#059669', padding: '8px 16px', borderRadius: '10px',
                   fontWeight: 700, fontSize: '13px', cursor: 'pointer'
                 }}
               >
@@ -372,8 +843,8 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   style={{
                     padding: '7px 14px', borderRadius: '20px', cursor: 'pointer',
                     fontSize: '13px', fontWeight: 700, border: '1.5px solid',
-                    background: previewDisaster === d.key ? d.color : 'rgba(255,255,255,0.04)',
-                    borderColor: previewDisaster === d.key ? d.color : 'rgba(255,255,255,0.15)',
+                    background: previewDisaster === d.key ? d.color : 'rgba(11,37,69,0.045)',
+                    borderColor: previewDisaster === d.key ? d.color : 'rgba(11,37,69,0.18)',
                     color: previewDisaster === d.key ? '#fff' : 'var(--text-muted)',
                     transition: 'all 0.15s',
                   }}
@@ -403,11 +874,11 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: '8px',
                   background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
-                  borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#c4b5fd',
+                  borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#6d28d9',
                 }}>
                   <span style={{ fontSize: '15px' }}>👁️</span>
                   <span>
-                    <strong style={{ color: '#a78bfa' }}>미리보기 모드</strong> — 발령 전 임무 확인용입니다.
+                    <strong style={{ color: '#7c3aed' }}>미리보기 모드</strong> — 발령 전 임무 확인용입니다.
                     체크는 로컬에만 저장되며 실제 임무와 무관합니다.
                   </span>
                 </div>
@@ -415,10 +886,10 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                 {/* 배지·역할 카드 */}
                 <div className="card" style={{ borderColor: 'rgba(139,92,246,0.3)', background: 'rgba(139,92,246,0.05)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                    <Award size={20} color={previewMyRole.bc ?? '#a78bfa'} />
+                    <Award size={20} color={previewMyRole.bc ?? '#7c3aed'} />
                     <h3 style={{ margin: 0, fontSize: '15px', flex: 1 }}>
                       나의 임무 카드:{' '}
-                      <span style={{ color: previewMyRole.bc ?? '#a78bfa' }}>{previewMyRole.role}</span>
+                      <span style={{ color: previewMyRole.bc ?? '#7c3aed' }}>{previewMyRole.role}</span>
                     </h3>
                     <span style={{
                       background: previewMyRole.bc ?? '#7c3aed', color: '#fff',
@@ -430,7 +901,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   <div className="progress-container">
                     <div className="progress-header">
                       <span>자가 수행률 (미리보기)</span>
-                      <strong style={{ color: previewPct === 100 ? 'var(--color-green)' : '#a78bfa' }}>
+                      <strong style={{ color: previewPct === 100 ? 'var(--color-green)' : '#7c3aed' }}>
                         {previewPct}% {previewPct === 100 && '✓'}
                       </strong>
                     </div>
@@ -447,84 +918,26 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                 <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden', borderColor: 'rgba(139,92,246,0.2)' }}>
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: '8px',
-                    padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)'
+                    padding: '14px 16px', borderBottom: '1px solid rgba(11,37,69,0.06)'
                   }}>
-                    <CheckSquare size={18} color="#a78bfa" />
+                    <CheckSquare size={18} color="#7c3aed" />
                     <h3 style={{ margin: 0, fontSize: '14px', flex: 1 }}>행동 매뉴얼 — {(() => { const d = DISASTERS.find(x => x.key === previewDisaster); return d?.label ?? previewDisaster; })()}</h3>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: previewDoneCount === previewCheckable.length && previewCheckable.length > 0 ? '#34d399' : 'var(--text-muted)' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: previewDoneCount === previewCheckable.length && previewCheckable.length > 0 ? '#059669' : 'var(--text-muted)' }}>
                       {previewDoneCount} / {previewCheckable.length}
                     </span>
                   </div>
                   <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px 16px' }}>
-                    {previewTaskGroups.map((group, gi) => {
-                      if (group.type === 'standalone') {
-                        const task = group.task;
-                        const num = previewTaskNumMap[task.id] ?? String(gi + 1).padStart(2, '0');
-                        return (
-                          <div
-                            key={task.id}
-                            className={`task-item ${task.done ? 'done' : ''}`}
-                            onClick={() => handlePreviewToggle(task)}
-                          >
-                            <div className="checkbox-visual"><Check size={14} strokeWidth={3} /></div>
-                            <div className="task-label">
-                              <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{num}</span>
-                              {stripPrefix(task.label)}
-                            </div>
-                          </div>
-                        );
-                      }
-                      const isOpen = previewOpenGroups.has(group.header.id);
-                      const doneCount = group.children.filter(c => c.done).length;
-                      const total = group.children.length;
-                      const headerNum = previewTaskNumMap[group.header.id] ?? String(gi + 1).padStart(2, '0');
-                      return (
-                        <div key={group.header.id}>
-                          <div
-                            onClick={() => togglePreviewGroup(group.header.id)}
-                            style={{
-                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                              padding: '11px 14px',
-                              background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)',
-                              borderRadius: isOpen ? '10px 10px 0 0' : '10px',
-                              cursor: 'pointer', userSelect: 'none',
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
-                              {isOpen ? <ChevronDown size={15} color="#a78bfa" style={{ flexShrink: 0 }} /> : <ChevronRight size={15} color="#a78bfa" style={{ flexShrink: 0 }} />}
-                              <span style={{ fontSize: '13px', fontWeight: 700, color: '#c4b5fd', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                <span style={{ color: '#a78bfa', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {headerNum}</span>
-                                {stripPrefix(group.header.label)}
-                              </span>
-                            </div>
-                            <span style={{ fontSize: '11px', fontWeight: 700, flexShrink: 0, marginLeft: '8px', color: doneCount === total && total > 0 ? '#34d399' : '#64748b' }}>
-                              {doneCount}/{total}
-                            </span>
-                          </div>
-                          {isOpen && (
-                            <div style={{ border: '1px solid rgba(139,92,246,0.15)', borderTop: 'none', borderRadius: '0 0 10px 10px', overflow: 'hidden', marginBottom: gi < previewTaskGroups.length - 1 ? '2px' : '0' }}>
-                              {group.children.map((child, ci) => {
-                                const childNum = previewTaskNumMap[child.id] ?? `${gi + 1}-${ci + 1}`;
-                                return (
-                                  <div
-                                    key={child.id}
-                                    className={`task-item ${child.done ? 'done' : ''}`}
-                                    onClick={() => handlePreviewToggle(child)}
-                                    style={{ borderRadius: 0, borderBottom: ci < group.children.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', paddingLeft: '20px', marginBottom: 0 }}
-                                  >
-                                    <div className="checkbox-visual"><Check size={14} strokeWidth={3} /></div>
-                                    <div className="task-label">
-                                      <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{childNum}</span>
-                                      {stripPrefix(child.label)}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    <TaskChecklistBody
+                      groups={previewTaskGroups}
+                      numMap={previewTaskNumMap}
+                      openGroups={previewOpenGroups}
+                      onToggleGroup={togglePreviewGroup}
+                      onToggleTask={handlePreviewToggle}
+                      theme={{
+                        headerBg: 'rgba(139,92,246,0.1)', headerBorder: 'rgba(139,92,246,0.2)',
+                        chevronColor: '#7c3aed', labelColor: '#6d28d9', bodyBorder: 'rgba(139,92,246,0.15)',
+                      }}
+                    />
                   </div>
                 </div>
               </>
@@ -548,7 +961,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   {isFireInitial && <span style={{ fontSize: '11px', marginLeft: '6px', opacity: 0.8 }}>· 감지기동작</span>}
                 </span>
               </div>
-              <span style={{ fontSize: '11px', background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '6px', flexShrink: 0 }}>
+              <span style={{ fontSize: '11px', background: 'rgba(11,37,69,0.12)', padding: '2px 8px', borderRadius: '6px', flexShrink: 0 }}>
                 {activeIncident.disaster}
               </span>
             </div>
@@ -562,19 +975,67 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
           {isWaitingForEscalation && (
             <div className="card" style={{ textAlign: 'center', padding: '32px 20px', borderColor: 'rgba(245,158,11,0.3)' }}>
               <div style={{ fontSize: '36px', marginBottom: '12px' }}>⏳</div>
-              <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '8px', color: '#fbbf24' }}>
+              <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '8px', color: '#b45309' }}>
                 대기 중
               </div>
               <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                현재 <strong style={{ color: '#fbbf24' }}>감지기동작 단계</strong>입니다.<br />
+                현재 <strong style={{ color: '#b45309' }}>감지기동작 단계</strong>입니다.<br />
                 초기출동조가 현장을 확인 중입니다.<br />
                 지휘관이 승격하면 임무가 부여됩니다.
               </div>
             </div>
           )}
 
-          {/* Responder Status - 상황실은 숨김 */}
-          {!isSituationRoom && (
+          {/* 대원 신원 카드 — 아바타 · 이름 · 파트/역할 · 배지 */}
+          {myRole && (
+            <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px' }}>
+              <div style={{
+                width: '42px', height: '42px', borderRadius: '50%', flexShrink: 0,
+                background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '14px', fontWeight: 800, color: '#fff',
+              }}>
+                {currentUser.name.slice(-2)}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '15px', fontWeight: 800 }}>{currentUser.name}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {displayTeam} · {myRole.role}
+                </div>
+              </div>
+              {myBadge && (
+                <span style={{
+                  fontSize: '11.5px', fontWeight: 800, padding: '5px 10px', borderRadius: '8px', flexShrink: 0,
+                  background: 'rgba(96,165,250,0.12)', color: '#2563eb', border: '1px solid rgba(96,165,250,0.3)',
+                }}>
+                  배지: {myBadge}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* 보기 방식 전환 — 상황실은 출동/현장 개념이 없어 숨김. 단계별을 누르면 전체화면으로 전환 */}
+          {!isSituationRoom && myRole && (
+            <div className="segmented-control">
+              <button
+                type="button"
+                className={`segmented-btn ${viewMode === 'step' ? 'active' : ''}`}
+                onClick={() => setViewMode('step')}
+              >
+                ① 단계별 임무수행
+              </button>
+              <button
+                type="button"
+                className={`segmented-btn ${viewMode === 'list' ? 'active' : ''}`}
+                onClick={() => setViewMode('list')}
+              >
+                ② 전체목록(현행)
+              </button>
+            </div>
+          )}
+
+          {/* Responder Status - 상황실은 숨김, 단계별 보기에서는 단계 안에 포함됨 */}
+          {!isSituationRoom && viewMode === 'list' && (
             <div className="card">
               <label>나의 대응 상태</label>
               <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
@@ -588,10 +1049,16 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                       className="btn"
                       style={{
                         flex: 1, padding: '10px 4px', fontSize: '12px',
-                        background: responderStatus === s ? colors[s] : 'rgba(255,255,255,0.05)',
-                        border: responderStatus === s ? 'none' : '1px solid rgba(255,255,255,0.1)'
+                        background: responderStatus === s ? colors[s] : 'rgba(11,37,69,0.05)',
+                        border: responderStatus === s ? 'none' : '1px solid rgba(11,37,69,0.12)',
+                        color: responderStatus === s ? '#ffffff' : '#2563eb',
                       }}
-                      onClick={() => updateStatus(s)}
+                      onClick={() => {
+                        // 훈련 상황에서는 같은 버튼을 다시 누르면 해제(미응답)됨
+                        const isTraining = activeIncident.mode.startsWith('훈련');
+                        if (isTraining && responderStatus === s) updateStatus('미응답');
+                        else updateStatus(s);
+                      }}
                       disabled={statusLoading}
                     >
                       {labels[s]}
@@ -635,6 +1102,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
               </div>
 
               {/* Task Checklist – 전체 아코디언 */}
+              {viewMode === 'list' && (
               <div className="card" style={{ flex: showChecklist ? 1 : '0 0 auto', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
                 {/* 헤더 — 탭으로 접기/펼치기 */}
                 <div
@@ -643,7 +1111,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   style={{
                     display: 'flex', alignItems: 'center', gap: '8px',
                     padding: '14px 16px',
-                    borderBottom: showChecklist ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                    borderBottom: showChecklist ? '1px solid rgba(11,37,69,0.06)' : 'none',
                   }}
                 >
                   <CheckSquare size={18} color="var(--color-green)" />
@@ -652,7 +1120,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   </h3>
                   <span style={{
                     fontSize: '12px', fontWeight: 700,
-                    color: completedTasksCount === totalTasksCount && totalTasksCount > 0 ? '#34d399' : 'var(--text-muted)',
+                    color: completedTasksCount === totalTasksCount && totalTasksCount > 0 ? '#059669' : 'var(--text-muted)',
                   }}>
                     {completedTasksCount} / {totalTasksCount}
                   </span>
@@ -663,112 +1131,168 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
 
                 {showChecklist && (
                 <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px 16px' }}>
-                  {taskGroups.map((group, gi) => {
-                    if (group.type === 'standalone') {
-                      const task = group.task;
-                      const num = taskNumMap[task.id] ?? String(gi + 1).padStart(2, '0');
-                      return (
-                        <div
-                          key={task.id}
-                          className={`task-item ${task.done ? 'done' : ''}`}
-                          onClick={() => handleTaskToggle(task)}
-                        >
-                          <div className="checkbox-visual">
-                            <Check size={14} strokeWidth={3} />
-                          </div>
-                          <div className="task-label">
-                            <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{num}</span>
-                            {stripPrefix(task.label)}
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    // Accordion group
-                    const isOpen = openGroups.has(group.header.id);
-                    const doneCount = group.children.filter(c => c.done).length;
-                    const total = group.children.length;
-                    const headerNum = taskNumMap[group.header.id] ?? String(gi + 1).padStart(2, '0');
-
-                    return (
-                      <div key={group.header.id}>
-                        {/* 그룹 헤더 바 (◇) */}
-                        <div
-                          onClick={() => toggleGroup(group.header.id)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '11px 14px',
-                            background: 'rgba(59,130,246,0.12)',
-                            border: '1px solid rgba(59,130,246,0.25)',
-                            borderRadius: isOpen ? '10px 10px 0 0' : '10px',
-                            cursor: 'pointer',
-                            userSelect: 'none',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
-                            {isOpen
-                              ? <ChevronDown size={15} color="#60a5fa" style={{ flexShrink: 0 }} />
-                              : <ChevronRight size={15} color="#60a5fa" style={{ flexShrink: 0 }} />
-                            }
-                            <span style={{
-                              fontSize: '13px', fontWeight: 700, color: '#93c5fd',
-                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-                            }}>
-                              <span style={{ color: '#60a5fa', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>TASK {headerNum}</span>
-                              {stripPrefix(group.header.label)}
-                            </span>
-                          </div>
-                          <span style={{
-                            fontSize: '11px', fontWeight: 700, flexShrink: 0, marginLeft: '8px',
-                            color: doneCount === total && total > 0 ? '#34d399' : '#64748b'
-                          }}>
-                            {doneCount}/{total}
-                          </span>
-                        </div>
-
-                        {/* 서브 항목 (┖) */}
-                        {isOpen && (
-                          <div style={{
-                            border: '1px solid rgba(59,130,246,0.15)',
-                            borderTop: 'none',
-                            borderRadius: '0 0 10px 10px',
-                            overflow: 'hidden',
-                            marginBottom: gi < taskGroups.length - 1 ? '2px' : '0',
-                          }}>
-                            {group.children.map((child, ci) => {
-                              const childNum = taskNumMap[child.id] ?? `${gi + 1}-${ci + 1}`;
-                              return (
-                                <div
-                                  key={child.id}
-                                  className={`task-item ${child.done ? 'done' : ''}`}
-                                  onClick={() => handleTaskToggle(child)}
-                                  style={{
-                                    borderRadius: 0,
-                                    borderBottom: ci < group.children.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
-                                    paddingLeft: '20px',
-                                    marginBottom: 0,
-                                  }}
-                                >
-                                  <div className="checkbox-visual">
-                                    <Check size={14} strokeWidth={3} />
-                                  </div>
-                                  <div className="task-label">
-                                    <span style={{ color: 'var(--text-muted)', fontWeight: 700, marginRight: '4px', fontSize: '11px' }}>{childNum}</span>
-                                    {stripPrefix(child.label)}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  <TaskChecklistBody
+                    groups={taskGroups}
+                    numMap={taskNumMap}
+                    openGroups={openGroups}
+                    onToggleGroup={toggleGroup}
+                    onToggleTask={handleTaskToggle}
+                    theme={{
+                      headerBg: 'rgba(59,130,246,0.12)', headerBorder: 'rgba(59,130,246,0.25)',
+                      chevronColor: '#2563eb', labelColor: '#1d4ed8', bodyBorder: 'rgba(59,130,246,0.15)',
+                    }}
+                  />
                 </div>
                 )}
               </div>
+              )}
+
+              {/* 단계별 임무수행 — 체크박스 중심, 전체화면으로 표시 */}
+              {viewMode === 'step' && (
+                <div style={{
+                  position: 'fixed', inset: 0, zIndex: 300,
+                  background: 'var(--bg-app)',
+                  display: 'flex', flexDirection: 'column',
+                  paddingTop: 'env(safe-area-inset-top, 0px)',
+                  paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+                }}>
+                  {/* 전체화면 상단 바 */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 16px',
+                    borderBottom: '1px solid rgba(11,37,69,0.09)', flexShrink: 0,
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('list')}
+                      style={{
+                        background: 'rgba(11,37,69,0.06)', border: '1px solid rgba(11,37,69,0.12)',
+                        color: 'var(--text-muted)', borderRadius: '10px', padding: '8px 12px',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: 700,
+                      }}
+                    >
+                      <ChevronLeft size={16} /> 전체목록
+                    </button>
+                    <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {activeIncident.disaster} · {currentUser.name}
+                      </div>
+                    </div>
+                    <div style={{ width: '84px', flexShrink: 0 }} />
+                  </div>
+
+                  <div className="card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '18px', padding: '22px 20px', margin: '12px 16px', borderRadius: '18px' }}>
+                  {/* 임무 카드 수행률 — 전체목록과 동일한 값(myProgressPct)을 그대로 표시해 두 보기 간 진행률 불일치 방지 */}
+                  <div className="progress-container" style={{ flexShrink: 0 }}>
+                    <div className="progress-header">
+                      <span>임무 카드 수행률</span>
+                      <strong style={{ color: myProgressPct === 100 ? 'var(--color-green)' : 'var(--color-power)' }}>
+                        {myProgressPct}% {myProgressPct === 100 && '✓'}
+                      </strong>
+                    </div>
+                    <div className="progress-track">
+                      <div
+                        className="progress-fill"
+                        style={{
+                          width: `${myProgressPct}%`,
+                          backgroundColor: myProgressPct === 100 ? 'var(--color-green)' : (roleColor || 'var(--color-fire)')
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {/* 진행 칩 */}
+                  <div style={{ display: 'flex', gap: '7px', overflowX: 'auto', paddingBottom: '2px', flexShrink: 0 }}>
+                    {stepFlow.map((item, i) => {
+                      const done = isStepDone(item);
+                      const isCurrent = stepIndex === 0 ? i === 0 : (i >= stepIndex && i < stepIndex + STEP_PAGE_SIZE);
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setStepIndex(i)}
+                          style={{
+                            flexShrink: 0, width: '38px', height: '38px', borderRadius: '11px',
+                            fontSize: '13px', fontWeight: 800, border: '1px solid', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: done ? 'rgba(16,185,129,0.16)' : isCurrent ? 'rgba(59,130,246,0.16)' : 'rgba(11,37,69,0.05)',
+                            borderColor: done ? 'rgba(16,185,129,0.35)' : isCurrent ? 'rgba(59,130,246,0.4)' : 'rgba(11,37,69,0.12)',
+                            color: done ? '#059669' : isCurrent ? '#2563eb' : 'var(--text-muted)',
+                          }}
+                        >
+                          {done ? <Check size={16} strokeWidth={3} /> : (i + 1)}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* 1단계(출동)는 단독 전체화면, 2단계부터는 3개씩 페이지로 보여줌 */}
+                  <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
+                  {stepIndex >= stepFlow.length ? (
+                    stepFlow.every(isStepDone) ? (
+                      <div style={{ textAlign: 'center', padding: '20px 8px', margin: 'auto 0' }}>
+                        <div style={{ fontSize: '52px', marginBottom: '14px' }}>🎉</div>
+                        <div style={{ fontWeight: 800, fontSize: '22px', marginBottom: '8px' }}>모든 임무를 완료했습니다</div>
+                        <div style={{ fontSize: '15px', color: 'var(--text-muted)' }}>수고하셨습니다.</div>
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '20px 8px', margin: 'auto 0' }}>
+                        <div style={{ fontSize: '52px', marginBottom: '14px' }}>⚠️</div>
+                        <div style={{ fontWeight: 800, fontSize: '22px', marginBottom: '8px' }}>아직 완료하지 않은 임무가 있습니다</div>
+                        <div style={{ fontSize: '15px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                          체크하지 않고 넘어간 단계가 있어요. 처음부터 다시 확인해주세요.
+                        </div>
+                        <button
+                          type="button" className="btn btn-primary" style={{ padding: '13px 24px', fontSize: '15px' }}
+                          onClick={() => setStepIndex(0)}
+                        >
+                          처음부터 확인하기
+                        </button>
+                      </div>
+                    )
+                  ) : stepIndex === 0 ? (
+                    <>
+                      {renderStepCard(stepFlow[0], 0, true)}
+                      <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
+                        <button
+                          type="button" className="btn btn-primary" style={{ flex: 1, padding: '17px', fontSize: '17px' }}
+                          disabled={statusLoading}
+                          onClick={goNextPage}
+                        >
+                          다음 임무 <ChevronRight size={20} />
+                        </button>
+                      </div>
+                    </>
+                  ) : (() => {
+                    const pageEnd = Math.min(stepIndex + STEP_PAGE_SIZE, stepFlow.length);
+                    const pageIndices = Array.from({ length: pageEnd - stepIndex }, (_, k) => stepIndex + k);
+                    const isLastPage = pageEnd >= stepFlow.length;
+
+                    return (
+                      <>
+                        {pageIndices.map(i => renderStepCard(stepFlow[i], i, true))}
+
+                        {/* 공용 이전/다음 네비게이션 — 1단계씩이 아니라 페이지(3단계) 단위로 이동 */}
+                        <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
+                          <button
+                            type="button" className="btn btn-secondary" style={{ width: 'auto', padding: '17px 20px', fontSize: '16px' }}
+                            onClick={goPrevPage}
+                          >
+                            <ChevronLeft size={20} /> 이전임무
+                          </button>
+                          <button
+                            type="button" className="btn btn-primary" style={{ flex: 1, padding: '17px', fontSize: '17px' }}
+                            disabled={statusLoading}
+                            onClick={goNextPage}
+                          >
+                            {isLastPage ? '임무 완료' : (<>다음 임무 <ChevronRight size={20} /></>)}
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
+                  </div>
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div className="card" style={{ textAlign: 'center', padding: '30px 16px' }}>

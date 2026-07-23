@@ -13,6 +13,9 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
   responders,
   tasks
 }) => {
+  const [showRoles, setShowRoles] = useState(true);
+  const [showActivityLog, setShowActivityLog] = useState(false);
+
   if (!activeIncident) {
     return (
       <div className="content">
@@ -29,9 +32,6 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
       </div>
     );
   }
-
-  const [showRoles, setShowRoles] = useState(true);
-  const [showActivityLog, setShowActivityLog] = useState(false);
 
   // Overall calculations
   const totalTasks = tasks.length;
@@ -51,17 +51,20 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
     <div className="content" style={{ gap: '14px' }}>
       {/* 1. COP Header */}
       <div className="banner alarm-active" style={{
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+        background: activeIncident.mode === '실제'
+          ? 'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(220,38,38,0.14) 100%)'
+          : 'linear-gradient(135deg, rgba(37,99,235,0.06) 0%, rgba(29,78,216,0.1) 100%)',
         borderColor: activeIncident.mode === '실제' ? 'var(--color-fire)' : 'var(--color-water)',
         padding: '16px 20px',
         marginBottom: 0
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{
-            fontSize: '11px', 
-            fontWeight: 900, 
-            padding: '2px 8px', 
+            fontSize: '11px',
+            fontWeight: 900,
+            padding: '2px 8px',
             borderRadius: '6px',
+            color: '#ffffff',
             background: activeIncident.mode === '실제' ? 'var(--color-fire)' : 'var(--color-water)'
           }}>
             {activeIncident.mode === '실제' ? '⚠️ 실제상황' : '🎓 훈련상황'}
@@ -71,8 +74,8 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
             <span>경과 시간: {getElapsedTime()}</span>
           </div>
         </div>
-        
-        <h2 style={{ fontSize: '22px', fontWeight: 900, marginTop: '10px', fontFamily: 'var(--font-display)' }}>
+
+        <h2 style={{ fontSize: '22px', fontWeight: 900, marginTop: '10px', fontFamily: 'var(--font-display)', color: 'var(--text-main)' }}>
           {activeIncident.disaster} 상황판 (COP)
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
@@ -102,7 +105,7 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '12px 16px',
-            borderBottom: showRoles ? '1px solid rgba(255,255,255,0.06)' : 'none',
+            borderBottom: showRoles ? '1px solid rgba(11,37,69,0.06)' : 'none',
           }}
         >
           <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 900, color: 'var(--text-main)', flex: 1, textAlign: 'center' }}>
@@ -140,7 +143,7 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
                   <div key={role} style={{
                     display: 'flex', alignItems: 'center', gap: '8px',
                     padding: '6px 0',
-                    borderBottom: '1px solid rgba(255,255,255,0.04)',
+                    borderBottom: '1px solid rgba(11,37,69,0.045)',
                   }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
@@ -179,7 +182,7 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
         <div
           className="accordion-header"
           onClick={() => setShowActivityLog(v => !v)}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', borderBottom: showActivityLog ? '1px solid rgba(255,255,255,0.06)' : 'none' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', borderBottom: showActivityLog ? '1px solid rgba(11,37,69,0.06)' : 'none' }}
         >
           <Activity size={18} color="var(--color-green)" />
           <h3 style={{ margin: 0, fontSize: '14px', flex: 1 }}>활동로그</h3>
@@ -215,7 +218,7 @@ export const COPDashboard: React.FC<COPDashboardProps> = ({
                 <div key={idx} style={{
                   display: 'flex', alignItems: 'baseline', gap: '6px',
                   fontSize: '14px', padding: '5px 6px',
-                  background: 'rgba(255,255,255,0.02)',
+                  background: 'rgba(11,37,69,0.03)',
                   borderLeft: `2px solid ${e.color}`,
                   borderRadius: '0 6px 6px 0',
                 }}>
