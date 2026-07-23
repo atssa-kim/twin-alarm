@@ -134,7 +134,8 @@ export const db = {
       // 이 경우 훈련 TTS는 안 가지만(마이그레이션 전까지) 발령/임무 생성은 정상 진행됨.
       if (error.code === 'PGRST204' && ttsEmpNos !== null) {
         console.warn('[declareIncident] tts_emp_nos 컬럼 없음 — 필드 제외하고 재시도. add-tts-emp-nos-260723.sql 실행 필요.');
-        const { tts_emp_nos, ...fallback } = incident;
+        const fallback = { ...incident };
+        delete fallback.tts_emp_nos;
         const { error: retryError } = await supabase.from('incidents').insert(fallback);
         if (retryError) throw retryError;
         return incident;
@@ -158,7 +159,8 @@ export const db = {
       // tts_emp_nos 컬럼 마이그레이션 미실행 시 승격 자체가 막히지 않도록 안전장치
       if (error.code === 'PGRST204' && ttsEmpNos !== undefined) {
         console.warn('[escalateIncident] tts_emp_nos 컬럼 없음 — 필드 제외하고 재시도. add-tts-emp-nos-260723.sql 실행 필요.');
-        const { tts_emp_nos, ...fallback } = update;
+        const fallback = { ...update };
+        delete fallback.tts_emp_nos;
         const { error: retryError } = await supabase.from('incidents').update(fallback).eq('id', incidentId);
         if (retryError) throw retryError;
         return;
