@@ -15,6 +15,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 //     한 번도 에스컬레이션 대상이 된 적 없으므로 여기서 빠지면 아무도 안 걸림(2026-07-20 발견된 버그)
 //   그 외 8개 재난                                       → 총괄/통제/상황 (지휘연락급)
 //
+// 화재 필수 연락망(2026-07-23): 위 배지·확인여부·30초 대기와 완전히 별개로,
+// 화재 발령/승격 시(훈련 포함) FIRE_MUST_CALL_EMP_NOS 8명에게는 대기 없이 즉시
+// 전화가 갑니다. 배지 대상자와 겹치면 30초 뒤 다시 걸릴 수 있음(중복 허용).
+//
 // 감지기동작→전체화재 승격은 새 발령(INSERT)이 아니라 같은 incident 행의
 // UPDATE라서, 같은 incident_id가 두 번(1.1, 1.2) 에스컬레이션될 수 있음 →
 // incident_call_escalations(incident_id, mode)로 (재난,상황단계) 단위 중복 방지.
@@ -29,6 +33,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const CALL_DELAY_MS = 30_000;
 const COMMAND_BADGES = ['총괄', '통제', '상황'];
 const FIRE_INITIAL_BADGES = ['총괄', '통제', '출동'];
+
+// 화재 필수 연락망 — 배지·확인여부·30초 대기와 무관하게 화재 발령/승격 즉시 무조건 전화
+// (2026-07-23 추가): 김견수·김기창·손남열·이길호·김정훈·김성진·길성용·김재석
+const FIRE_MUST_CALL_EMP_NOS = [
+  'E-4001', 'E-0001', 'E-2001', 'E-3001', 'E-5007', 'E-7005', 'E-7004', 'E-9001',
+];
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -159,6 +169,20 @@ Deno.serve(async (req) => {
       .insert({ incident_id: incidentId, mode, escalated_at: Date.now() });
     if (claimErr) {
       return new Response('skip: already escalated for this mode', { status: 200, headers: CORS });
+    }
+
+    // 화재 필수 연락망 — 배지/확인여부 판단(30초 대기) 이전에 즉시 발신
+    if (disaster === '화재') {
+      const { data: mustCallRows } = await supabase
+        .from('employees')
+        .select('phone')
+        .in('emp_no', FIRE_MUST_CALL_EMP_NOS)
+        .not('phone', 'is', null);
+      const mustCallPhones = (mustCallRows ?? []).map((e: { phone: string }) => e.phone).filter(Boolean);
+      const immediateText = isTraining
+        ? `훈련상황입니다. 화재 훈련. ${location}. 확인 바랍니다.`
+        : `화재 발생. ${location}. 즉시 확인 바랍니다.`;
+      await sendVoiceCalls(mustCallPhones, immediateText);
     }
 
     // 발령 즉시 응답은 보내되, 함수 실행은 30초 대기 후 계속 진행

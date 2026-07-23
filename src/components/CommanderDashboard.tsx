@@ -895,24 +895,25 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
               </div>
             </div>
 
-            {/* 실제상황일 때만: 30초 무응답자 TTS 전화 사용 여부 */}
-            {selectedMode === '실제' && (
-              <label style={{
-                display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
-                padding: '10px 12px', borderRadius: '10px',
-                border: '1.5px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.06)',
-              }}>
-                <input
-                  type="checkbox"
-                  checked={ttsCallEnabled}
-                  onChange={e => setTtsCallEnabled(e.target.checked)}
-                  style={{ width: '16px', height: '16px', accentColor: '#ef4444', cursor: 'pointer' }}
-                />
-                <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#475569' }}>
-                  📞 30초 내 미확인자에게 TTS 전화 (통화료 발생)
-                </span>
-              </label>
-            )}
+            {/* 발령 전 TTS 전화 사용 여부 — 훈련/실제 모두 표시 (화재는 필수연락망 즉시발신 + 30초 미확인자 발신 모두 포함) */}
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+              padding: '10px 12px', borderRadius: '10px',
+              border: '1.5px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.06)',
+            }}>
+              <input
+                type="checkbox"
+                checked={ttsCallEnabled}
+                onChange={e => setTtsCallEnabled(e.target.checked)}
+                style={{ width: '16px', height: '16px', accentColor: '#ef4444', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#475569' }}>
+                📞 TTS 전화 사용 (통화료 발생)
+                {isFireDisaster
+                  ? ' — 필수연락망 즉시발신 + 30초 내 미확인자 발신'
+                  : ' — 30초 내 미확인자에게 발신'}
+              </span>
+            </label>
 
             {/* 위치 */}
             <div>
