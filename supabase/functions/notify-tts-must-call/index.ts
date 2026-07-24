@@ -45,7 +45,7 @@ const CORS = {
 interface SolapiMessage {
   to: string;
   from: string;
-  type: 'LMS' | 'ATA' | 'CTI';
+  type?: 'LMS' | 'ATA' | 'VOICE';
   [key: string]: unknown;
 }
 
@@ -113,10 +113,13 @@ async function sendVoiceCalls(phones: string[], text: string): Promise<SendResul
   if (!senderPhone) return { sent: 0, ok: false, error: 'SENDER_PHONE 미설정' };
 
   const validPhones = normalizePhones(phones);
+  // type은 일부러 안 씀 — voiceOptions가 있으면 SOLAPI가 자동으로 음성(VOICE) 타입으로 인식함
+  // (공식 SDK 예제와 동일한 방식, 2026-07-24 수정: 기존 'CTI'는 음성 전화와는 다른 별도
+  // 타입으로 확인됨 — SOLAPI 공식 solapi-nodejs SDK 소스의 messageTypeSchema에 'CTI'와
+  // 'VOICE'가 서로 다른 리터럴로 정의돼 있고, voiceOptions는 'VOICE'와만 짝을 이룸)
   const messages: SolapiMessage[] = validPhones.map(to => ({
     to,
     from: senderPhone.replace(/[-\s]/g, ''),
-    type: 'CTI', // SOLAPI 음성(TTS 전화) 메시지 타입
     text: text.slice(0, 490), // 한글 최대 490자
     voiceOptions: { voiceType: 'FEMALE' },
   }));
