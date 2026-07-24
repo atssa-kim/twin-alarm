@@ -5,6 +5,7 @@ import { Check, ShieldAlert, MapPin, Award, CheckSquare, ChevronDown, ChevronRig
 import { unlockAudio } from '../utils/audio';
 import { DISASTERS, FIRE_INITIAL_BADGES } from '../data/disasters';
 import { findEquipmentLocation } from '../data/equipmentLocations';
+import { VARIANT_LABELS } from './CommanderDashboard';
 
 interface ResponderViewProps {
   activeIncident: Incident | null;
@@ -240,6 +241,10 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   const [previewLocalDone, setPreviewLocalDone] = useState<Record<string, boolean>>({});
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewOpenGroups, setPreviewOpenGroups] = useState<Set<string>>(new Set());
+  // 미리보기 전용 상황별 보기 필터 — 'ALL'(전체) | 'COMMON'(공통, variant 없음) | 실제 variant 값.
+  // 발령 후(실제 진행 중) 화면에는 적용하지 않음 — 그쪽은 지휘관이 확정한 상황(activeIncident.variant)
+  // 하나만 보여주는 게 의도된 동작이라, 대원이 임의로 다른 상황을 보게 하면 혼선이 생길 수 있음.
+  const [previewVariant, setPreviewVariant] = useState<'ALL' | 'COMMON' | string>('ALL');
 
   useEffect(() => {
     if (!activeIncident) { setMyBadge(null); return; }
@@ -255,6 +260,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
       setPreviewBadge(null);
       setPreviewLocalDone({});
       setPreviewOpenGroups(new Set());
+      setPreviewVariant('ALL');
       return;
     }
     const load = () => {
@@ -266,6 +272,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
         setPreviewRoles(roles);
         setPreviewBadge(badge);
         setPreviewLocalDone({});
+        setPreviewVariant('ALL');
         // 모든 그룹 기본 펼침
         const headers = new Set<string>(
           roles
@@ -717,11 +724,28 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     ? (previewRoles.find(r => r.badge === previewBadge) ?? null)
     : null;
 
+  // 상황별 보기: 이 배지 임무에 실제로 붙어있는 variant 값과 개수를 재난대응메뉴얼과 동일하게 집계.
+  // variant 임무가 하나도 없으면 빈 배열 — 이 경우 필터 칩 자체를 숨김(항상 '전체'와 동일하므로).
+  const previewVariantCounts = useMemo(() => {
+    if (!previewMyRole) return { common: 0, variants: [] as { key: string; count: number }[] };
+    let common = 0;
+    const map: Record<string, number> = {};
+    (previewMyRole.disaster_tasks ?? []).forEach(t => {
+      if (t.variant) map[t.variant] = (map[t.variant] ?? 0) + 1;
+      else common++;
+    });
+    return { common, variants: Object.entries(map).map(([key, count]) => ({ key, count })) };
+  }, [previewMyRole]);
+
   const previewTasks: MemberTask[] = useMemo(() => {
     if (!previewMyRole) return [];
     return [previewMyRole].flatMap(r =>
       (r.disaster_tasks ?? [])
-        // 미리보기는 상황(variant) 미확정 상태이지만, 재난대응매뉴얼과 동일하게 전체 임무를 보여줌
+        .filter(dt =>
+          previewVariant === 'ALL' ? true :
+          previewVariant === 'COMMON' ? !dt.variant :
+          dt.variant === previewVariant
+        )
         .sort((a, b) => a.task_idx - b.task_idx)
         .map(dt => ({
           id: `preview_${dt.id}`,
@@ -735,7 +759,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
           updated_at: null,
         } satisfies MemberTask))
     );
-  }, [previewMyRole, previewRoles, previewBadge, previewLocalDone, currentUser.empNo]);
+  }, [previewMyRole, previewRoles, previewBadge, previewVariant, previewLocalDone, currentUser.empNo]);
 
   const previewTaskGroups = useMemo(() => groupTasks(previewTasks), [previewTasks]);
   const previewTaskNumMap = useMemo(() => computeTaskNumMap(previewTasks), [previewTasks]);
@@ -925,6 +949,39 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                       {previewDoneCount} / {previewCheckable.length}
                     </span>
                   </div>
+                  {/* 상황별 보기 — 이 배지에 variant 임무가 하나라도 있을 때만 표시. 미리보기 전용(발령 후에는 안 씀) */}
+                  {previewVariantCounts.variants.length > 0 && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap',
+                      padding: '10px 16px', borderBottom: '1px solid rgba(11,37,69,0.06)',
+                      background: 'rgba(139,92,246,0.04)',
+                    }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#7c3aed', flexShrink: 0 }}>🏷️ 상황별 보기:</span>
+                      {([
+                        { key: 'ALL' as const, label: '전체', count: previewVariantCounts.common + previewVariantCounts.variants.reduce((s, v) => s + v.count, 0) },
+                        { key: 'COMMON' as const, label: '공통', count: previewVariantCounts.common },
+                        ...previewVariantCounts.variants.map(v => ({ key: v.key, label: VARIANT_LABELS[v.key] ?? v.key, count: v.count })),
+                      ]).map(({ key, label, count }) => {
+                        const active = previewVariant === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setPreviewVariant(key)}
+                            style={{
+                              padding: '5px 10px', borderRadius: '999px', cursor: 'pointer',
+                              fontSize: '11.5px', fontWeight: 700, whiteSpace: 'nowrap',
+                              background: active ? 'rgba(124,58,237,0.2)' : 'rgba(11,37,69,0.05)',
+                              border: `1px solid ${active ? 'rgba(124,58,237,0.55)' : 'rgba(11,37,69,0.12)'}`,
+                              color: active ? '#7c3aed' : 'var(--text-muted)',
+                            }}
+                          >
+                            {label} {count}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px 16px' }}>
                     <TaskChecklistBody
                       groups={previewTaskGroups}
