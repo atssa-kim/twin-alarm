@@ -452,7 +452,7 @@
         <li><strong>직원 1명 = 재난 1개 + 근무(주/야간) 1개당 배지 1개.</strong> "대응1"이면서 동시에 "대응2"일 수 없습니다 — 조를 옮기려면 기존 배정을 지우고 새로 배정하세요.</li>
         <li><strong>이름은 한 글자도 다르면 안 됩니다.</strong> <code class="inline">대응1</code>과 <code class="inline">대응 1</code>(띄어쓰기 포함)은 시스템이 완전히 다른 배지로 취급합니다.</li>
         <li><strong>색상은 배지가 아니라 역할(role)마다 따로 저장됩니다.</strong> 같은 <code class="inline">대응1</code>이라도 지진과 폭설에서 색이 다를 수 있습니다 — 정상입니다.</li>
-        <li>화재 한정으로 <code class="inline">총괄·통제·출동</code> 3개 배지는 TTS 전화 에스컬레이션(30초 무응답 시 자동 전화)의 1차 대상이고, 나머지 전 배지는 화재상황 전체승격 시 2차 대상입니다. 대응/지원/유도를 세분화해도 이 로직은 그대로 적용됩니다.</li>
+        <li>TTS 전화는 배지가 아니라 <strong>재난 편제표에서 사람별로 체크한 "TTS 필수"</strong> 여부로 결정됩니다(2026-07-24 변경 — 예전의 "총괄·통제·출동 자동 1차, 나머지 2차" 규칙은 삭제됨). 자세한 내용은 <code class="inline">docs/tts-manual.html</code> 참고.</li>
       </ul>
     </div>
   </section>
