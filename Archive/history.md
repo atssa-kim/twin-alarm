@@ -1,0 +1,339 @@
+# TwinTower Ops — 상세 이력
+
+> [CLAUDE.md](./CLAUDE.md)의 핵심 요약에서 링크되는 상세 버전. 여기에는 날짜별 작업 로그와
+> 주요 기능의 설계 배경(왜 그렇게 만들었는지, 무엇을 검토했는지)을 그대로 보존합니다.
+> CLAUDE.md가 200줄을 넘으면 오래된/상세 서술을 이 파일로 옮기고, CLAUDE.md에는 현재 상태
+> 요약 + 이 파일로의 링크만 남깁니다. 코딩 시 필요하면 이 파일도 함께 참고하세요.
+
+## 직원 seed 현황 (2026-06-23 기준)
+- 등록 완료: 49명 (센터장·운영·기계·전기·소방·건축·품질/안전파트)
+- 미등록: 보안파트(보안1/2/3 구분 필요), 미화파트, 주차파트
+- 재실행: `npm run seed-employees` (upsert이므로 중복 실행 무관)
+
+## 재난 임무 매트릭스(duty_matrix) 신설 배경 — 2026-07-04, Phase 1만 완료
+
+### 배경
+기존에는 팀→재난→배지 매핑표(`TEAM_BADGE_MAP`)가 **세 군데에 따로 하드코딩**돼 있었음
+(`scripts/seed-employees.ts`, `src/components/AdminPanel.tsx`, 그리고 참여인원 그룹핑용
+`CMD_TEAMS`/`EVAC_TEAMS`가 `AdminPanel.tsx`·`CommanderDashboard.tsx` 두 군데 중복). 또한
+근무(주간/야간) 구분이 스키마 어디에도 없어서, 같은 직원이 교대로 야간 근무를 해도 재난 배지는
+하나만 가질 수 있었음. 회사에서 받은 "트윈타워_재난대응_조직도_일원화_260703.pdf"를 기준으로
+이 구조를 통합하기 시작한 것이 `duty_matrix` 테이블.
+
+### 현재 상태 (Phase 1 — 데이터만 존재, 아직 앱에 미연결)
+- `duty_matrix` 테이블: 재난(9종) × 근무(주간/야간) × 반(division) × 배지(badge) × 부서(dept_code)
+  37+행 마스터. `scripts/seed-duty-matrix.ts` 실행 시 델리트 후 전체 재적재(idempotent).
+- 지휘연락반(주간+야간, 9개 재난 전체 통일된 명칭, 가운뎃점 없음)은 3개 배지로 확정:
+  | 배지 | 대상 | dept_code |
+  |---|---|---|
+  | 총괄 | 센터장 | `총괄` |
+  | 통제 | 그 재난의 담당 파트장(화재·지진→소방, 정전·승강기→전기, 누수·태풍/홍수·가스누출→기계, 폭설·테러→운영) | 해당 부서 코드 |
+  | 상황 | 상황실 | `상황` |
+- `employees`에 `dept_code`(부서, team보다 세분화 — 건축사무→건축2, 건축현장→건축1, 교대
+  상황실 인원→야전기/야BMS/야운전/야소방 등)와 `shift_group`(NULL|A|B|C|D) 컬럼 추가,
+  `seed-employees.ts`의 기존 60명 데이터에 값 백필 완료.
+- **`employee_disaster_badges`, `AdminPanel.tsx`, `CommanderDashboard.tsx`, `ResponderView.tsx`는
+  아직 하나도 안 바뀜.** 즉 지금 앱을 실제로 써도 동작은 이전과 100% 동일함 — duty_matrix는
+  아직 "참고용 마스터 데이터"일 뿐 실시간 임무 배정에 영향 없음.
+
+### 배지 정합 패치 완료 — 화재·가스누출 (2026-07-04, `scripts/fix-badges-260704.ts`)
+Phase 1 데이터와 기존 라이브 시스템(`disaster_roles`/`TEAM_BADGE_MAP`)을 대조해보니 duty_matrix
+연결 이전에도 이미 깨져 있던 부분들이 있어서, 두 재난만 우선 정합했습니다:
+- **화재**: 기계파트 `소화`→`조치`로 통일(disaster_roles 쪽 이름 변경), 보안1 `응급`→`구조`로 통일,
+  보안2 `경계`→`유도`로 통일, **보안3의 화재 임무 자체를 삭제**(기존엔 소방파트장과 임무가
+  뒤섞이는 버그였음).
+- **가스누출**: 센터장 `지휘`→`총괄`로 통일 — 기존엔 disaster_roles에 `총괄` 역할이 없어서
+  **센터장이 가스누출 발령 시 임무를 아예 못 보고 있었음**(duty_matrix 연동과 무관한 기존 버그).
+  전기/운영/주차파트는 무엇을 해야 할지 정해진 게 없는데 그럴듯한 배지(지원/유도)를 억지로
+  쓰고 있어서 오히려 없는 역할과 매칭돼 빈 화면이 뜨고 있었음 → 배지 자체를 제거.
+- **확정된 원칙 2가지** (앞으로 다른 재난에도 적용):
+  1. "통제(그 재난 담당 파트장)가 아닌 파트장은 파트원과 동일 배지" — 전기·운영·건축은 이미
+     이 원칙대로였고, 각 재난에서 담당 파트장(=통제)만 예외.
+  2. **"배지없으면 임무없음"** — 부서-배지 매핑이 불확실하면 비슷한 배지를 억지로 끌어쓰지 않고
+     아예 배지를 안 준다. (근거: 잘못된 배지는 "임무 있음"처럼 보이지만 실제로는 엉뚱하거나
+     빈 임무를 보여줘서 오히려 더 위험함 — 안 보이는 게 차라리 안전)
+- **주의**: `disaster_roles`의 badge를 UPDATE했으므로 (a) Supabase에서
+  `npx tsx scripts/fix-badges-260704.ts` 실행, (b) 이어서 `npm run seed-employees` 재실행해서
+  `employee_disaster_badges`의 실제 값도 새 매핑으로 갱신해야 반영됩니다. 둘 다 아직 실제
+  Supabase에 적용 안 됐다면(로컬 코드만 수정) 반드시 실행하세요.
+- 태풍/홍수·폭설·지진·테러 4개 재난에도 가스누출과 동일한 "지휘"/"총괄" 불일치가 있으나
+  이번 지시 범위는 화재·가스누출뿐이라 손대지 않음.
+
+### 확실하지 않아서 임의로 채우지 않은 부분
+- **보안3**: 화재는 임무를 삭제했지만, 다른 재난에서의 보안3 역할은 여전히 PDF 매트릭스에
+  정의가 없음. `employees.dept_code='보안3'`으로만 남겨둠.
+- **건축파트장**: PDF에 파트장 전용 행이 없어 건축사무(건축2)와 동일하게 임시 처리.
+- **PDF 자체가 화재·지진만 부서구분(dept_code)이 채워져 있고, 나머지 7개 재난(정전·누수·
+  태풍/홍수·폭설·가스누출·승강기·테러)의 현장대응반/대피유도반/지원반은 배지만 있고 부서
+  매핑이 비어있음.** 회사 쪽에서 부서를 확정해줘야 채울 수 있는 부분(가스누출의 전기/운영/
+  주차파트가 배지 없는 상태로 남아있는 이유).
+
+### Phase 2 — 다음에 해야 할 것 (아직 시작 안 함)
+1. **회사에 확인**: 위 "확실하지 않은 부분"(보안3 나머지 재난, 건축파트장, 7개 재난 부서 매핑)
+   답 받기 — 이게 없으면 Phase 2를 정확히 진행할 수 없음.
+2. **`disa_app` 정합**: duty_matrix의 배지 체계(특히 지휘연락반 총괄/통제/상황)가
+   `disaster_roles.badge`(disa_app이 관리)와 일치하는지 맞추는 작업. disa_app 쪽 수정이
+   필요할 수 있음.
+3. **`employee_disaster_badges`에 근무(shift) 축 추가**: 현재 PK가 `(emp_no, disaster)`라
+   재난당 배지 1개뿐 → `(emp_no, disaster, shift)`로 변경해서 교대 직원이 주간/야간 배지를
+   동시에 가질 수 있게. (스키마 변경 + 기존 데이터 마이그레이션 필요) — **완료됨, 2026-07-08.**
+4. **`AdminPanel.tsx`의 `TEAM_BADGE_MAP` 자동배정 로직을 `duty_matrix` 조회로 교체**:
+   직원 저장 시 `dept_code`+`shift_group` 기준으로 duty_matrix를 찾아 배지를 자동 upsert.
+5. **`CommanderDashboard.tsx`/`AdminPanel.tsx`의 `CMD_TEAMS`/`EVAC_TEAMS`/`getOrgGroup()`
+   중복 제거**: duty_matrix의 division(반) 값을 단일 소스로 참여인원 그룹핑에 사용.
+6. **발령 시 주간/야간 판정 로직 추가**: `incidents` 테이블에 `shift` 컬럼 추가,
+   `CommanderDashboard.tsx`의 `handleDeclare()`에서 발령 시각 기준(예: 06~18시=주간) 자동
+   판정 후 저장. `ResponderView.tsx`의 `getEmployeeBadge()` 호출도 `incident.shift`를
+   같이 넘기도록 확장. — **완료됨, 2026-07-05 (단, 자동판정 대신 지휘관 수동 선택 방식 채택).**
+
+## 작업 로그 — 2026-07-23
+
+### 1. GitHub 동기화 확인
+로컬 main이 origin/main보다 **30개 커밋 뒤처져** 있던 걸 발견(직전 세션 이후 다른 곳에서
+TTS 에스컬레이션·배지 세분화 등 대량 작업이 이미 푸시돼 있었음). `git pull --rebase`로
+받아온 뒤, 로컬에만 있던 archive 정리(중복 연락처 파일 삭제, 오탈자 수정)와 `.gitignore`에
+`.claude/`·`.omc/`(로컬 도구 상태 폴더) 추가를 리베이스해서 푸시함.
+
+### 2. 화재/주간 '상황실' 배지 중복 정리 (DB)
+`disaster_roles`에 화재/day용 상황실 관련 역할이 **3개 중복**으로 남아있던 걸 발견:
+- `상황`(id=3, 47건) — 이미 병합·2026-07-13 재분류까지 반영된 최종본
+- `상황실`(id=810, 33건), `상황실/화재`(id=811, 19건) — `fix-badges-260705b.ts`가
+  병합 후 삭제하도록 설계됐으나 라이브 DB엔 삭제가 반영 안 돼 남아있던 잔재
+
+`상황실` 배지를 쓰던 직원 11명(김범재·손경배·유지원·심현보·김성·석경민·이태경·윤창현 등)을
+`상황`으로 재배정하고, 중복 역할 2개(및 CASCADE로 딸린 임무들) 삭제.
+→ `scripts/migrations/fix-badges-260723-dedup-situation-room.ts` (idempotent, 커밋됨)
+
+### 3. 재난 미리보기 임무 개수 불일치 수정
+증상: 화재 미리보기 "나의 임무"에 소방파트장(통제 배지)이 16건만 뜨는데, 매뉴얼상 전체는
+38건 — 원인은 `ResponderView.tsx`의 미리보기 로직이 발령 전엔 상황(variant) 미확정이라며
+variant 있는 임무(K급주방/가스구역/UPS실/지하주차장, 22건)를 숨기고 공통 임무 16건만
+보여주고 있었음(의도된 설계였으나 이번에 매뉴얼과 동일하게 전체를 보여주는 쪽으로 변경 확정).
+
+`previewTasks`(ResponderView.tsx:720~)에서 `.filter(dt => !dt.variant)` 제거 →
+미리보기도 재난대응매뉴얼과 동일하게 전체 임무 표시. 실제 발령 후 상황 확정 시 필터링하는
+로직(`rawTasks`, ResponderView.tsx:316, `activeIncident?.variant` 비교)은 그대로 유지 —
+이 변경은 발령 전 미리보기 화면에만 영향.
+
+`npm install`(node_modules 비어있었음) → `npm run build` → `npm run deploy`로
+GitHub Pages(https://atssa-kim.github.io/twin-alarm/) 반영 완료.
+
+### 4. 훈련 참여인원설정에 사람별 "TTS 전화 받기" 체크박스 추가
+기존엔 훈련 중 TTS 무응답자 전화가 항상 배지(통제)로만 걸렸고, "훈련 참여인원 설정"에서
+선택한 참여인원(drill_emp_nos)과는 완전히 무관했음(참여인원을 좁혀도 통제 배지 전원에게
+전화가 감). 요청에 따라 **참여 여부와 독립적인** 별도 지정 방식으로 구현:
+
+- `EmployeeGroupPicker`(CommanderDashboard.tsx) 각 직원 행에 참여 체크박스와 별개로
+  "TTS" 체크박스 추가, 툴바에 "📞 파트장 전체 TTS"(role==='파트장' 일괄 체크) 버튼 추가.
+- 발령 시(`ttsEmps`)·2차 소집 승격 시(`escalateTtsEmps`) 각각 상태 관리, 콤마구분 문자열로
+  `incidents.tts_emp_nos`에 저장(`declareIncident`/`escalateIncident` 신규 파라미터,
+  `src/services/supabase.ts`).
+- `escalate-unacked-calls`(Edge Function): 훈련이고 `tts_emp_nos`가 지정돼 있으면 배지 조회를
+  건너뛰고 그 목록만 대상으로 함. 미지정 시 기존 배지(통제) 기준 동작 그대로 유지(하위호환).
+- DB: `incidents.tts_emp_nos text` 컬럼 필요 —
+  `scripts/migrations/add-tts-emp-nos-260723.sql`. **직접 실행 권한(DB 비밀번호)이 없어
+  Supabase SQL Editor에서 수동 실행 필요** — 실행 전까지는 컬럼이 없어도 안전하게 기존
+  배지 기준 동작으로 폴백됨(트리거가 `row_to_json(NEW)`로 행 전체를 넘기므로 컬럼 없으면
+  `record.tts_emp_nos`가 `undefined`).
+- Edge Function은 `supabase functions deploy escalate-unacked-calls`로 배포 완료. 프론트는
+  `npm run build && npm run deploy`로 GitHub Pages 반영 완료.
+
+### 5. "파트장 TTS" 버튼 파트장 판정 버그 수정 + 운영파트장 인사 정리
+"파트장 TTS" 버튼(role==='파트장' 기준)이 소방파트장(김견수, role: '파트장(안전관리자)')을
+놓치는 버그 발견 → team명 화이트리스트(`PART_LEADER_TEAMS` = 소방/전기/기계/건축/운영파트장)
+로 교체.
+
+이 과정에서 라이브 DB를 보니 **곽우람(E-1001, 운영파트장)이 이미 삭제되어 있고 박세훈
+(E-1003)이 이미 파트장으로 승격되어 있었음**(배지도 이미 본인 앞으로 정상 배정됨) — 다만
+`team` 값이 다른 4개 파트장과 다르게 `'운영파트'`(파트원과 동일)로 남아있어서, `team`명
+문자열로 매칭하는 CMD_TEAMS(폭설 지휘연락 분류)·PART_LEADER_TEAMS 등에서 누락되는 상태였음.
+`team`을 다른 파트장과 동일한 규칙(`'운영파트장'`)으로 정정, `scripts/seed-employees.ts`도
+라이브 상태에 맞춰 곽우람 행 제거 + 박세훈 team/role/is_commander 갱신(다음에 스크립트를
+재실행해도 되돌아가지 않도록). 프론트 코드 변경 없어 재배포는 불필요.
+
+### 6. TTS 전화 로직 정리 + 사람별 TTS 체크박스 기능 제거
+사용자 요청으로 TTS 전화 대상 규칙을 화재(훈련/실제 × 감지기동작/전체, 주/야간)·기타 8개
+재난·"TTS 전화 사용" 체크박스와의 관계까지 정리해서 설명. 이 과정에서 **화재 야간(night)
+30초-미확인자 전화가 현재 아무도 대상이 안 되는 문제를 발견**함 — `employee_disaster_badges`의
+화재/night 배지가 `현장`·`대피`뿐이고 `총괄`/`통제`/`출동`/`상황` 이름으로 배정된 사람이 없어서
+(day는 정상 배정), FIRE_INITIAL_BADGES/COMMAND_BADGES 배지 조회가 항상 0명으로 나옴. 필수연락망
+8명 즉시발신은 주/야간 무관하게 정상 동작하므로 완전 무대응은 아니지만, 확인 안 한 나머지
+인원에게는 야간엔 전화가 안 감. **이번엔 손대지 않음 — 필요시 별도로 요청받아 처리.**
+
+또한 §4에서 만들었던 "참여인원설정 사람별 TTS 체크박스"(`tts_emp_nos`) 기능은, `isTraining &&`
+로 완전히 훈련 전용으로 게이트돼 있어 실제 상황엔 전혀 영향이 없음을 재확인 → 사용자 지시로
+**전체 제거**. `EmployeeGroupPicker`의 TTS 체크박스·"📞 파트장 TTS" 버튼(및 그 대상 판정용
+`PART_LEADER_TEAMS`)·`ttsEmps`/`escalateTtsEmps` 상태·`declareIncident`/`escalateIncident`의
+`ttsEmpNos` 인자·`Incident.tts_emp_nos` 타입 필드를 모두 되돌리고, `escalate-unacked-calls`도
+배지 조회만 쓰는 이전 로직으로 복원 후 재배포. `incidents.tts_emp_nos` DB 컬럼(SQL 마이그레이션
+`add-tts-emp-nos-260723.sql`)은 실행했더라도 그냥 안 쓰는 nullable 컬럼으로 남아 무해하므로
+DROP은 안 함. README.md의 관련 문단도 제거.
+
+TTS 전화 현재 로직 정리 (2026-07-24 수정 반영)
+1. 화재
+감지기동작	화재확정(전체)
+훈련(주간만)	mode=훈련/감지기 — 필수연락망 8명 즉시발신 + 30초 후 미확인 통제만	mode=훈련/전체 — 동일
+실제·주간	mode=실제/감지기(scope=fire_initial) — 필수연락망 8명 즉시발신 + 30초 후 미확인 총괄/통제/출동	mode=실제/화재 — 필수연락망 8명 즉시발신 + 30초 후 미확인 총괄/통제/출동 제외한 나머지 전 배지(감지기 단계 생략 시엔 전 배지)
+실제·야간	필수연락망 8명 즉시발신 제외(주간 근무자라 퇴근 상태) — 30초 후 미확인 배지 대상자에게만 전화. 단 총괄/통제/출동/상황 배지 보유자가 현재 없어(현장·대피만 배정됨) 사실상 아무도 안 걸림(기존부터 있던 별도 이슈, 미해결)	동일
+주간 공통: 필수연락망 8명은 훈련/실제 구분 없이 항상 즉시 전화. 야간은 필수연락망 제외(이번에 수정).
+
+2. 기타 8개 재난
+항상 주간만 존재. mode가 훈련이면 통제만, 실제면 총괄/통제/상황(지휘연락급) 대상으로 30초 후 미확인자에게 전화. 필수연락망 개념 없음(화재 전용).
+
+### 7. TTS 에스컬레이션 전체 코드 리뷰 + 발견된 문제 일괄 수정
+위 §6에서 "화재 실제·야간은 총괄/통제/출동/상황 배지가 없어 사실상 아무도 안 걸림"이라고
+적었는데, **다시 정밀하게 코드를 추적해보니 그 설명이 부정확했음** — `fireInitialAlreadyHandled`
+(감지기동작 이미 거침) 분기와 "감지기동작 없이 바로 전체화재" 분기는 애초에 FIRE_INITIAL_BADGES로
+좁히지 않아서 야간에도 `현장`/`대피` 18명이 걸리고 있었음. 진짜 0명이었던 건 `isFireInitial`
+(감지기동작) 단계 하나뿐. 정정.
+
+전체 코드 리뷰로 추가 발견한 문제들, 전부 수정:
+
+1. **[심각] `incident_acks` 단계별 확인 격리가 실제로는 안 됨**: `ackIncident()`의
+   `onConflict: 'incident_id,emp_no'`에 mode가 빠져있어서, 승격되어 mode가 바뀌면 앱이
+   열려있기만 해도(사람이 아무것도 안 해도) 자동으로 새 단계 "확인됨"으로 덮어써짐 — 세 군데
+   주석(supabase.ts/App.tsx/fix-escalation-bugs-260720.sql)이 전부 "mode별로 분리된다"고
+   설명하는데 실제로는 안 그랬음(PK가 (incident_id,emp_no)뿐이라 mode 컬럼은 그냥 최신값으로
+   갱신될 뿐). PK를 `(incident_id, emp_no, mode)`로 변경, `onConflict`도 맞춤.
+2. **[중간] 에스컬레이션 실패 시 무한 침묵**: `(incident_id, mode)` 클레임을 30초 대기 **전**에
+   선점해서, 클레임 이후 어떤 이유로든 실패하면(쿼리 에러, 타임아웃 등) 재시도도 실패 알림도
+   없이 완전히 조용히 사라짐. `incident_call_escalations`에 `scope`/`must_call_count`/
+   `target_count`/`called_count`/`error`/`completed_at` 감사 컬럼 추가, 매 종료 경로(성공/실패/
+   대상없음/전원확인/사고종료)에서 `recordResult()`로 기록하도록 수정. 클레임 INSERT 자체가
+   실패한 경우도 unique_violation(23505, 진짜 중복)과 그 외 에러(진짜 실패)를 구분해서 로깅.
+3. **[경미] `fireInitialAlreadyHandled` 판정이 `mode LIKE '%감지기%'` 문자열 매칭**: mode
+   네이밍이 바뀌면 조용히 깨질 수 있어서, `incident_call_escalations.scope='fire_initial'`
+   비교로 교체(위 감사 컬럼에 scope도 같이 저장).
+4. **[경미] SOLAPI 발신 성공/실패가 로그에만 남음**: `sendSolapiMessages`/`sendVoiceCalls`가
+   결과(`{sent, ok, error}`)를 반환하도록 바꿔서 위 감사 컬럼에 기록되게 함.
+5. **화재 야간 배지 필터 재정비 + 오늘 근무조(A~D) 좁히기**: `isFireInitial`/
+   `fireInitialAlreadyHandled` 분기를 `shift !== 'night'`로 한정해서, 야간은 항상
+   "그 shift에 배정된 전 배지"를 대상으로 하도록 통일(감지기동작 단계도 이제 0명이 아님).
+   추가로 `incidents.night_duty_group`(A|B|C|D) 컬럼 신설 — 지휘본부가 화재 야간 발령 시
+   오늘 실제 근무조를 고르면(CommanderDashboard.tsx, 필수 입력) TTS 대상을 그 조
+   (`employees.shift_group`)로만 좁혀서, 4교대 중 비번인 3개조까지 전화가 가던 문제 해결.
+
+DB 변경은 `scripts/migrations/fix-escalation-audit-260724.sql` — Supabase SQL Editor에서
+수동 실행 필요(직접 실행 권한 없음). Edge Function·프론트 모두 재배포 완료.
+
+### 8. TTS 정책 재설계 — 야간 TTS 완전 제거 + 필수인원 AdminPanel 체크박스로 일반화
+§7에서 만든 "야간 근무조(A~D) 선택" 기능이 하루도 안 돼서 바로 폐기됨 — 사용자가 "야간엔
+항상 무전기를 휴대하고 있어 TTS가 아예 없어도 된다"고 판단. 세 가지 지시를 반영:
+
+1. **야간은 TTS 자체를 스킵**: `escalate-unacked-calls`가 `shift==='night'`이면 맨 위에서
+   바로 종료(필수인원 즉시발신도, 30초-미확인자 발신도 전혀 안 함). 이로써 §7의
+   `night_duty_group`(4교대 근무조 좁히기)도 자동으로 필요 없어짐 — CommanderDashboard의
+   "오늘 야간 근무조" 선택 UI·상태·`declareIncident` 파라미터까지 전부 되돌림.
+   `incidents.night_duty_group` 컬럼 자체는 무해하게 남겨둠(DROP 안 함, 그냥 안 씀).
+2. **TTS 필수인원을 화재 전용 하드코딩 8명(`FIRE_MUST_CALL_EMP_NOS`)에서 재난 무관
+   일반화 + AdminPanel 체크박스 관리로 전환**: `employee_disaster_badges`에
+   `tts_must_call boolean` 컬럼 추가. AdminPanel "재난 편제표" 탭에서 배지 배정된 사람
+   행마다 "TTS 필수" 체크박스 추가(`handleToggleTtsMustCall` → `db.setTtsMustCall`) —
+   담당자가 코드 수정·재배포 없이 재난별로 직접 관리 가능. 기존 화재 8명은
+   `add-tts-must-call-260724.sql`에서 화재/주간 배지에 그대로 이관(전원 기존 배지 보유
+   확인 후 UPDATE로 안전하게 처리).
+3. **필수인원 즉시발신은 실제상황(훈련 아님)에만 적용**: 훈련은 여전히 §1의 통제-배지
+   30초 대기 방식만 사용, "TTS 전화 사용" 체크박스로 훈련/실제 공통 on-off.
+
+DB 변경은 `scripts/migrations/add-tts-must-call-260724.sql` 추가 실행 필요(위 §7 SQL도
+여전히 필요 — ack/감사 컬럼 부분은 이번 변경과 무관하게 유효). Edge Function·프론트
+모두 재배포 완료.
+
+### 9. TTS "30초 미확인자 에스컬레이션" 모드 완전 삭제 — 즉시발신 하나로 단순화
+§7~8에서 "필수인원 즉시발신"과 "배지 기준 30초 대기 후 미확인자 발신" 두 가지 메커니즘이
+공존했는데, 사용자가 후자를 완전히 삭제하라고 지시. 최종 규칙을 딱 하나로 통일:
+
+- **실제상황**: 발령/승격 즉시(대기 없음) TTS 필수인원에게 발신. "TTS 전화 사용"
+  체크박스와 무관하게 항상 발신 — 끌 수 없음.
+- **훈련**: 체크박스가 켜져 있을 때만 실제와 동일하게(TTS 필수인원에게) 즉시 발신.
+- **야간**: 여전히 TTS 자체를 안 씀(§8 유지).
+
+`escalate-unacked-calls`에서 `sleep(30_000)`, `incident_acks` 확인여부 조회, `COMMAND_BADGES`/
+`FIRE_INITIAL_BADGES` 배지 타겟팅, `fireInitialAlreadyHandled` 판정을 전부 삭제 — 함수가
+훨씬 단순해짐(클레임 → TTS 필수인원 조회 → 즉시발신 → 결과 기록, 끝). 함수 이름
+`escalate-unacked-calls`는 더 이상 실제 동작과 안 맞지만(더 이상 "에스컬레이션"도
+"미확인자"도 없음) 이번엔 이름은 안 바꿈(리네임하려면 새 함수 생성+기존 함수 삭제+트리거
+SQL의 URL 변경까지 필요해서 별도 작업).
+
+`CommanderDashboard.tsx`의 "TTS 전화 사용" 체크박스는 이제 실제상황에선 아무 효과가 없어서
+(항상 발신되므로) **훈련일 때만 화면에 표시**하도록 변경(`selectedMode === '훈련' &&`로 감쌈).
+`incident_acks`/`incident_call_escalations`의 mode 격리·감사 컬럼(§7)은 이 함수가 더 이상
+안 쓰지만 테이블 자체는 그대로 둠(다른 용도로 쓰일 수 있어 손대지 않음).
+
+Edge Function·프론트 모두 재배포 완료. 이번 변경은 DB 스키마 추가가 없어(기존 컬럼만 사용)
+새 마이그레이션 파일 없음.
+
+### 10. TTS Edge Function 리네임: escalate-unacked-calls → notify-tts-must-call
+§9에서 "함수 이름이 이제 실제 동작과 안 맞는다"고 지적한 걸 사용자가 "정리"로 승인.
+
+- 새 함수 `supabase/functions/notify-tts-must-call/`를 만들어 §9 코드를 그대로 복사(자기
+  참조 로그 라벨만 이름 갱신), 배포 완료.
+- `scripts/migrations/rename-tts-function-260724.sql` — 트리거 함수
+  `notify_incident_call_escalation()`의 `pg_net.http_post` URL을 새 함수로 재지정하는
+  `CREATE OR REPLACE FUNCTION`. 트리거 자체(이름·바인딩)는 안 건드림 — 함수 본문만 교체.
+  안전을 위해 **옛 함수(`escalate-unacked-calls`)는 아직 삭제하지 않고 배포된 채로 둠** —
+  이 SQL을 실행하기 전까지는 트리거가 계속 옛 함수를 호출하므로 TTS가 끊기지 않고, SQL
+  실행 후에야 새 함수로 넘어가며, 그 이후에 옛 함수를 지워도 안전함(SQL 파일 마지막 주석에
+  `npx supabase functions delete escalate-unacked-calls` 안내 남겨둠 — 사용자가 SQL
+  실행을 확인한 뒤 별도로 요청하면 그때 삭제).
+- 옛 함수 디렉터리는 저장소에서 `git rm`(히스토리엔 남음). README·notify-incident의
+  주석 참조도 새 이름으로 갱신. `incident_call_escalations` 테이블명 자체는 안 바꿈
+  (데이터 마이그레이션 부담 대비 얻는 게 적어서 — 리네임 범위를 함수 이름으로만 한정).
+
+DB 변경은 `scripts/migrations/rename-tts-function-260724.sql` — 반드시 §7/§9의 SQL과
+함께(또는 이후) 실행. 새 함수는 이미 배포됨.
+
+**(추가, 같은 날) 사용자가 SQL 실행 확인 → 옛 함수 삭제 완료**: `add-tts-emp-nos-260723.sql`/
+`add-tts-must-call-260724.sql`/`fix-escalation-audit-260724.sql` 3개는 라이브 DB 컬럼
+존재 여부로 직접 재확인함(전부 반영됨). `rename-tts-function-260724.sql`(트리거 함수
+본문)은 PostgREST로 직접 조회할 방법이 없어 사용자 확인만으로 신뢰 — `npx supabase
+functions delete escalate-unacked-calls` 실행해서 옛 함수 완전히 제거함. TTS 정리 작업
+(§7~11) 전체 종료.
+
+### 11. TTS 훈련 대상 재정정 — AdminPanel 필수인원이 아니라 참여인원설정 사람별 체크
+§9~10까지 "훈련도 실제와 똑같이 AdminPanel TTS 필수인원에게 간다"고 구현했는데, 사용자가
+"실제 원했던 건 그게 아니었다"고 정정. 진짜 의도:
+
+- **훈련**: 지휘본부 "훈련 참여인원 설정" 화면에서 **사람별로 체크한 대상**에게 즉시 발신
+  (제가 §7 이전 세션에서 만들었다가 "실제 상황에 영향 없어 복잡하다"는 이유로 삭제했던
+  바로 그 기능 — 다만 그때는 30초-대기-배지 로직과 공존해서 복잡했던 거고, 이제 30초 로직
+  자체가 없으니 단순히 "체크된 사람=즉시 대상"이 됨). 훈련마다 테스트하고 싶은 사람이
+  다를 수 있어서, 실제상황용 고정 명단(AdminPanel TTS 필수인원)과는 별도로 매번 고름.
+- **실제상황**: AdminPanel TTS 필수인원 그대로 유지(안 바뀜).
+- **"TTS 전화 사용" 마스터 체크박스는 완전 삭제**: 훈련은 참여인원설정에서 아무도 안
+  체크하면 자연히 전화가 안 가므로 별도 on/off 스위치가 불필요해짐.
+
+되돌린 것(§9 삭제 때 지웠던 것 재구현): `EmployeeGroupPicker`에 사람별 TTS 체크박스
+재추가(`ttsEmps`/`escalateTtsEmps` 상태), `incidents.tts_emp_nos`·`declareIncident`/
+`escalateIncident`의 `ttsEmpNos` 인자 복원. `notify-tts-must-call`은 `isTraining`이면
+`record.tts_emp_nos`를 그대로(배지 조회 없이) 대상으로 쓰고, 아니면 기존처럼
+`employee_disaster_badges.tts_must_call` 조회. `ttsCallEnabled`/`tts_call_enabled`
+관련 코드는 프론트에서 전부 제거(DB 컬럼 자체는 안 씀, 무해하게 방치).
+
+DB 스키마 변경 없음(§7의 `tts_emp_nos` 컬럼을 그대로 재사용 — 삭제한 적 없어서 이미 있음,
+없다면 `scripts/migrations/add-tts-emp-nos-260723.sql` 실행 필요). Edge Function·프론트
+모두 재배포 완료.
+
+**⚠️ 라이브 DB 점검 결과, 오늘(§7·§10·이번) SQL 마이그레이션 3개가 전부 미실행 상태였음**
+(`tts_emp_nos`/`tts_must_call`/`incident_call_escalations` 감사컬럼 전부 없음 확인).
+`tts_emp_nos`는 `declareIncident`/`escalateIncident`의 `insert`/`update` payload에 들어가는
+필드라 컬럼이 없으면 **발령/승격 자체가 실패**하는 심각한 문제 — 안전장치로
+`declareIncident`/`escalateIncident`에 PGRST204(컬럼 없음) 감지 시 그 필드만 빼고 재시도하는
+폴백 추가. `notify-tts-must-call`의 클레임 INSERT(`scope` 컬럼)·TTS 필수인원 배지 조회
+(`tts_must_call` 컬럼)에도 동일하게 컬럼 없으면 조용히 건너뛰는 폴백 추가 — 마이그레이션
+전이라도 앱이 안 깨지지만, TTS 전화 자체는 해당 마이그레이션 실행 전까진 안 나감.
+**§7/§10(add-tts-must-call)/이번(add-tts-emp-nos) SQL 전부 아직 미실행 — 최우선 실행 필요.**
+
+미해결로 남은 것: 화재 야간 30초-미확인자 전화가 현재 대상자 0명입니다(배지 미배정). A~D 4개조 운영 특성상 어떻게 대상을 정할지는 지난 답변에서 드린 대로 검토 중이고, 방향 정해지면 이 부분도 같이 고치겠습니다.
+
+## 작업 로그 — 2026-07-24 (계속)
+
+### 12. TTS lint 에러 수정
+TTS 폴백 코드에서 미사용 구조분해 변수로 인한 lint 에러 수정. (커밋 eed688a)
+
+### 13. TTS 마이그레이션 전체 반영 확인 + 옛 함수 삭제 완료
+TTS 마이그레이션 전체 반영 확인, 옛 `escalate-unacked-calls` 함수 삭제 완료 문서화. (커밋 ff46c0f)
+
+### 14. 훈련 TTS 대상 재정정 + 마이그레이션 누락 안전장치
+훈련 TTS 대상을 참여인원설정 사람별 체크로 재정정, 마이그레이션 누락 안전장치 추가.
+(커밋 9adc945 — §11과 동일 작업의 커밋 반영분)
