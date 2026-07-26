@@ -197,7 +197,7 @@ async function sendFcmPush(
   title: string,
   body: string,
   data: Record<string, string>
-): Promise<void> {
+): Promise<boolean> {
   // 알림 탭 시 ?alert=1 파라미터로 앱을 열어 TTS 강제 재생
   const alertUrl = APP_URL + '?alert=1';
   // notification 필드를 제거하고 data-only 메시지로 전송
@@ -222,7 +222,9 @@ async function sendFcmPush(
 
   if (!resp.ok) {
     console.warn(`FCM send failed [${token.slice(0, 20)}...]: ${await resp.text()}`);
+    return false;
   }
+  return true;
 }
 
 Deno.serve(async (req) => {
@@ -299,9 +301,9 @@ Deno.serve(async (req) => {
       : [];
 
     const supabase = supabaseForClaim;
-    let subsQuery = supabase.from('push_subscriptions').select('fcm_token');
+    let subsQuery = supabase.from('push_subscriptions').select('emp_no, fcm_token');
     if (empNoList.length > 0) subsQuery = (subsQuery as any).in('emp_no', empNoList);
-    let phoneQuery = supabase.from('employees').select('phone').not('phone', 'is', null);
+    let phoneQuery = supabase.from('employees').select('emp_no, phone').not('phone', 'is', null);
     if (empNoList.length > 0) phoneQuery = (phoneQuery as any).in('emp_no', empNoList);
 
     // push 발송 대상 조회, SMS/알림톡 발송 대상 조회, FCM용 구글 OAuth 토큰 발급은
@@ -314,28 +316,40 @@ Deno.serve(async (req) => {
     if (subsErr) throw new Error('push_subscriptions 조회 오류: ' + subsErr.message);
     if (phoneErr) throw new Error('employees 조회 오류: ' + phoneErr.message);
 
+    // 푸시 발송 + 이번 발송에서 실제로 성공(FCM 200 응답)한 emp_no 집합 수집.
+    // 한 사람이 기기를 여러 대 등록했을 수 있어 그중 하나라도 성공하면 "푸시로 받음"
+    // 처리한다. 이 판정은 같은 요청-응답 안에서 즉시 끝나므로(수백ms~2초 내) 재난
+    // 알림 지연과는 무관 — 2026-07-26, SMS 중복 발송을 줄이기 위해 추가.
+    const pushSucceededEmpNos = new Set<string>();
     if (subs && subs.length > 0) {
-      await Promise.allSettled(
-        subs.map((s: { fcm_token: string }) =>
+      const results = await Promise.allSettled(
+        subs.map((s: { emp_no: string; fcm_token: string }) =>
           sendFcmPush(accessToken, s.fcm_token, title, bodyText, {
             disaster: record.disaster ?? '',
             location: record.location ?? '',
             mode: record.mode ?? '',
-          })
+          }).then(ok => ({ ok, empNo: s.emp_no }))
         )
       );
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value.ok) pushSucceededEmpNos.add(r.value.empNo);
+      }
     }
 
     // ── SMS + Kakao 알림톡 병행 발송 ─────────────────────────────────────────
-    // push 대상이 0명이어도(아직 알림 권한 허용 안 한 경우 등) SMS/알림톡은 별도로 계속 발송됨
-    const phones = (empPhones ?? []).map((e: { phone: string }) => e.phone).filter(Boolean);
+    // 이번 발송에서 푸시가 실제로 성공한 사람은 생략 — 앱 미설치자·토큰 만료자 등
+    // 푸시가 안 간(또는 등록 자체가 없는) 사람에게만 SMS/알림톡이 보완적으로 감.
+    const phones = (empPhones ?? [])
+      .filter((e: { emp_no: string; phone: string }) => !pushSucceededEmpNos.has(e.emp_no))
+      .map((e: { emp_no: string; phone: string }) => e.phone)
+      .filter(Boolean);
     await Promise.all([
       sendSMS(phones, disaster, location, bodyText),        // SOLAPI_API_KEY + SENDER_PHONE 설정 시 즉시 발송 (알림톡 심사와 무관)
       sendKakaoAlimtalk(phones, disaster, location, bodyText), // KAKAO_PF_ID + KAKAO_TEMPLATE_ID 설정 시 추가 발송 (심사 완료 후)
     ]);
     // ─────────────────────────────────────────────────────────────────────────
 
-    return new Response(JSON.stringify({ sent: subs?.length ?? 0, sms: phones.length, kakao: phones.length }), {
+    return new Response(JSON.stringify({ sent: subs?.length ?? 0, pushOk: pushSucceededEmpNos.size, sms: phones.length, kakao: phones.length }), {
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   } catch (err: unknown) {

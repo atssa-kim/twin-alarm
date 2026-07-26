@@ -112,6 +112,24 @@ const EmployeeGroupPicker: React.FC<EmployeeGroupPickerProps> = ({
   employees, disasterKey, selected, setSelected, openAccordions, setOpenAccordions, wrapperBorderColor, footerSuffix, showTotalPrefix = true,
   ttsSelected, setTtsSelected,
 }) => {
+  // 참여 체크 시 TTS도 기본으로 같이 켜짐(개별 해제는 계속 가능) — 2026-07-26 결정.
+  // "참여" 관련 토글은 전부 이 함수를 거치도록 통일해, ttsSelected가 제공된 화면(훈련
+  // 참여인원 설정)에서는 항상 참여-TTS가 같이 움직이게 함.
+  const applyParticipant = (ids: string[], add: boolean) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => (add ? next.add(id) : next.delete(id)));
+      return next;
+    });
+    if (setTtsSelected) {
+      setTtsSelected(prev => {
+        const next = new Set(prev);
+        ids.forEach(id => (add ? next.add(id) : next.delete(id)));
+        return next;
+      });
+    }
+  };
+
   return (
     <div style={{ marginTop: '6px', border: `1px solid ${wrapperBorderColor}`, borderRadius: '10px', overflow: 'hidden', background: 'rgba(11,37,69,0.03)' }}>
       {/* ── 메뉴바 ── */}
@@ -121,7 +139,7 @@ const EmployeeGroupPicker: React.FC<EmployeeGroupPickerProps> = ({
           const allSel = allIds.length > 0 && allIds.every(id => selected.has(id));
           const partSel = !allSel && allIds.some(id => selected.has(id));
           return (
-            <button type="button" onClick={() => setSelected(allSel ? new Set() : new Set(allIds))} style={{
+            <button type="button" onClick={() => applyParticipant(allIds, !allSel)} style={{
               padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 800, flexShrink: 0,
               border: `1px solid ${allSel ? '#4f46e5' : partSel ? '#4f46e566' : '#4f46e544'}`,
               background: allSel ? '#4f46e522' : partSel ? '#4f46e50d' : 'transparent',
@@ -136,12 +154,7 @@ const EmployeeGroupPicker: React.FC<EmployeeGroupPickerProps> = ({
           const allSel = selCount === grpIds.length;
           const partSel = selCount > 0 && !allSel;
           return (
-            <button key={key} type="button" onClick={() => setSelected(prev => {
-              const next = new Set(prev);
-              if (allSel) grpIds.forEach(id => next.delete(id));
-              else grpIds.forEach(id => next.add(id));
-              return next;
-            })} style={{
+            <button key={key} type="button" onClick={() => applyParticipant(grpIds, !allSel)} style={{
               padding: '5px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 700, flexShrink: 0,
               border: `1px solid ${allSel ? color : partSel ? color + '66' : color + '44'}`,
               background: allSel ? color + '22' : partSel ? color + '0d' : 'transparent',
@@ -171,21 +184,14 @@ const EmployeeGroupPicker: React.FC<EmployeeGroupPickerProps> = ({
           ...Object.entries(tmap).filter(([t]) => !TEAM_ORDER.includes(t)),
         ];
 
-        const toggleGrpSel = () => setSelected(prev => {
-          const next = new Set(prev);
-          if (allSel) grpEmps.forEach(e => next.delete(e.emp_no));
-          else grpEmps.forEach(e => next.add(e.emp_no));
-          return next;
-        });
+        const toggleGrpSel = () => applyParticipant(grpEmps.map(e => e.emp_no), !allSel);
 
         const mkEmpRow = (emp: EmployeeDB, c: string) => {
           const checked = selected.has(emp.emp_no);
           const ttsChecked = ttsSelected?.has(emp.emp_no) ?? false;
           return (
             <div key={emp.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '5px 4px' }}>
-              <div onClick={() => setSelected(prev => {
-                const next = new Set(prev); next.has(emp.emp_no) ? next.delete(emp.emp_no) : next.add(emp.emp_no); return next;
-              })} style={{ display: 'flex', alignItems: 'center', gap: '9px', flex: 1, minWidth: 0, cursor: 'pointer' }}>
+              <div onClick={() => applyParticipant([emp.emp_no], !checked)} style={{ display: 'flex', alignItems: 'center', gap: '9px', flex: 1, minWidth: 0, cursor: 'pointer' }}>
                 <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, border: `2px solid ${checked ? c : 'rgba(11,37,69,0.18)'}`, background: checked ? c + '33' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {checked && <span style={{ color: c, fontSize: '9px', lineHeight: 1, fontWeight: 900 }}>✓</span>}
                 </div>
@@ -233,12 +239,7 @@ const EmployeeGroupPicker: React.FC<EmployeeGroupPickerProps> = ({
                     const allChoSel = choSel === choEmps.length;
                     return (
                       <div key={cho}>
-                        <div onClick={() => setSelected(prev => {
-                          const next = new Set(prev);
-                          if (allChoSel) choEmps.forEach(e => next.delete(e.emp_no));
-                          else choEmps.forEach(e => next.add(e.emp_no));
-                          return next;
-                        })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 4px 3px', cursor: 'pointer', borderBottom: '1px solid rgba(11,37,69,0.045)', marginBottom: '2px' }}>
+                        <div onClick={() => applyParticipant(choEmps.map(e => e.emp_no), !allChoSel)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 4px 3px', cursor: 'pointer', borderBottom: '1px solid rgba(11,37,69,0.045)', marginBottom: '2px' }}>
                           <span style={{ fontSize: '11px', color: cc, fontWeight: 700 }}>{cho}조</span>
                           <span style={{ fontSize: '10px', color: '#475569' }}>{choSel}/{choEmps.length}</span>
                           <span style={{ marginLeft: 'auto', fontSize: '10px', color: allChoSel ? cc : '#475569' }}>{allChoSel ? '전체해제' : '전체선택'}</span>
@@ -253,12 +254,7 @@ const EmployeeGroupPicker: React.FC<EmployeeGroupPickerProps> = ({
                     const allTSel = tSel === teamEmps.length;
                     return (
                       <div key={team} style={{ marginBottom: '3px' }}>
-                        <div onClick={() => setSelected(prev => {
-                          const next = new Set(prev);
-                          if (allTSel) teamEmps.forEach(e => next.delete(e.emp_no));
-                          else teamEmps.forEach(e => next.add(e.emp_no));
-                          return next;
-                        })} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 4px 2px', cursor: 'pointer', borderBottom: '1px solid rgba(11,37,69,0.045)', marginBottom: '2px' }}>
+                        <div onClick={() => applyParticipant(teamEmps.map(e => e.emp_no), !allTSel)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 4px 2px', cursor: 'pointer', borderBottom: '1px solid rgba(11,37,69,0.045)', marginBottom: '2px' }}>
                           <span style={{ fontSize: '11px', color: tSel > 0 ? color : '#64748b', fontWeight: 700, flex: 1 }}>{team}</span>
                           <span style={{ fontSize: '10px', color: '#475569' }}>{tSel}/{teamEmps.length}</span>
                         </div>
