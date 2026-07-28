@@ -191,13 +191,18 @@ async function getGoogleAccessToken(sa: { client_email: string; private_key: str
   return json.access_token;
 }
 
+// FCM 토큰 정리 기준: HTTP v1 응답 본문의 error.details[].errorCode === 'UNREGISTERED'만
+// "이 토큰은 이제 죽었다"는 Google의 공식 신호(FCM 공식 문서 기준)로 보고 삭제 대상으로 표시함.
+// 그 외 실패(일시적 오류·인증 문제 등)는 토큰 자체 문제가 아닐 수 있어 지우지 않고 다음 발송에서 재시도.
+type FcmSendResult = { ok: boolean; unregistered: boolean };
+
 async function sendFcmPush(
   accessToken: string,
   token: string,
   title: string,
   body: string,
   data: Record<string, string>
-): Promise<boolean> {
+): Promise<FcmSendResult> {
   // 알림 탭 시 ?alert=1 파라미터로 앱을 열어 TTS 강제 재생
   const alertUrl = APP_URL + '?alert=1';
   // notification 필드를 제거하고 data-only 메시지로 전송
@@ -221,10 +226,17 @@ async function sendFcmPush(
   });
 
   if (!resp.ok) {
-    console.warn(`FCM send failed [${token.slice(0, 20)}...]: ${await resp.text()}`);
-    return false;
+    const text = await resp.text();
+    console.warn(`FCM send failed [${token.slice(0, 20)}...]: ${text}`);
+    let unregistered = false;
+    try {
+      const errBody = JSON.parse(text);
+      const details = errBody?.error?.details;
+      unregistered = Array.isArray(details) && details.some((d: any) => d?.errorCode === 'UNREGISTERED');
+    } catch { /* 응답이 JSON이 아니면 그냥 미확정으로 둠(삭제 안 함) */ }
+    return { ok: false, unregistered };
   }
-  return true;
+  return { ok: true, unregistered: false };
 }
 
 Deno.serve(async (req) => {
@@ -321,6 +333,9 @@ Deno.serve(async (req) => {
     // 처리한다. 이 판정은 같은 요청-응답 안에서 즉시 끝나므로(수백ms~2초 내) 재난
     // 알림 지연과는 무관 — 2026-07-26, SMS 중복 발송을 줄이기 위해 추가.
     const pushSucceededEmpNos = new Set<string>();
+    // FCM이 UNREGISTERED(등록 해제됨)로 명시적으로 답한 토큰만 정리 대상으로 모음 — 그 외
+    // 실패는 일시적일 수 있어 지우지 않고 다음 발송 때 재시도(2026-07-26 추가).
+    const deadTokens: string[] = [];
     if (subs && subs.length > 0) {
       const results = await Promise.allSettled(
         subs.map((s: { emp_no: string; fcm_token: string }) =>
@@ -328,12 +343,22 @@ Deno.serve(async (req) => {
             disaster: record.disaster ?? '',
             location: record.location ?? '',
             mode: record.mode ?? '',
-          }).then(ok => ({ ok, empNo: s.emp_no }))
+          }).then(result => ({ ...result, empNo: s.emp_no, token: s.fcm_token }))
         )
       );
       for (const r of results) {
-        if (r.status === 'fulfilled' && r.value.ok) pushSucceededEmpNos.add(r.value.empNo);
+        if (r.status !== 'fulfilled') continue;
+        if (r.value.ok) pushSucceededEmpNos.add(r.value.empNo);
+        if (r.value.unregistered) deadTokens.push(r.value.token);
       }
+    }
+    if (deadTokens.length > 0) {
+      const { error: cleanupErr } = await supabase
+        .from('push_subscriptions')
+        .delete()
+        .in('fcm_token', deadTokens);
+      if (cleanupErr) console.warn('죽은 FCM 토큰 정리 실패:', cleanupErr.message);
+      else console.log(`죽은 FCM 토큰 ${deadTokens.length}개 정리 완료`);
     }
 
     // ── SMS + Kakao 알림톡 병행 발송 ─────────────────────────────────────────
@@ -349,7 +374,7 @@ Deno.serve(async (req) => {
     ]);
     // ─────────────────────────────────────────────────────────────────────────
 
-    return new Response(JSON.stringify({ sent: subs?.length ?? 0, pushOk: pushSucceededEmpNos.size, sms: phones.length, kakao: phones.length }), {
+    return new Response(JSON.stringify({ sent: subs?.length ?? 0, pushOk: pushSucceededEmpNos.size, tokensCleaned: deadTokens.length, sms: phones.length, kakao: phones.length }), {
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   } catch (err: unknown) {
