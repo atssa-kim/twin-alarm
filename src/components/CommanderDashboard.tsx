@@ -12,9 +12,9 @@ export const VARIANT_LABELS: Record<string, string> = {
   '지하주차장': '🚗 지하주차장',
 };
 
-// 전광판 표시용 상태 라벨 — 데이터값(Responder.status)은 그대로 '현장'을 쓰되,
-// 화면에는 "현장 임무수행중"으로 보여줌(출동체크 후 임무 체크 시 자동으로 이 상태가 됨)
-const responderStatusLabel = (status: string) => status === '현장' ? '현장 임무수행중' : status;
+// 전광판 표시용 상태 라벨 — 출동중 체크 여부와 무관하게 임무를 하나라도 체크하면 자동으로 '현장'
+// 상태가 됨(2026-07-24). 화면에는 데이터값 그대로 "현장"으로 표시.
+const responderStatusLabel = (status: string) => status;
 
 // 참여인원 모달: 파트장 → 파트로, 교대 직원 → 상황실로 통합
 const normalizeParticipantTeam = (team: string, role: string) =>

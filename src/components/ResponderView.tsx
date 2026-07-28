@@ -704,8 +704,9 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     setOptimisticDone(prev => ({ ...prev, [task.id]: true }));
     try {
       await db.toggleTaskDone(task.id, true, currentUser.name);
-      // 출동체크 후 임무를 하나라도 체크하면 → 자동으로 "현장 임무수행중" 처리 (상황실 제외)
-      if (!isSituationRoom && responderStatus === '출동중') {
+      // 임무를 하나라도 체크하면 → 출동중 체크를 따로 안 했어도 자동으로 "활동중"(현장) 처리 (상황실 제외).
+      // 이미 현장·복귀까지 진행된 경우는 되돌리지 않음(2026-07-24: 출동중 사전 체크 없이도 동작하도록 조건 완화).
+      if (!isSituationRoom && responderStatus !== '현장' && responderStatus !== '복귀') {
         updateStatus('현장');
       }
       // 화재: 출동/대응/구조 배지의 조장이 체크하면, 이미 출동체크한 조원도 자동으로 현장 처리
