@@ -88,6 +88,20 @@ export interface EmployeeDB {
   shift_group?: 'A' | 'B' | 'C' | 'D' | null;
 }
 
+// 현장 피드(무전 로그) — 텍스트·사진·동영상 통합 타임라인. incidents와 동일 컨벤션(id: TEXT, 시간: BIGINT epoch ms).
+export interface IncidentFeedEntry {
+  id: string;
+  incident_id: string;
+  emp_no: string | null; // 시스템 메시지는 null
+  author_name: string;
+  author_team: string | null;
+  author_badge: string | null;
+  type: 'text' | 'photo' | 'video' | 'system';
+  content: string | null;
+  media_path: string | null; // Storage(incident-feed 버킷) object path
+  created_at: number;
+}
+
 export interface DutyMatrixRow {
   id: number;
   disaster: string;
@@ -138,10 +152,12 @@ export const db = {
         delete fallback.tts_emp_nos;
         const { error: retryError } = await supabase.from('incidents').insert(fallback);
         if (retryError) throw retryError;
+        db.addFeedEntry({ incidentId, empNo: null, authorName: '시스템', type: 'system', content: `🚨 ${disaster} 발령 · ${location}` }).catch(() => {});
         return incident;
       }
       throw error;
     }
+    db.addFeedEntry({ incidentId, empNo: null, authorName: '시스템', type: 'system', content: `🚨 ${disaster} 발령 · ${location}` }).catch(() => {});
     return incident;
   },
 
@@ -464,6 +480,56 @@ export const db = {
     const map: Record<string, string[]> = {};
     for (const row of data ?? []) (map[row.badge] ??= []).push(row.emp_no);
     return map;
+  },
+
+  // ── 현장 피드(무전 로그) ────────────────────────────────────────
+  async getIncidentFeed(incidentId: string): Promise<IncidentFeedEntry[]> {
+    const { data, error } = await supabase
+      .from('incident_feed')
+      .select('*')
+      .eq('incident_id', incidentId)
+      .order('created_at');
+    if (error) throw error;
+    return (data ?? []) as IncidentFeedEntry[];
+  },
+
+  async addFeedEntry(entry: {
+    incidentId: string;
+    empNo: string | null;
+    authorName: string;
+    authorTeam?: string | null;
+    authorBadge?: string | null;
+    type: IncidentFeedEntry['type'];
+    content?: string | null;
+    mediaPath?: string | null;
+  }): Promise<void> {
+    const id = `feed_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const { error } = await supabase.from('incident_feed').insert({
+      id,
+      incident_id: entry.incidentId,
+      emp_no: entry.empNo,
+      author_name: entry.authorName,
+      author_team: entry.authorTeam ?? null,
+      author_badge: entry.authorBadge ?? null,
+      type: entry.type,
+      content: entry.content ?? null,
+      media_path: entry.mediaPath ?? null,
+      created_at: Date.now(),
+    });
+    if (error) throw error;
+  },
+
+  // 사진/동영상을 incident-feed Storage 버킷에 업로드하고 object path를 반환
+  async uploadFeedMedia(incidentId: string, file: File): Promise<string> {
+    const ext = file.name.split('.').pop() || (file.type.startsWith('video/') ? 'mp4' : 'jpg');
+    const path = `${incidentId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await supabase.storage.from('incident-feed').upload(path, file, { contentType: file.type });
+    if (error) throw error;
+    return path;
+  },
+
+  getFeedMediaUrl(path: string): string {
+    return supabase.storage.from('incident-feed').getPublicUrl(path).data.publicUrl;
   },
 
   // ── 종료 재난 이력 조회 ──────────────────────────────────────

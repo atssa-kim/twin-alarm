@@ -6,6 +6,7 @@ import { unlockAudio } from '../utils/audio';
 import { DISASTERS, FIRE_INITIAL_BADGES } from '../data/disasters';
 import { findEquipmentLocation } from '../data/equipmentLocations';
 import { VARIANT_LABELS } from './CommanderDashboard';
+import { IncidentFeedPanel } from './IncidentFeedPanel';
 
 interface ResponderViewProps {
   activeIncident: Incident | null;
@@ -229,6 +230,8 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   const [optimisticStatus, setOptimisticStatus] = useState<Responder['status'] | null>(null);
   const [showChecklist, setShowChecklist] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'step'>('list');
+  // 발령 화면 상단 탭 — 기존 임무 체크리스트/단계별수행과 신규 현장 피드(무전 로그)를 전환
+  const [mainTab, setMainTab] = useState<'mission' | 'feed'>('mission');
   const [stepIndex, setStepIndex] = useState(0);
   const [stepDetailOpen, setStepDetailOpen] = useState<Set<number>>(new Set());
   const [openEquipment, setOpenEquipment] = useState<string | null>(null);
@@ -622,11 +625,12 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     );
   };
 
-  // 재난 발령/변경 시 전체 그룹 펼침
+  // 재난 발령/변경 시 전체 그룹 펼침 + 상단 탭을 '내 임무'로 초기화
   useEffect(() => {
     if (!activeIncident) return;
     if (incidentIdRef.current === activeIncident.id) return;
     incidentIdRef.current = activeIncident.id;
+    setMainTab('mission');
     const headers = new Set(
       taskGroups
         .filter((g): g is AccordionGroup => g.type === 'group')
@@ -708,6 +712,14 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
       // 이미 현장·복귀까지 진행된 경우는 되돌리지 않음(2026-07-24: 출동중 사전 체크 없이도 동작하도록 조건 완화).
       if (!isSituationRoom && responderStatus !== '현장' && responderStatus !== '복귀') {
         updateStatus('현장');
+      }
+      // 완료 기록을 현장 피드에도 한 줄 남김 — 실패해도 임무 체크 자체엔 영향 없음
+      if (activeIncident) {
+        db.addFeedEntry({
+          incidentId: activeIncident.id, empNo: currentUser.empNo, authorName: currentUser.name,
+          authorTeam: currentUser.team, authorBadge: myBadge, type: 'system',
+          content: `✅ ${stripPrefix(task.label)} 완료`,
+        }).catch(() => {});
       }
       // 화재: 출동/대응/구조 배지의 조장이 체크하면, 이미 출동체크한 조원도 자동으로 현장 처리
       if (activeIncident?.disaster === '화재' && myBadge && isFireLeaderAutoBadge(myBadge) && currentUser.role.includes('파트장')) {
@@ -1028,6 +1040,26 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
             </div>
           </div>
 
+          {/* 상단 탭 — 내 임무(체크리스트) ↔ 현장 피드(무전 로그) */}
+          <div className="segmented-control">
+            <button
+              type="button"
+              className={`segmented-btn ${mainTab === 'mission' ? 'active' : ''}`}
+              onClick={() => setMainTab('mission')}
+            >
+              ✅ 내 임무
+            </button>
+            <button
+              type="button"
+              className={`segmented-btn ${mainTab === 'feed' ? 'active' : ''}`}
+              onClick={() => setMainTab('feed')}
+            >
+              📻 현장 피드
+            </button>
+          </div>
+
+          {mainTab === 'mission' && (
+          <>
           {/* 화재 감지기동작: 초기출동조 외 대원 대기 안내 */}
           {isWaitingForEscalation && (
             <div className="card" style={{ textAlign: 'center', padding: '32px 20px', borderColor: 'rgba(245,158,11,0.3)' }}>
@@ -1360,6 +1392,18 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                 상황실 및 총괄자의 통제 하에 대피 유도나 현장 통제를 지원해 주시기 바랍니다.
               </p>
             </div>
+          )}
+          </>
+          )}
+
+          {mainTab === 'feed' && (
+            <IncidentFeedPanel
+              incidentId={activeIncident.id}
+              empNo={currentUser.empNo}
+              name={currentUser.name}
+              team={currentUser.team}
+              badge={myBadge}
+            />
           )}
         </>
       )}
