@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { db, supabase, type EmployeeDB, type DisasterRole, type DisasterTask } from '../services/supabase';
 import { UserPlus, Pencil, Trash2, X, Save, Users, ChevronDown, Copy, ExternalLink, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { IncidentHistoryPanel } from './IncidentHistoryPanel';
 
 // ── 팀 목록 (seed-employees.ts team 값과 일치) ──────────────
 const ALL_TEAMS = [
@@ -92,7 +93,7 @@ interface AdminPanelProps {
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) => {
-  const [adminTab, setAdminTab] = useState<'list' | 'org'>('list');
+  const [adminTab, setAdminTab] = useState<'list' | 'org' | 'history'>('list');
   const [orgDisaster, setOrgDisaster] = useState<Disaster>('화재');
   const [filterCategory, setFilterCategory] = useState('전체');
   const [search, setSearch] = useState('');
@@ -477,6 +478,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
         {([
           { key: 'list' as const, label: '👥 직원 목록' },
           { key: 'org'  as const, label: '🗂 재난 편제표' },
+          { key: 'history' as const, label: '🗃 기타관리' },
         ]).map(tab => (
           <button key={tab.key} type="button" onClick={() => setAdminTab(tab.key)} style={{
             flex: 1, padding: '8px 0', fontSize: '12px', fontWeight: 700, cursor: 'pointer', borderRadius: '7px',
@@ -763,6 +765,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
             )}
           </div>
         </div>
+      )}
+
+      {/* ── 기타관리 탭: 종료 재난 기록 열람 (2026-07-29, 지휘본부 발령 화면에서 이전) ── */}
+      {adminTab === 'history' && (
+        <IncidentHistoryPanel employees={employees} />
       )}
 
       {/* ── 추가/편집 모달 ── */}

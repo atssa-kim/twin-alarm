@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRealtime } from './hooks/useRealtime';
 import { type Employee, Login } from './components/Login';
 import { CommanderDashboard } from './components/CommanderDashboard';
@@ -7,9 +7,24 @@ import { COPDashboard } from './components/COPDashboard';
 import { triggerEmergencyAlert, announceTTS, stopAllAlerts, unlockAudio } from './utils/audio';
 import { db, type EmployeeDB, isIncidentParticipant } from './services/supabase';
 import { requestNotificationPermission, onForegroundMessage } from './services/notifications';
-import { Shield, ShieldAlert, LogOut, Radio, LayoutDashboard, ClipboardCheck, Bell, BellOff, Megaphone, Settings } from 'lucide-react';
+import { LogOut, Radio, LayoutDashboard, ClipboardCheck, Bell, BellOff, Megaphone, Settings } from 'lucide-react';
 import { AdminPanel } from './components/AdminPanel';
 import { VARIANT_LABELS } from './components/CommanderDashboard';
+
+// 헤더 심벌 — 트윈알람(twin-alarm)과 재난대응메뉴얼(disa_app)의 브랜딩을 교차 적용:
+// 제목은 "Twin-alarm" 그대로 두고, 심벌은 재난메뉴얼의 트윈타워 건물 아이콘을 가져옴
+// (disa_app/index.html의 canvas 파비콘 드로잉과 동일한 좌표를 SVG로 재현).
+const TwinTowerIcon: React.FC<{ size: number; color: string }> = ({ size, color }) => (
+  <svg width={size} height={size} viewBox="0 0 60 50" fill={color}>
+    <rect x="1" y="10" width="22" height="38" />
+    <rect x="37" y="10" width="22" height="38" />
+    <rect x="23" y="38" width="14" height="10" />
+    <rect x="4" y="6" width="14" height="4" />
+    <rect x="42" y="6" width="14" height="4" />
+    <rect x="8" y="2" width="6" height="4" />
+    <rect x="46" y="2" width="6" height="4" />
+  </svg>
+);
 
 // 알람 중복 방지 Set을 localStorage에 영구 저장 — 앱 재생성(재로딩)해도 이미 경보한
 // 재난은 다시 울리지 않도록 함 (기존엔 useRef뿐이라 재생성 시 항상 초기화되어 재발화됨)
@@ -36,7 +51,6 @@ const App: React.FC = () => {
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>(
     'Notification' in window ? Notification.permission : 'denied'
   );
-  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceName, setSelectedVoiceName] = useState<string>(() => {
     return localStorage.getItem('tt_selected_voice') || '';
   });
@@ -58,8 +72,7 @@ const App: React.FC = () => {
         const voices = speechSynthesis.getVoices();
         const koVoices = voices.filter(v => v.lang.startsWith('ko') || v.lang.startsWith('KO'));
         const filteredVoices = koVoices.length > 0 ? koVoices : voices;
-        setAvailableVoices(filteredVoices);
-        
+
         // If no voice selected yet, default to Injun
         if (!selectedVoiceName && filteredVoices.length > 0) {
           const injun = filteredVoices.find(v => v.name.includes('인준') || v.name.includes('Injun') || v.name.includes('injun'));
@@ -86,39 +99,6 @@ const App: React.FC = () => {
       (window as any).__tt_selected_voice = selectedVoiceName;
     }
   }, [selectedVoiceName]);
-
-  const getCleanVoiceName = useCallback((fullName: string) => {
-    if (!fullName) return '화자 선택';
-    if (fullName.includes('인준') || fullName.includes('Injun')) return '인준';
-    if (fullName.includes('혜미') || fullName.includes('Heami')) return '혜미';
-    if (fullName.includes('선희') || fullName.includes('SunHi')) return '선희';
-    if (fullName.includes('민준') || fullName.includes('Minjun')) return '민준';
-    if (fullName.includes('Google') && (fullName.includes('ko') || fullName.includes('KO'))) return '구글 KO';
-    return fullName
-      .replace(/Microsoft\s+/g, '')
-      .replace(/Google\s+/g, '')
-      .replace(/\s+Online\s+\(Natural\)/g, '')
-      .replace(/\s+-\s+Korean.*/g, '')
-      .trim();
-  }, []);
-
-  const handleVoiceChange = useCallback((voiceName: string) => {
-    setSelectedVoiceName(voiceName);
-    localStorage.setItem('tt_selected_voice', voiceName);
-    (window as any).__tt_selected_voice = voiceName;
-    // Preview the voice
-    if ('speechSynthesis' in window) {
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance('화자 변경 완료');
-      const voices = speechSynthesis.getVoices();
-      const v = voices.find(voice => voice.name === voiceName);
-      if (v) { u.voice = v; u.lang = v.lang; }
-      else { u.lang = 'ko-KR'; }
-      u.rate = 0.95;
-      speechSynthesis.speak(u);
-    }
-  }, []);
-
 
   // 알림 허용 배너: 로그인 후 미허용이면 표시 (세션 단위 — 로그인마다 다시 표시)
   useEffect(() => {
@@ -421,11 +401,7 @@ const App: React.FC = () => {
       {/* Top sticky bar */}
       <header className="topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {activeIncident ? (
-            <ShieldAlert size={20} color="#f87171" />
-          ) : (
-            <Shield size={20} color="#34d399" />
-          )}
+          <TwinTowerIcon size={20} color={activeIncident ? '#f87171' : '#34d399'} />
           <a
             href="https://atssa-kim.github.io/disa_app/"
             target="disa_app_window"
@@ -621,10 +597,6 @@ const App: React.FC = () => {
             currentUser={currentUser}
             employees={employees}
             isCommander={currentUser.isCommander}
-            availableVoices={availableVoices}
-            selectedVoiceName={selectedVoiceName}
-            getCleanVoiceName={getCleanVoiceName}
-            handleVoiceChange={handleVoiceChange}
           />
         )}
 

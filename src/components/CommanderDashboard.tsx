@@ -1,8 +1,8 @@
-import React, { useRef, useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { type Incident, type Responder, type MemberTask, type EmployeeDB, db, supabase } from '../services/supabase';
 import { DISASTERS, FIRE_INITIAL_BADGES } from '../data/disasters';
 import { stopAllAlerts } from '../utils/audio';
-import { Play, Square, AlertTriangle, Users, Mic, UserCheck, BarChart2, Monitor, History, X, ChevronDown } from 'lucide-react';
+import { Play, Square, AlertTriangle, Users, UserCheck, BarChart2, Monitor } from 'lucide-react';
 
 // 상황 확정(variant) 칩 표시용 라벨 — 새 variant를 추가할 때 여기만 채우면 됨 (미등록 값은 그대로 표시)
 export const VARIANT_LABELS: Record<string, string> = {
@@ -75,10 +75,6 @@ interface CommanderDashboardProps {
   currentUser: { empNo: string; name: string };
   employees: EmployeeDB[];
   isCommander: boolean;
-  availableVoices: SpeechSynthesisVoice[];
-  selectedVoiceName: string;
-  getCleanVoiceName: (name: string) => string;
-  handleVoiceChange: (name: string) => void;
 }
 
 const TEAM_ORDER = [
@@ -288,10 +284,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   currentUser,
   employees,
   isCommander,
-  availableVoices,
-  selectedVoiceName,
-  getCleanVoiceName,
-  handleVoiceChange,
 }) => {
   const [selectedDisasterKey, setSelectedDisasterKey] = useState('화재');
   const [selectedMode, setSelectedMode] = useState<'훈련' | '실제'>('훈련');
@@ -301,8 +293,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const [fireShift, setFireShift] = useState<'day' | 'night'>('day');
   const [location, setLocation] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showVoicePicker, setShowVoicePicker] = useState(false);
-  const voicePickerRef = useRef<HTMLDivElement>(null);
 
   // 참여인원 인라인 패널
   const [showParticipants, setShowParticipants] = useState(false);
@@ -332,63 +322,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
     setActiveMonitorTab('roster');
   }, [activeIncident?.id]);
 
-  // ── 종료 재난 로그 ───────────────────────────────────────────
-  const [showLog, setShowLog] = useState(false);
-  const [logIncidents, setLogIncidents] = useState<import('../services/supabase').Incident[]>([]);
-  const [logLoading, setLogLoading] = useState(false);
-  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
-  const [logDetail, setLogDetail] = useState<{
-    responders: import('../services/supabase').Responder[];
-    tasks: import('../services/supabase').MemberTask[];
-  } | null>(null);
-  const [logDetailLoading, setLogDetailLoading] = useState(false);
-  // 로그 서브 아코디언: Record<incidentId, Record<sectionKey, isOpen>>
-  const [logSubOpen, setLogSubOpen] = useState<Record<string, Record<string, boolean>>>({});
-  const isSubOpen = (incId: string, sec: string) => logSubOpen[incId]?.[sec] !== false;
-  const toggleSub = (incId: string, sec: string) =>
-    setLogSubOpen(p => ({ ...p, [incId]: { ...p[incId], [sec]: !isSubOpen(incId, sec) } }));
-
-  const loadLog = async () => {
-    setLogLoading(true);
-    try {
-      const list = await db.getClosedIncidents();
-      setLogIncidents(list);
-      setShowLog(true);
-    } catch (e: any) {
-      alert('기록 로드 실패: ' + e.message);
-    } finally {
-      setLogLoading(false);
-    }
-  };
-
-  const loadLogDetail = async (incidentId: string) => {
-    if (expandedLogId === incidentId) { setExpandedLogId(null); return; }
-    setExpandedLogId(incidentId);
-    setLogDetail(null);
-    setLogDetailLoading(true);
-    try {
-      const [responders, tasks] = await Promise.all([
-        db.getIncidentResponders(incidentId),
-        db.getIncidentTasks(incidentId),
-      ]);
-      setLogDetail({ responders, tasks });
-    } catch (e: any) {
-      alert('상세 로드 실패: ' + e.message);
-    } finally {
-      setLogDetailLoading(false);
-    }
-  };
-
-  const fmtDate = (ms: number) => {
-    const d = new Date(ms);
-    return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-  };
-
-  const fmtDateFull = (ms: number) => {
-    const d = new Date(ms);
-    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-  };
-
   const generateAIReport = async () => {
     if (!activeIncident) return;
     setAiLoading(true);
@@ -412,73 +345,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const fmtTime = (ms: number) => {
     const d = new Date(ms);
     return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-  };
-
-  const downloadReport = (inc: import('../services/supabase').Incident) => {
-    if (!logDetail) return;
-    const getN = (empNo: string | null | undefined) =>
-      employees.find(e => e.emp_no === empNo)?.name ?? (empNo || '—');
-    const checkable = logDetail.tasks.filter(t => !t.label.startsWith('◇') && !t.label.startsWith('◆'));
-    const done = checkable.filter(t => t.done);
-    const pct = checkable.length > 0 ? Math.round(done.length / checkable.length * 100) : 0;
-    const roleGroups: Record<string, typeof logDetail.tasks> = {};
-    for (const t of checkable) { (roleGroups[t.role] ??= []).push(t); }
-    const ord = ['현장','복귀','출동중','미응답'];
-    const sortedResp = [...logDetail.responders].sort((a,b) => ord.indexOf(a.status) - ord.indexOf(b.status));
-    const stColor = (s: string) => s==='현장'?'#1565c0':s==='복귀'?'#2e7d32':s==='출동중'?'#e65100':'#9e9e9e';
-
-    const html = `<!DOCTYPE html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8"><title>재난 대응 보고서</title>
-<style>
-  body{font-family:'맑은 고딕','Malgun Gothic',sans-serif;font-size:10pt;margin:40px;color:#111}
-  h1{font-size:16pt;border-bottom:3px solid #1a237e;padding-bottom:8px;color:#1a237e;margin-bottom:16px}
-  h2{font-size:12pt;background:#e8eaf6;padding:5px 10px;margin-top:20px;border-left:4px solid #3f51b5;color:#1a237e}
-  h3{font-size:10pt;margin:10px 0 4px;color:#37474f;border-bottom:1px solid #ccc;padding-bottom:2px}
-  table{border-collapse:collapse;width:100%;margin:8px 0;font-size:9.5pt}
-  th{background:#e3f2fd;border:1px solid #90caf9;padding:5px 8px;text-align:left;font-weight:bold}
-  td{border:1px solid #bbdefb;padding:4px 8px;vertical-align:top}
-  .done{color:#1b5e20}.undone{color:#9e9e9e}
-  .footer{margin-top:30px;font-size:8.5pt;color:#9e9e9e;border-top:1px solid #eee;padding-top:8px}
-</style></head>
-<body>
-<h1>재난 대응 보고서</h1>
-<table>
-  <tr><th style="width:15%">발령 시각</th><td style="width:35%">${fmtDateFull(inc.declared_at)}</td><th style="width:15%">발령자</th><td>${getN(inc.declared_by)}</td></tr>
-  <tr><th>재난 유형</th><td>${inc.disaster}</td><th>구분</th><td>${inc.mode}</td></tr>
-  <tr><th>발생 위치</th><td colspan="3">${inc.location}</td></tr>
-</table>
-<h2>📊 임무 수행 요약</h2>
-<p>전체 임무 완수율: <strong>${pct}%</strong> &nbsp;(${done.length} / ${checkable.length}건 완료)</p>
-<h2>👥 출동 현황 (${logDetail.responders.length}명)</h2>
-<table>
-  <tr><th>이름</th><th>소속</th><th>상태</th></tr>
-  ${sortedResp.map(r=>`<tr><td>${r.name}</td><td>${r.team??''}</td><td style="color:${stColor(r.status)};font-weight:bold">${r.status}</td></tr>`).join('')}
-</table>
-<h2>✅ 임무 수행 내역</h2>
-${Object.entries(roleGroups).map(([role,tasks])=>{
-  const dc=tasks.filter(t=>t.done).length;
-  return `<h3>${role} (${dc}/${tasks.length})</h3>
-<table>
-  <tr><th style="width:5%">완료</th><th>임무 내용</th><th style="width:14%">완료자</th><th style="width:14%">완료 시각</th></tr>
-  ${[...tasks].sort((a,b)=>a.task_idx-b.task_idx).map(t=>`
-  <tr><td style="text-align:center">${t.done?'✅':'⬜'}</td>
-      <td class="${t.done?'done':'undone'}">${t.label}</td>
-      <td>${t.done&&t.done_by?getN(t.done_by):''}</td>
-      <td>${t.done&&t.updated_at?fmtDate(t.updated_at):''}</td></tr>`).join('')}
-</table>`;}).join('')}
-<div class="footer">이 보고서는 Twin-alarm 재난대응 시스템에서 자동 생성되었습니다. 생성 시각: ${new Date().toLocaleString('ko-KR')}</div>
-</body></html>`;
-
-    const blob = new Blob(['﻿' + html], { type: 'application/msword' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `재난보고서_${inc.disaster}_${fmtDateFull(inc.declared_at).replace(/\//g,'-').replace(' ','-').replace(':','')}.doc`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   // ── 발령 ─────────────────────────────────────────
@@ -749,7 +615,7 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
           </div>
         ) : (
         <>
-          {/* 헤더 카드 (제목 + 화자변경) */}
+          {/* 헤더 카드 */}
           <div className="card" style={{ padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderLeft: '4px solid #ef4444' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span style={{
@@ -762,188 +628,172 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
               <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '16px', margin: 0, flex: 1, color: '#991b1b' }}>
                 신규 비상 상황 발령
               </h3>
-              {/* 화자변경 버튼 */}
-              <div ref={voicePickerRef} style={{ position: 'relative', flexShrink: 0 }}>
-                <button
-                  type="button"
-                  onClick={() => setShowVoicePicker(v => !v)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '5px',
-                    background: showVoicePicker ? 'rgba(37,99,235,0.1)' : 'rgba(11,37,69,0.05)',
-                    border: showVoicePicker ? '1px solid rgba(37,99,235,0.35)' : '1px solid rgba(11,37,69,0.12)',
-                    borderRadius: '8px', padding: '6px 10px',
-                    color: showVoicePicker ? '#2563eb' : 'var(--text-muted)',
-                    fontSize: '12px', fontWeight: 700, cursor: 'pointer',
-                  }}
-                >
-                  <Mic size={13} />화자변경
-                </button>
-                {showVoicePicker && (
-                  <div style={{
-                    position: 'absolute', top: '100%', right: 0, marginTop: '6px',
-                    background: '#ffffff',
-                    border: '1px solid rgba(11,37,69,0.12)', borderRadius: '12px',
-                    padding: '6px 0', minWidth: '200px', maxHeight: '260px',
-                    overflowY: 'auto', zIndex: 200, boxShadow: '0 12px 32px rgba(11,37,69,0.18)',
-                  }}>
-                    <div style={{ padding: '6px 14px 10px', borderBottom: '1px solid rgba(11,37,69,0.08)', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>🎙 TTS 화자 선택</span>
-                    </div>
-                    {availableVoices.length === 0 ? (
-                      <div style={{ padding: '10px 14px', color: '#64748b', fontSize: '13px' }}>사용 가능한 화자 없음</div>
-                    ) : (
-                      [...availableVoices]
-                        .sort((a, b) => getCleanVoiceName(a.name).localeCompare(getCleanVoiceName(b.name), 'ko'))
-                        .map(voice => (
-                          <button key={voice.name} type="button"
-                            onClick={() => { handleVoiceChange(voice.name); setShowVoicePicker(false); }}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: '8px',
-                              width: '100%', padding: '9px 14px',
-                              background: selectedVoiceName === voice.name ? 'rgba(37,99,235,0.1)' : 'transparent',
-                              border: 'none',
-                              color: selectedVoiceName === voice.name ? '#2563eb' : 'var(--text-main)',
-                              fontSize: '13px', cursor: 'pointer', textAlign: 'left',
-                            }}
-                          >
-                            <span style={{ width: '16px', textAlign: 'center' }}>{selectedVoiceName === voice.name ? '✓' : ''}</span>
-                            <span>{getCleanVoiceName(voice.name)}</span>
-                          </button>
-                        ))
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
 
-          <form onSubmit={handleDeclare} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {/* 재난 유형 + 발령구분 + 화재서브모드 */}
-            <div className="card" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label htmlFor="disaster-select">재난 유형</label>
-                <select id="disaster-select" value={selectedDisasterKey}
-                  onChange={(e) => { setSelectedDisasterKey(e.target.value); setFireSubMode('initial'); }}
-                >
-                  {DISASTERS.map((d) => (
-                    <option key={d.key} value={d.key}>{d.label}</option>
-                  ))}
-                </select>
-              </div>
+          {/* 타임라인 스텝형 발령 폼 (2026-07-29 개편) — 번호 노드 + 세로 연결선.
+              2단계(발령 구분)는 훈련=남색 톤, 실제=적색 톤으로 대비. 접힌 "실제상황" 줄은
+              선택되지 않은 상태에서도 굵은 적색 테두리 + 큰 화살표로 눈에 띄게 처리. */}
+          <form onSubmit={handleDeclare} style={{ position: 'relative', paddingLeft: '28px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ position: 'absolute', left: '11px', top: '11px', bottom: '11px', width: '2px', background: 'var(--border-glow)' }} />
 
-              <div>
-                <label>발령 구분</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {(['훈련', '실제'] as const).map(mode => {
-                    const isSel = selectedMode === mode;
-                    const color = mode === '훈련' ? '#d97706' : '#ef4444';
-                    const modeLabel = mode === '훈련' ? '🎓 훈련상황' : '⚠️ 실제상황';
-                    const subOptions = isFireDisaster
-                      ? mode === '훈련'
-                        ? [{ key: 'initial' as const, icon: '🔔', label: '감지기동작' }, { key: 'full' as const, icon: '🎯', label: '전체훈련' }]
-                        : [{ key: 'initial' as const, icon: '🔔', label: '감지기동작' }, { key: 'full' as const, icon: '🔥', label: '화재상황' }]
-                      : [];
-                    const subLabel = isSel && isFireDisaster
-                      ? (fireSubMode === 'initial' ? '감지기동작' : mode === '훈련' ? '전체훈련' : '화재상황')
-                      : '';
-                    return (
-                      <div key={mode} style={{
-                        border: `2px solid ${isSel ? color : 'rgba(11,37,69,0.12)'}`,
-                        borderRadius: '12px', overflow: 'hidden',
-                        background: isSel ? color + '22' : 'transparent',
-                        boxShadow: isSel ? `0 2px 8px ${color}33` : 'none',
-                        transition: 'all 0.2s',
-                      }}>
-                        <div
-                          onClick={() => setSelectedMode(mode)}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: '10px',
-                            padding: '12px 14px', cursor: 'pointer',
-                            borderLeft: `6px solid ${isSel ? color : 'transparent'}`,
-                          }}
-                        >
-                          {isSel && (
-                            <span style={{
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
-                              background: color, color: '#fff', fontSize: '12px', fontWeight: 900,
-                            }}>✓</span>
-                          )}
-                          <span style={{ fontSize: '15px', fontWeight: isSel ? 900 : 700, color: isSel ? color : '#475569', flex: 1 }}>
-                            {modeLabel}
-                          </span>
-                          {subLabel && (
-                            <span style={{ fontSize: '11px', color: color, fontWeight: 800 }}>{subLabel}</span>
-                          )}
-                          {isFireDisaster && (
-                            <span style={{ fontSize: '10px', color: '#475569' }}>{isSel ? '▲' : '▶'}</span>
-                          )}
-                        </div>
-                        {isSel && isFireDisaster && (
-                          <div style={{
-                            display: 'flex', flexDirection: 'column', gap: '8px',
-                            padding: '4px 12px 12px',
-                            borderTop: `1px solid ${color}22`,
-                          }}>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              {subOptions.map(opt => (
-                                <button
-                                  key={opt.key}
-                                  type="button"
-                                  onClick={e => { e.stopPropagation(); setFireSubMode(opt.key); }}
-                                  style={{
-                                    flex: 1, padding: '13px 0', borderRadius: '10px', cursor: 'pointer',
-                                    fontSize: '13px', fontWeight: 800,
-                                    background: fireSubMode === opt.key ? color + '2e' : '#ffffff',
-                                    border: `1px solid ${fireSubMode === opt.key ? color + 'aa' : 'rgba(11,37,69,0.12)'}`,
-                                    color: fireSubMode === opt.key ? color : '#64748b',
-                                    transition: 'all 0.15s',
-                                  }}
-                                >
-                                  {opt.icon} {opt.label}
-                                </button>
-                              ))}
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              {([{ key: 'day' as const, icon: '☀️', label: '주간' }, { key: 'night' as const, icon: '🌙', label: '야간' }]).map(opt => (
-                                <button
-                                  key={opt.key}
-                                  type="button"
-                                  onClick={e => { e.stopPropagation(); setFireShift(opt.key); }}
-                                  style={{
-                                    flex: 1, padding: '13px 0', borderRadius: '10px', cursor: 'pointer',
-                                    fontSize: '13px', fontWeight: 800,
-                                    background: fireShift === opt.key ? color + '2e' : '#ffffff',
-                                    border: `1px solid ${fireShift === opt.key ? color + 'aa' : 'rgba(11,37,69,0.12)'}`,
-                                    color: fireShift === opt.key ? color : '#64748b',
-                                    transition: 'all 0.15s',
-                                  }}
-                                >
-                                  {opt.icon} {opt.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
+            {/* 1. 재난 유형 */}
+            <div style={{ position: 'relative' }}>
+              <span style={{
+                position: 'absolute', left: '-28px', top: 0, width: '22px', height: '22px', borderRadius: '50%',
+                background: '#0d1f36', color: '#fff', fontSize: '11px', fontWeight: 800,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 0 4px var(--bg-app)',
+              }}>1</span>
+              <label htmlFor="disaster-select" style={{ fontSize: '12px', fontWeight: 800, color: '#0d1f36', textTransform: 'none', letterSpacing: 'normal', marginBottom: '6px' }}>
+                재난 유형
+              </label>
+              <select id="disaster-select" value={selectedDisasterKey}
+                onChange={(e) => { setSelectedDisasterKey(e.target.value); setFireSubMode('initial'); }}
+              >
+                {DISASTERS.map((d) => (
+                  <option key={d.key} value={d.key}>{d.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 2. 훈련 / 실제 상황 선택 */}
+            <div style={{ position: 'relative' }}>
+              <span style={{
+                position: 'absolute', left: '-28px', top: 0, width: '22px', height: '22px', borderRadius: '50%',
+                background: '#0d1f36', color: '#fff', fontSize: '11px', fontWeight: 800,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 0 4px var(--bg-app)',
+              }}>2</span>
+              <div style={{ fontSize: '12px', fontWeight: 800, color: '#0d1f36', marginBottom: '6px' }}>
+                훈련 / 실제 상황 선택
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {(['훈련', '실제'] as const).map(mode => {
+                  const isSel = selectedMode === mode;
+                  const isReal = mode === '실제';
+                  const color = isReal ? '#dc2626' : '#0d1f36';
+                  const modeLabel = mode === '훈련' ? '🎓 훈련상황' : '⚠️ 실제상황';
+                  const subOptions = isFireDisaster
+                    ? mode === '훈련'
+                      ? [{ key: 'initial' as const, icon: '🔔', label: '감지기동작' }, { key: 'full' as const, icon: '🎯', label: '전체훈련' }]
+                      : [{ key: 'initial' as const, icon: '🔔', label: '감지기동작' }, { key: 'full' as const, icon: '🔥', label: '화재상황' }]
+                    : [];
+                  const subLabel = isSel && isFireDisaster
+                    ? (fireSubMode === 'initial' ? '감지기동작' : mode === '훈련' ? '전체훈련' : '화재상황')
+                    : '';
+                  // 접혀 있어도 "실제상황"만은 굵은 적색 테두리·배경·큰 화살표로 강조 (위급 옵션임을 항상 표시)
+                  const collapsedUrgent = !isSel && isReal;
+                  return (
+                    <div key={mode} style={{
+                      border: `${isSel || collapsedUrgent ? 2 : 1.5}px solid ${isSel || collapsedUrgent ? color : 'rgba(11,37,69,0.12)'}`,
+                      borderRadius: '12px', overflow: 'hidden',
+                      background: isSel ? color + '14' : collapsedUrgent ? '#fdeeee' : 'transparent',
+                      boxShadow: isSel ? `0 2px 8px ${color}33` : 'none',
+                      transition: 'all 0.2s',
+                    }}>
+                      <div
+                        onClick={() => setSelectedMode(mode)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '10px',
+                          padding: '12px 14px', cursor: 'pointer',
+                          borderLeft: `6px solid ${isSel ? color : 'transparent'}`,
+                        }}
+                      >
+                        {isSel && (
+                          <span style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
+                            background: color, color: '#fff', fontSize: '12px', fontWeight: 900,
+                          }}>✓</span>
                         )}
+                        <span style={{ fontSize: '15px', fontWeight: isSel || collapsedUrgent ? 900 : 700, color: isSel || collapsedUrgent ? color : '#475569', flex: 1 }}>
+                          {modeLabel}
+                        </span>
+                        {subLabel && (
+                          <span style={{ fontSize: '11px', color: color, fontWeight: 800 }}>{subLabel}</span>
+                        )}
+                        <span style={{ fontSize: collapsedUrgent ? '20px' : '10px', fontWeight: 800, color: collapsedUrgent ? color : '#475569', lineHeight: 1 }}>
+                          {isSel ? (isFireDisaster ? '▲' : '') : (collapsedUrgent ? '▸' : (isFireDisaster ? '▶' : ''))}
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
+                      {isSel && isFireDisaster && (
+                        <div style={{
+                          display: 'flex', flexDirection: 'column', gap: '8px',
+                          padding: '4px 12px 12px',
+                          borderTop: `1px solid ${color}22`,
+                        }}>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            {subOptions.map(opt => (
+                              <button
+                                key={opt.key}
+                                type="button"
+                                onClick={e => { e.stopPropagation(); setFireSubMode(opt.key); }}
+                                style={{
+                                  flex: 1, padding: '13px 0', borderRadius: '10px', cursor: 'pointer',
+                                  fontSize: '13px', fontWeight: 800,
+                                  background: fireSubMode === opt.key ? color : '#ffffff',
+                                  border: `1px solid ${fireSubMode === opt.key ? color : 'rgba(11,37,69,0.12)'}`,
+                                  color: fireSubMode === opt.key ? '#fff' : '#64748b',
+                                  transition: 'all 0.15s',
+                                }}
+                              >
+                                {opt.icon} {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            {([{ key: 'day' as const, icon: '☀️', label: '주간' }, { key: 'night' as const, icon: '🌙', label: '야간' }]).map(opt => (
+                              <button
+                                key={opt.key}
+                                type="button"
+                                onClick={e => { e.stopPropagation(); setFireShift(opt.key); }}
+                                style={{
+                                  flex: 1, padding: '13px 0', borderRadius: '10px', cursor: 'pointer',
+                                  fontSize: '13px', fontWeight: 800,
+                                  background: fireShift === opt.key ? color : '#ffffff',
+                                  border: `1px solid ${fireShift === opt.key ? color : 'rgba(11,37,69,0.12)'}`,
+                                  color: fireShift === opt.key ? '#fff' : '#64748b',
+                                  transition: 'all 0.15s',
+                                }}
+                              >
+                                {opt.icon} {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            {/* 위치 */}
-            <div>
-              <label htmlFor="location-input">재난 발생 위치</label>
+            {/* 3. 재난 발생 위치 */}
+            <div style={{ position: 'relative' }}>
+              <span style={{
+                position: 'absolute', left: '-28px', top: 0, width: '22px', height: '22px', borderRadius: '50%',
+                background: '#0d1f36', color: '#fff', fontSize: '11px', fontWeight: 800,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 0 4px var(--bg-app)',
+              }}>3</span>
+              <label htmlFor="location-input" style={{ fontSize: '12px', fontWeight: 800, color: '#0d1f36', textTransform: 'none', letterSpacing: 'normal', marginBottom: '6px' }}>
+                재난 발생 위치
+              </label>
               <input id="location-input" type="text"
                 placeholder="예: 서관 3층 어린이집 옆, 지하 1층 변전실"
                 value={location} onChange={(e) => setLocation(e.target.value)} required
               />
             </div>
 
-            {/* 훈련 시 참여인원 — 인라인 그리드 */}
+            {/* 4. 훈련 시 참여인원 — 인라인 그리드 */}
             {selectedMode === '훈련' && (
-              <div>
+              <div style={{ position: 'relative' }}>
+                <span style={{
+                  position: 'absolute', left: '-28px', top: 0, width: '22px', height: '22px', borderRadius: '50%',
+                  background: '#0d1f36', color: '#fff', fontSize: '11px', fontWeight: 800,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 0 4px var(--bg-app)',
+                }}>4</span>
+                <div style={{ fontSize: '12px', fontWeight: 800, color: '#0d1f36', marginBottom: '6px' }}>
+                  훈련인원 설정
+                </div>
                 <button type="button"
                   onClick={() => setShowParticipants(v => !v)}
                   style={{
@@ -978,196 +828,23 @@ ${Object.entries(roleGroups).map(([role,tasks])=>{
               </div>
             )}
 
-            <button type="submit" className="btn btn-danger" disabled={loading} style={{ marginTop: '4px' }}>
-              <Play size={18} fill="white" />
-              즉시 비상 발령 (사이렌/임무 생성)
-            </button>
+            {/* 5. 비상 발령 */}
+            <div style={{ position: 'relative' }}>
+              <span style={{
+                position: 'absolute', left: '-28px', top: 0, width: '22px', height: '22px', borderRadius: '50%',
+                background: '#dc2626', color: '#fff', fontSize: '11px', fontWeight: 800,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 0 4px var(--bg-app)',
+              }}>5</span>
+              <div style={{ fontSize: '12px', fontWeight: 800, color: '#0d1f36', marginBottom: '6px' }}>
+                비상 발령
+              </div>
+              <button type="submit" className="btn btn-danger" disabled={loading}>
+                <Play size={18} fill="white" />
+                즉시 비상 발령 (사이렌/임무 생성)
+              </button>
+            </div>
           </form>
 
-          {/* 이전 재난 기록 */}
-          <button type="button" onClick={loadLog} disabled={logLoading}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-              padding: '10px 14px', borderRadius: '10px', cursor: logLoading ? 'default' : 'pointer',
-              border: '1px solid rgba(148,163,184,0.2)',
-              background: 'rgba(148,163,184,0.04)',
-              color: '#64748b', fontSize: '13px', fontWeight: 700,
-            }}>
-            <History size={15} />
-            {logLoading ? '로딩 중...' : '이전 재난 기록 보기'}
-          </button>
-
-          {showLog && (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderBottom: '1px solid rgba(11,37,69,0.06)' }}>
-                <span style={{ fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
-                  <History size={14} /> 종료 재난 기록 (최근 30건)
-                </span>
-                <button type="button" onClick={() => setShowLog(false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '2px', display: 'flex' }}>
-                  <X size={16} />
-                </button>
-              </div>
-              {logIncidents.length === 0 ? (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#475569', fontSize: '13px' }}>종료된 재난 기록이 없습니다.</div>
-              ) : (
-                logIncidents.map(inc => {
-                  const isExpanded = expandedLogId === inc.id;
-                  return (
-                    <div key={inc.id} style={{ borderBottom: '1px solid rgba(11,37,69,0.045)' }}>
-                      <div onClick={() => loadLogDetail(inc.id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '11px 14px', cursor: 'pointer', background: isExpanded ? 'rgba(11,37,69,0.045)' : 'transparent' }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>{inc.disaster} — {inc.location}</div>
-                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{inc.mode} · {fmtDate(inc.declared_at)}</div>
-                        </div>
-                        <ChevronDown size={14} color="#475569" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
-                      </div>
-                      {isExpanded && (
-                        <div style={{ padding: '10px 14px 14px', background: 'rgba(11,37,69,0.03)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                          {logDetailLoading ? (
-                            <div style={{ fontSize: '12px', color: '#64748b', textAlign: 'center', padding: '12px' }}>로딩 중...</div>
-                          ) : logDetail ? (() => {
-                            const getEmpName = (empNo: string | null | undefined) =>
-                              employees.find(e => e.emp_no === empNo)?.name ?? (empNo || '—');
-
-                            const checkable = logDetail.tasks.filter(t => !t.label.startsWith('◇') && !t.label.startsWith('◆'));
-                            const doneTasks = checkable.filter(t => t.done);
-                            const pct = checkable.length > 0 ? Math.round(doneTasks.length / checkable.length * 100) : 0;
-
-                            const roleGroups: Record<string, typeof logDetail.tasks> = {};
-                            for (const t of checkable) { (roleGroups[t.role] ??= []).push(t); }
-
-                            const secTitle: React.CSSProperties = { fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '7px' };
-
-                            return (
-                              <>
-                                {/* ① 발령 정보 */}
-                                <div>
-                                  <div style={secTitle}>📋 발령 정보</div>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
-                                    {([
-                                      ['발령 시각', fmtDateFull(inc.declared_at)],
-                                      ['발령자', getEmpName(inc.declared_by)],
-                                      ['구분', inc.mode],
-                                      ['위치', inc.location],
-                                    ] as [string, string][]).map(([lbl, val]) => (
-                                      <div key={lbl} style={{ background: 'rgba(11,37,69,0.045)', borderRadius: '6px', padding: '5px 8px' }}>
-                                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, marginBottom: '2px' }}>{lbl}</div>
-                                        <div style={{ fontSize: '12px', color: 'var(--text-main)', fontWeight: 600, wordBreak: 'break-all' }}>{val}</div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                {/* 다운로드 버튼 */}
-                                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                  <button type="button" onClick={() => downloadReport(inc)} style={{
-                                    display: 'flex', alignItems: 'center', gap: '5px',
-                                    padding: '5px 11px', borderRadius: '6px', cursor: 'pointer',
-                                    fontSize: '11px', fontWeight: 700,
-                                    background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)',
-                                    color: '#4f46e5',
-                                  }}>📄 보고서 다운로드</button>
-                                </div>
-
-                                {/* ② 출동 현황 아코디언 */}
-                                <div style={{ border: '1px solid rgba(11,37,69,0.09)', borderRadius: '7px', overflow: 'hidden' }}>
-                                  <div onClick={() => toggleSub(inc.id, 'responders')} style={{
-                                    display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', cursor: 'pointer',
-                                    background: 'rgba(11,37,69,0.045)',
-                                    borderBottom: isSubOpen(inc.id, 'responders') ? '1px solid rgba(11,37,69,0.07)' : 'none',
-                                  }}>
-                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', flex: 1 }}>
-                                      👥 출동 현황 ({logDetail.responders.length}명)
-                                    </span>
-                                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' as const }}>
-                                      {(['현장', '복귀', '출동중', '미응답'] as const).map(st => {
-                                        const cnt = logDetail!.responders.filter(r => r.status === st).length;
-                                        if (cnt === 0) return null;
-                                        const c = st==='출동중'?'#c2410c':st==='현장'?'#0284c7':st==='복귀'?'#16a34a':'#64748b';
-                                        return <span key={st} style={{ fontSize: '10px', padding: '1px 5px', borderRadius: '3px', background: c+'22', color: c, fontWeight: 700 }}>{st} {cnt}</span>;
-                                      })}
-                                    </div>
-                                    <ChevronDown size={13} color="#475569" style={{ transform: isSubOpen(inc.id, 'responders') ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
-                                  </div>
-                                  {isSubOpen(inc.id, 'responders') && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '6px 8px' }}>
-                                      {[...logDetail.responders]
-                                        .sort((a, b) => {
-                                          const ord = ['현장', '복귀', '출동중', '미응답'];
-                                          return ord.indexOf(a.status) - ord.indexOf(b.status);
-                                        })
-                                        .map(r => {
-                                          const c = r.status==='출동중'?'#c2410c':r.status==='현장'?'#0284c7':r.status==='복귀'?'#16a34a':'#64748b';
-                                          return (
-                                            <div key={r.emp_no} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 6px', borderRadius: '5px', background: 'rgba(11,37,69,0.035)' }}>
-                                              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: c, flexShrink: 0 }} />
-                                              <span style={{ fontSize: '12px', color: 'var(--text-main)', flex: 1 }}>{r.name}</span>
-                                              <span style={{ fontSize: '10px', color: '#475569' }}>{r.team}</span>
-                                              <span style={{ fontSize: '11px', color: c, fontWeight: 700, marginLeft: '4px' }}>{r.status}</span>
-                                            </div>
-                                          );
-                                        })
-                                      }
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* ③ 임무 수행 내역 아코디언 */}
-                                <div style={{ border: '1px solid rgba(11,37,69,0.09)', borderRadius: '7px', overflow: 'hidden' }}>
-                                  <div onClick={() => toggleSub(inc.id, 'tasks')} style={{
-                                    display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', cursor: 'pointer',
-                                    background: 'rgba(11,37,69,0.045)',
-                                    borderBottom: isSubOpen(inc.id, 'tasks') ? '1px solid rgba(11,37,69,0.07)' : 'none',
-                                  }}>
-                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', flex: 1 }}>
-                                      ✅ 임무 수행 내역
-                                    </span>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                      <div style={{ width: '60px', height: '4px', borderRadius: '2px', background: 'rgba(11,37,69,0.06)' }}>
-                                        <div style={{ width: `${pct}%`, height: '100%', borderRadius: '2px', background: '#0f9d63' }} />
-                                      </div>
-                                      <span style={{ fontSize: '10px', color: '#0f9d63', fontWeight: 700, whiteSpace: 'nowrap' as const }}>{pct}% ({doneTasks.length}/{checkable.length})</span>
-                                    </div>
-                                    <ChevronDown size={13} color="#475569" style={{ transform: isSubOpen(inc.id, 'tasks') ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
-                                  </div>
-                                  {isSubOpen(inc.id, 'tasks') && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '8px' }}>
-                                      {Object.entries(roleGroups).map(([role, roleTasks]) => {
-                                        const doneInRole = roleTasks.filter(t => t.done).length;
-                                        return (
-                                          <div key={role}>
-                                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, padding: '3px 0', borderBottom: '1px solid rgba(11,37,69,0.06)', marginBottom: '4px' }}>
-                                              {role} ({doneInRole}/{roleTasks.length})
-                                            </div>
-                                            {[...roleTasks].sort((a, b) => a.task_idx - b.task_idx).map(t => (
-                                              <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', padding: '3px 2px', opacity: t.done ? 1 : 0.4 }}>
-                                                <span style={{ fontSize: '11px', marginTop: '1px', flexShrink: 0 }}>{t.done ? '✅' : '⬜'}</span>
-                                                <span style={{ fontSize: '12px', color: t.done ? 'var(--text-main)' : '#64748b', flex: 1 }}>{t.label}</span>
-                                                {t.done && (
-                                                  <span style={{ fontSize: '10px', color: '#475569', flexShrink: 0, textAlign: 'right' as const }}>
-                                                    {t.done_by ? getEmpName(t.done_by) : ''}
-                                                    {t.updated_at ? ` ${fmtDate(t.updated_at)}` : ''}
-                                                  </span>
-                                                )}
-                                              </div>
-                                            ))}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              </>
-                            );
-                          })() : null}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
         </>
         )
       ) : (
