@@ -404,8 +404,6 @@ const App: React.FC = () => {
           <TwinTowerIcon size={20} color={activeIncident ? '#f87171' : '#34d399'} />
           <a
             href="https://atssa-kim.github.io/disa_app/"
-            target="disa_app_window"
-            rel="noopener noreferrer"
             className="topbar-title"
             style={{ textDecoration: 'none', cursor: 'pointer' }}
           >
