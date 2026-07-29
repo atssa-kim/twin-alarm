@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { type Incident, type Responder, type MemberTask, type EmployeeDB, db, supabase } from '../services/supabase';
 import { DISASTERS, FIRE_INITIAL_BADGES } from '../data/disasters';
 import { stopAllAlerts } from '../utils/audio';
-import { Play, Square, AlertTriangle, Users, UserCheck, BarChart2, Monitor } from 'lucide-react';
+import { Play, Square, Users, UserCheck, BarChart2, Monitor } from 'lucide-react';
 
 // 상황 확정(variant) 칩 표시용 라벨 — 새 variant를 추가할 때 여기만 채우면 됨 (미등록 값은 그대로 표시)
 export const VARIANT_LABELS: Record<string, string> = {
@@ -615,22 +615,6 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
           </div>
         ) : (
         <>
-          {/* 헤더 카드 */}
-          <div className="card" style={{ padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderLeft: '4px solid #ef4444' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
-                background: '#ef4444', color: '#fff',
-              }}>
-                <AlertTriangle size={15} />
-              </span>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '16px', margin: 0, flex: 1, color: '#991b1b' }}>
-                신규 비상 상황 발령
-              </h3>
-            </div>
-          </div>
-
           {/* 타임라인 스텝형 발령 폼 (2026-07-29 개편) — 번호 노드 + 세로 연결선.
               2단계(발령 구분)는 훈련=남색 톤, 실제=적색 톤으로 대비. 접힌 "실제상황" 줄은
               선택되지 않은 상태에서도 굵은 적색 테두리 + 큰 화살표로 눈에 띄게 처리. */}

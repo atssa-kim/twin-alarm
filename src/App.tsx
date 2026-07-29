@@ -505,7 +505,7 @@ const App: React.FC = () => {
           }}
         >
           <LayoutDashboard size={17} />
-          <span style={{ whiteSpace: 'nowrap' }}>지휘본부</span>
+          <span style={{ whiteSpace: 'nowrap' }}>비상발령</span>
         </button>
         <button
           onClick={() => setCurrentView('responder')}
