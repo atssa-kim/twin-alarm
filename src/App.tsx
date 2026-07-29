@@ -409,7 +409,7 @@ const App: React.FC = () => {
             className="topbar-title"
             style={{ textDecoration: 'none', cursor: 'pointer' }}
           >
-            Twin-alarm
+            트윈 재난메뉴얼
           </a>
         </div>
 
