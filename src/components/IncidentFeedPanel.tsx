@@ -264,7 +264,7 @@ export const IncidentFeedPanel: React.FC<IncidentFeedPanelProps> = ({ incidentId
       {!pendingMedia && (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '10px 12px 12px' }}>
           <input
-            ref={fileInputRef} type="file" accept="image/*,video/*"
+            ref={fileInputRef} type="file" accept="image/*,video/*" capture="environment"
             onChange={handleFilePick} style={{ display: 'none' }}
           />
           <button
