@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase, db, type IncidentFeedEntry } from '../services/supabase';
-import { Camera, Send, X, Radio } from 'lucide-react';
+import { Camera, Video, Send, X, Radio } from 'lucide-react';
 
 interface IncidentFeedPanelProps {
   incidentId: string;
@@ -34,7 +34,8 @@ export const IncidentFeedPanel: React.FC<IncidentFeedPanelProps> = ({ incidentId
   const [pendingMedia, setPendingMedia] = useState<{ file: File; url: string; kind: 'photo' | 'video' } | null>(null);
   const [caption, setCaption] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -269,18 +270,35 @@ export const IncidentFeedPanel: React.FC<IncidentFeedPanelProps> = ({ incidentId
       {/* 입력창 */}
       {!readOnly && !pendingMedia && (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '10px 12px 12px' }}>
+          {/* accept를 image/video로 함께 지정하면 일부 모바일 브라우저(특히 iOS)가 capture를
+              무시하고 일반 파일 선택창을 띄움 — 사진/동영상용 입력을 분리해야 카메라가 바로 열림 */}
           <input
-            ref={fileInputRef} type="file" accept="image/*,video/*" capture="environment"
+            ref={photoInputRef} type="file" accept="image/*" capture="environment"
+            onChange={handleFilePick} style={{ display: 'none' }}
+          />
+          <input
+            ref={videoInputRef} type="file" accept="video/*" capture="environment"
             onChange={handleFilePick} style={{ display: 'none' }}
           />
           <button
-            type="button" onClick={() => fileInputRef.current?.click()}
+            type="button" onClick={() => photoInputRef.current?.click()}
+            title="사진 촬영"
             style={{
               width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0, border: '1px solid var(--border-glow)', cursor: 'pointer',
               background: '#f7f9fc', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
             <Camera size={17} />
+          </button>
+          <button
+            type="button" onClick={() => videoInputRef.current?.click()}
+            title="동영상 촬영"
+            style={{
+              width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0, border: '1px solid var(--border-glow)', cursor: 'pointer',
+              background: '#f7f9fc', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Video size={17} />
           </button>
           <input
             value={draft}
