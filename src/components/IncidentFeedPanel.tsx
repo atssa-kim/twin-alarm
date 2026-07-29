@@ -8,6 +8,7 @@ interface IncidentFeedPanelProps {
   name: string;
   team: string;
   badge: string | null;
+  readOnly?: boolean; // 종료된 재난 기록 열람용 — 프리셋/입력창 없이 읽기만
 }
 
 const PRESETS = ['📍 현장 도착', '✅ 완료', '🆘 지원 요청', '👌 이상 없음'];
@@ -25,7 +26,7 @@ function formatTime(ms: number): string {
 
 const MAX_MEDIA_BYTES = 50 * 1024 * 1024; // 50MB
 
-export const IncidentFeedPanel: React.FC<IncidentFeedPanelProps> = ({ incidentId, empNo, name, team, badge }) => {
+export const IncidentFeedPanel: React.FC<IncidentFeedPanelProps> = ({ incidentId, empNo, name, team, badge, readOnly = false }) => {
   const [entries, setEntries] = useState<IncidentFeedEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
@@ -43,6 +44,9 @@ export const IncidentFeedPanel: React.FC<IncidentFeedPanelProps> = ({ incidentId
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false); });
 
+    // 종료된 재난 기록 열람 시에는 새 글이 올라올 일이 없으므로 구독 생략
+    if (readOnly) return () => { cancelled = true; };
+
     const channel = supabase
       .channel(`incident-feed-${incidentId}`)
       .on(
@@ -56,7 +60,7 @@ export const IncidentFeedPanel: React.FC<IncidentFeedPanelProps> = ({ incidentId
       .subscribe();
 
     return () => { cancelled = true; supabase.removeChannel(channel); };
-  }, [incidentId]);
+  }, [incidentId, readOnly]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -116,7 +120,7 @@ export const IncidentFeedPanel: React.FC<IncidentFeedPanelProps> = ({ incidentId
     <div className="card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '14px 16px', borderBottom: '1px solid var(--border-glow)' }}>
         <Radio size={18} color="var(--color-purple)" />
-        <h3 style={{ margin: 0, fontSize: '14px', flex: 1 }}>현장 피드</h3>
+        <h3 style={{ margin: 0, fontSize: '14px', flex: 1 }}>현장 피드{readOnly && <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}> · 기록 열람</span>}</h3>
         <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{entries.length}건</span>
       </div>
 
@@ -210,6 +214,7 @@ export const IncidentFeedPanel: React.FC<IncidentFeedPanelProps> = ({ incidentId
       </div>
 
       {/* 프리셋 */}
+      {!readOnly && (
       <div style={{ display: 'flex', gap: '6px', padding: '8px 12px', overflowX: 'auto', borderTop: '1px solid var(--border-glow)' }}>
         {PRESETS.map(p => (
           <button
@@ -224,9 +229,10 @@ export const IncidentFeedPanel: React.FC<IncidentFeedPanelProps> = ({ incidentId
           </button>
         ))}
       </div>
+      )}
 
       {/* 선택된 미디어 미리보기 */}
-      {pendingMedia && (
+      {!readOnly && pendingMedia && (
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '10px 12px', borderTop: '1px solid var(--border-glow)' }}>
           {pendingMedia.kind === 'photo' ? (
             <img src={pendingMedia.url} alt="첨부 미리보기" style={{ width: '48px', height: '48px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }} />
@@ -261,7 +267,7 @@ export const IncidentFeedPanel: React.FC<IncidentFeedPanelProps> = ({ incidentId
       )}
 
       {/* 입력창 */}
-      {!pendingMedia && (
+      {!readOnly && !pendingMedia && (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '10px 12px 12px' }}>
           <input
             ref={fileInputRef} type="file" accept="image/*,video/*" capture="environment"

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { type Incident, type Responder, type MemberTask, type DisasterRole, type DisasterTask, db, supabase, isIncidentParticipant } from '../services/supabase';
 import { type Employee } from './Login';
-import { Check, ShieldAlert, MapPin, Award, CheckSquare, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Check, ShieldAlert, MapPin, Award, CheckSquare, ChevronDown, ChevronRight, ChevronLeft, Radio } from 'lucide-react';
 import { unlockAudio } from '../utils/audio';
 import { DISASTERS, FIRE_INITIAL_BADGES } from '../data/disasters';
 import { findEquipmentLocation } from '../data/equipmentLocations';
@@ -248,6 +248,20 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   // 발령 후(실제 진행 중) 화면에는 적용하지 않음 — 그쪽은 지휘관이 확정한 상황(activeIncident.variant)
   // 하나만 보여주는 게 의도된 동작이라, 대원이 임의로 다른 상황을 보게 하면 혼선이 생길 수 있음.
   const [previewVariant, setPreviewVariant] = useState<'ALL' | 'COMMON' | string>('ALL');
+
+  // ── 비상 대기 중 현장 피드 기록 열람 ─────────────────────────
+  const [feedHistory, setFeedHistory] = useState<Incident[]>([]);
+  const [feedHistoryLoading, setFeedHistoryLoading] = useState(false);
+  const [feedHistoryId, setFeedHistoryId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeIncident || mainTab !== 'feed') return;
+    setFeedHistoryLoading(true);
+    db.getClosedIncidents()
+      .then(setFeedHistory)
+      .catch(() => setFeedHistory([]))
+      .finally(() => setFeedHistoryLoading(false));
+  }, [activeIncident, mainTab]);
 
   useEffect(() => {
     if (!activeIncident) { setMyBadge(null); return; }
@@ -631,6 +645,7 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     if (incidentIdRef.current === activeIncident.id) return;
     incidentIdRef.current = activeIncident.id;
     setMainTab('mission');
+    setFeedHistoryId(null);
     const headers = new Set(
       taskGroups
         .filter((g): g is AccordionGroup => g.type === 'group')
@@ -807,6 +822,26 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
     <div className="content">
       {!activeIncident ? (
         <>
+          {/* 상단 탭 — 대기 중에도 지난 발령의 현장 피드 기록은 열람 가능 */}
+          <div className="segmented-control">
+            <button
+              type="button"
+              className={`segmented-btn ${mainTab === 'mission' ? 'active' : ''}`}
+              onClick={() => setMainTab('mission')}
+            >
+              ✅ 내 임무
+            </button>
+            <button
+              type="button"
+              className={`segmented-btn ${mainTab === 'feed' ? 'active' : ''}`}
+              onClick={() => setMainTab('feed')}
+            >
+              📻 현장 피드
+            </button>
+          </div>
+
+          {mainTab === 'mission' && (
+          <>
           {/* 비상 대기 카드 */}
           <div className="card" style={{ textAlign: 'center', padding: '28px 20px' }}>
             <div style={{
@@ -1010,6 +1045,65 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                   </div>
                 </div>
               </>
+            )
+          )}
+          </>
+          )}
+
+          {mainTab === 'feed' && (
+            feedHistoryId ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setFeedHistoryId(null)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '4px', alignSelf: 'flex-start',
+                    background: 'transparent', border: 'none', color: 'var(--color-water)',
+                    fontSize: '13px', fontWeight: 700, cursor: 'pointer', padding: '4px 0',
+                  }}
+                >
+                  <ChevronLeft size={16} /> 발령 목록
+                </button>
+                <IncidentFeedPanel
+                  incidentId={feedHistoryId}
+                  empNo={currentUser.empNo}
+                  name={currentUser.name}
+                  team={currentUser.team}
+                  badge={myBadge}
+                  readOnly
+                />
+              </>
+            ) : feedHistoryLoading ? (
+              <div className="card" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                불러오는 중...
+              </div>
+            ) : feedHistory.length === 0 ? (
+              <div className="card" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                아직 종료된 발령 기록이 없습니다.
+              </div>
+            ) : (
+              <div className="card" style={{ padding: '8px' }}>
+                {feedHistory.map(inc => (
+                  <div
+                    key={inc.id}
+                    className="task-item"
+                    onClick={() => setFeedHistoryId(inc.id)}
+                    style={{ alignItems: 'center' }}
+                  >
+                    <Radio size={16} color="var(--color-purple)" style={{ flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700 }}>
+                        {inc.disaster} · {inc.location}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        {new Date(inc.declared_at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        {' · '}{inc.mode}
+                      </div>
+                    </div>
+                    <ChevronRight size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                  </div>
+                ))}
+              </div>
             )
           )}
         </>
