@@ -55,6 +55,13 @@ const DISASTER_LABELS: Record<Disaster, string> = {
 type Disaster = '화재'|'정전'|'누수'|'태풍/홍수'|'폭설'|'지진'|'가스누출'|'승강기'|'테러';
 const ALL_DISASTERS: Disaster[] = ['화재','정전','누수','태풍/홍수','폭설','지진','가스누출','승강기','테러'];
 
+// ── 인원 관리 화면 내 메뉴 선택 상태 저장 — 폰에서 다른 탭으로 갔다가 돌아오는 등
+// 화면이 재생성(리마운트)돼도 마지막으로 보던 탭/재난/주야/카테고리가 그대로 유지되도록 함
+const ADMIN_TAB_KEY = 'tt_admin_tab';
+const ADMIN_ORG_DISASTER_KEY = 'tt_admin_org_disaster';
+const ADMIN_ORG_SHIFT_KEY = 'tt_admin_org_shift';
+const ADMIN_FILTER_CATEGORY_KEY = 'tt_admin_filter_category';
+
 const RLS_FIX_SQL =
   `ALTER TABLE employees DISABLE ROW LEVEL SECURITY;\nALTER TABLE employee_disaster_badges DISABLE ROW LEVEL SECURITY;`;
 const SUPABASE_SQL_URL = 'https://supabase.com/dashboard/project/hzqesdprnlpzaomaeswx/sql/new';
@@ -93,9 +100,15 @@ interface AdminPanelProps {
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) => {
-  const [adminTab, setAdminTab] = useState<'list' | 'org' | 'history'>('list');
-  const [orgDisaster, setOrgDisaster] = useState<Disaster>('화재');
-  const [filterCategory, setFilterCategory] = useState('전체');
+  const [adminTab, setAdminTab] = useState<'list' | 'org' | 'history'>(() => {
+    const saved = localStorage.getItem(ADMIN_TAB_KEY);
+    return saved === 'list' || saved === 'org' || saved === 'history' ? saved : 'list';
+  });
+  const [orgDisaster, setOrgDisaster] = useState<Disaster>(() => {
+    const saved = localStorage.getItem(ADMIN_ORG_DISASTER_KEY) as Disaster | null;
+    return saved && ALL_DISASTERS.includes(saved) ? saved : '화재';
+  });
+  const [filterCategory, setFilterCategory] = useState(() => localStorage.getItem(ADMIN_FILTER_CATEGORY_KEY) || '전체');
   const [search, setSearch] = useState('');
   const [modalMode, setModalMode] = useState<'add' | 'edit' | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -106,7 +119,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
   const [orgRoles, setOrgRoles] = useState<(DisasterRole & { disaster_tasks: DisasterTask[] })[]>([]);
   const [previewBadge, setPreviewBadge] = useState<string | null>(null);
   // 재난편제표: 주/야 구분 — 2026-07-08부터 모든 재난에 적용 (배지·임무·배정 인원 모두 근무별로 다름)
-  const [orgShift, setOrgShift] = useState<'day' | 'night'>('day');
+  const [orgShift, setOrgShift] = useState<'day' | 'night'>(() => {
+    const saved = localStorage.getItem(ADMIN_ORG_SHIFT_KEY);
+    return saved === 'day' || saved === 'night' ? saved : 'day';
+  });
   // 재난편제표: 배지별 배정 인원(emp_no) — 2026-07-05부터 여기서 직접 배정/해제
   const [badgeAssignments, setBadgeAssignments] = useState<Record<string, string[]>>({});
   // TTS 필수인원(emp_no) — 이 재난·근무에서 체크된 사람은 실제상황 발령 즉시(대기 없이) 전화(2026-07-24)
@@ -122,6 +138,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
     db.getAllEmployeeBadges().then(setAllEmployeeBadges).catch(() => setAllEmployeeBadges({}));
   };
   useEffect(() => { refreshAllEmployeeBadges(); }, []);
+  useEffect(() => { localStorage.setItem(ADMIN_TAB_KEY, adminTab); }, [adminTab]);
+  useEffect(() => { localStorage.setItem(ADMIN_ORG_DISASTER_KEY, orgDisaster); }, [orgDisaster]);
+  useEffect(() => { localStorage.setItem(ADMIN_ORG_SHIFT_KEY, orgShift); }, [orgShift]);
+  useEffect(() => { localStorage.setItem(ADMIN_FILTER_CATEGORY_KEY, filterCategory); }, [filterCategory]);
   const [rlsError, setRlsError] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -255,6 +275,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
     }
   };
 
+  const handleBadgeOpError = (err: any, fallbackMsg: string) => {
+    if (err.message?.includes('row-level security') || err.code === '42501') {
+      setRlsError(true);
+    } else {
+      alert(fallbackMsg + ': ' + (err.message ?? err));
+    }
+  };
+
   const handleAssignBadge = async (empNo: string, badge: string) => {
     setBadgeBusy(true);
     try {
@@ -262,6 +290,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       refreshBadgeAssignments();
       refreshAllEmployeeBadges();
       setAddSearch('');
+    } catch (err: any) {
+      handleBadgeOpError(err, '인원 추가 실패');
     } finally {
       setBadgeBusy(false);
     }
@@ -272,6 +302,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
     try {
       await db.setTtsMustCall(empNo, orgDisaster, orgShift, next);
       refreshBadgeAssignments();
+    } catch (err: any) {
+      handleBadgeOpError(err, 'TTS 필수 설정 실패');
     } finally {
       setBadgeBusy(false);
     }
@@ -284,6 +316,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       await db.deleteEmployeeBadge(empNo, orgDisaster, orgShift);
       refreshBadgeAssignments();
       refreshAllEmployeeBadges();
+    } catch (err: any) {
+      handleBadgeOpError(err, '인원 제거 실패');
     } finally {
       setBadgeBusy(false);
     }
@@ -298,6 +332,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       refreshBadgeAssignments();
       refreshAllEmployeeBadges();
       setBulkTeam('');
+    } catch (err: any) {
+      handleBadgeOpError(err, '팀 일괄 추가 실패');
     } finally {
       setBadgeBusy(false);
     }
