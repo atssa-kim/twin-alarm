@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { db, supabase, type EmployeeDB, type DisasterRole, type DisasterTask } from '../services/supabase';
-import { UserPlus, Pencil, Trash2, X, Save, Users, ChevronDown, Copy, ExternalLink, Download } from 'lucide-react';
+import { UserPlus, Pencil, Trash2, X, Save, Users, ChevronDown, GripVertical, Copy, ExternalLink, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { IncidentHistoryPanel } from './IncidentHistoryPanel';
 
@@ -63,7 +63,7 @@ const ADMIN_ORG_SHIFT_KEY = 'tt_admin_org_shift';
 const ADMIN_FILTER_CATEGORY_KEY = 'tt_admin_filter_category';
 
 const RLS_FIX_SQL =
-  `ALTER TABLE employees DISABLE ROW LEVEL SECURITY;\nALTER TABLE employee_disaster_badges DISABLE ROW LEVEL SECURITY;`;
+  `ALTER TABLE employees DISABLE ROW LEVEL SECURITY;\nALTER TABLE employee_disaster_badges DISABLE ROW LEVEL SECURITY;\nALTER TABLE disaster_roles DISABLE ROW LEVEL SECURITY;`;
 const SUPABASE_SQL_URL = 'https://supabase.com/dashboard/project/hzqesdprnlpzaomaeswx/sql/new';
 
 // ── 전화번호 자동 포맷 ───────────────────────────────────────
@@ -132,6 +132,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
   const [addSearch, setAddSearch] = useState('');
   const [bulkTeam, setBulkTeam] = useState('');
   const [badgeBusy, setBadgeBusy] = useState(false);
+  // 재난편제표: 배지 카드 드래그 정렬 중 상태 — 드래그 중인 카드/현재 포인터가 올라간 카드의 orgRoles 인덱스.
+  // state는 시각적 표시(파란 테두리)용, ref는 실제 로직용 — pointerup이 마지막 pointermove의 리렌더보다
+  // 먼저 실행되는 경우가 있어(React state closure가 갱신되기 전) state만 읽으면 놓기 직전 값을 놓칠 수 있음
+  const [dragRoleIdx, setDragRoleIdx] = useState<number | null>(null);
+  const [dragOverRoleIdx, setDragOverRoleIdx] = useState<number | null>(null);
+  const dragRoleIdxRef = useRef<number | null>(null);
+  const dragOverRoleIdxRef = useRef<number | null>(null);
   // 직원목록 탭: 전 직원의 배지 배정 현황 (읽기전용 표시용)
   const [allEmployeeBadges, setAllEmployeeBadges] = useState<Record<string, Record<string, string>>>({});
   const refreshAllEmployeeBadges = () => {
@@ -334,6 +341,57 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
       setBulkTeam('');
     } catch (err: any) {
       handleBadgeOpError(err, '팀 일괄 추가 실패');
+    } finally {
+      setBadgeBusy(false);
+    }
+  };
+
+  // 재난편제표: 배지 카드 드래그 정렬 — 손잡이(⠿)를 눌러 끄는 동안 포인터 아래 카드 위치로 미리보기,
+  // 놓으면 전체 목록의 sort_order를 새 순서대로 다시 매겨 저장
+  const handleDragHandlePointerDown = (e: React.PointerEvent<HTMLDivElement>, idx: number) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRoleIdxRef.current = idx;
+    dragOverRoleIdxRef.current = idx;
+    setDragRoleIdx(idx);
+    setDragOverRoleIdx(idx);
+  };
+
+  const handleDragHandlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragRoleIdxRef.current === null) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const cardEl = el?.closest('[data-role-idx]') as HTMLElement | null;
+    if (!cardEl) return;
+    const idx = Number(cardEl.dataset.roleIdx);
+    if (!Number.isNaN(idx) && idx !== dragOverRoleIdxRef.current) {
+      dragOverRoleIdxRef.current = idx;
+      setDragOverRoleIdx(idx);
+    }
+  };
+
+  const handleDragHandlePointerUp = async (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    const from = dragRoleIdxRef.current;
+    const to = dragOverRoleIdxRef.current;
+    dragRoleIdxRef.current = null;
+    dragOverRoleIdxRef.current = null;
+    setDragRoleIdx(null);
+    setDragOverRoleIdx(null);
+    if (from === null || to === null || from === to) return;
+
+    const reordered = orgRoles.slice();
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+    setOrgRoles(reordered);
+    setBadgeBusy(true);
+    try {
+      await Promise.all(reordered.map((r, i) => db.updateDisasterRoleSortOrder(r.id, (i + 1) * 10)));
+      const roles = await db.getDisasterRolesWithTasks(orgDisaster, orgShift);
+      setOrgRoles(roles);
+    } catch (err: any) {
+      handleBadgeOpError(err, '순서 변경 실패');
+      const roles = await db.getDisasterRolesWithTasks(orgDisaster, orgShift).catch(() => []);
+      setOrgRoles(roles);
     } finally {
       setBadgeBusy(false);
     }
@@ -582,7 +640,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                 {orgShift === 'night' ? ' (야간 임무는 아직 화재만 있습니다 — 재난대응메뉴얼에서 다른 재난 야간 역할도 만들 수 있습니다).' : ' (재난대응메뉴얼에서 역할을 먼저 만들어야 합니다).'}
               </div>
             )}
-            {orgRoles.map(role => {
+            {orgRoles.map((role, roleIdx) => {
               const color = role.bc || '#2563eb';
               const badge = role.badge;
               const assignedNos = badgeAssignments[badge] ?? [];
@@ -599,12 +657,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
                   ).slice(0, 8)
                 : [];
 
+              const isDragging = dragRoleIdx === roleIdx;
+              const isDragOver = dragOverRoleIdx === roleIdx && dragRoleIdx !== null && dragRoleIdx !== roleIdx;
+
               return (
-                <div key={badge} style={{ border: `1px solid ${color}33`, borderRadius: '10px', overflow: 'hidden' }}>
+                <div key={badge} data-role-idx={roleIdx} style={{
+                  border: `1px solid ${color}33`, borderRadius: '10px', overflow: 'hidden',
+                  opacity: isDragging ? 0.4 : 1,
+                  boxShadow: isDragOver ? `0 0 0 2px ${color}` : 'none',
+                  transition: 'box-shadow 0.1s',
+                }}>
                   <div onClick={() => setPreviewBadge(isOpen ? null : badge)} style={{
                     display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', cursor: 'pointer',
                     background: `${color}10`, borderBottom: isOpen ? `1px solid ${color}22` : 'none',
                   }}>
+                    <div
+                      onPointerDown={(e) => handleDragHandlePointerDown(e, roleIdx)}
+                      onPointerMove={handleDragHandlePointerMove}
+                      onPointerUp={handleDragHandlePointerUp}
+                      onPointerCancel={handleDragHandlePointerUp}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        display: 'flex', alignItems: 'center', flexShrink: 0,
+                        touchAction: 'none', cursor: dragRoleIdx !== null ? 'grabbing' : 'grab',
+                        padding: '2px', opacity: 0.5,
+                      }}>
+                      <GripVertical size={14} color={color} />
+                    </div>
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, flexShrink: 0 }} />
                     <span style={{ fontSize: '13px', fontWeight: 800, color, flex: 1 }}>{badge}</span>
                     <span style={{ fontSize: '10px', color: '#64748b' }}>{role.role}</span>

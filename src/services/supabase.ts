@@ -64,6 +64,7 @@ export interface DisasterRole {
   role: string;
   badge: string;
   bc: string | null;
+  sort_order: number | null; // 재난편제표 배지 카드 표시 순서 — null이면 id 순(기존 동작)으로 정렬됨
   disaster_tasks?: DisasterTask[];
 }
 
@@ -262,9 +263,25 @@ export const db = {
       .select('*, disaster_tasks(*)')
       .eq('disaster', disasterKey)
       .eq('shift', shift)
+      .order('sort_order', { ascending: true, nullsFirst: false })
       .order('id');
     if (error) throw error;
     return (data ?? []) as (DisasterRole & { disaster_tasks: DisasterTask[] })[];
+  },
+
+  // 재난편제표: 배지 카드 순서 변경(드래그) — sort_order 직접 지정
+  // RLS가 막고 있으면 postgrest가 에러 없이 0건 반영으로 "성공" 응답하므로, .select()로 실제 반영 행을
+  // 확인해 0건이면 명시적으로 에러를 던짐 (안 그러면 화면만 잠깐 바뀌었다가 새로고침 시 조용히 원복됨)
+  async updateDisasterRoleSortOrder(roleId: number, sortOrder: number): Promise<void> {
+    const { data, error } = await supabase
+      .from('disaster_roles')
+      .update({ sort_order: sortOrder })
+      .eq('id', roleId)
+      .select('id');
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      throw new Error('순서 저장이 반영되지 않았습니다 (권한 문제로 보임 — disaster_roles RLS 확인 필요)');
+    }
   },
 
   // 8. Fetch all employees from DB
