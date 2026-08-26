@@ -12,7 +12,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 //       AdminPanel "재난 편제표" 탭에서 재난·사람별로 체크 관리)에게 전화.
 //   훈련
 //     → 대기 없이 즉시, incidents.tts_emp_nos(지휘본부 "훈련 참여인원설정" 화면에서
-//       사람별로 체크한 TTS 즉시발신 대상, 참여 여부와 독립)에 있는 사람에게만 전화.
+//       사람별로 체크한 TTS 즉시발신 대상)에 있는 사람에게만 전화. 2026-07-26부터 이
+//       화면에서 참여 체크를 하면 TTS도 기본으로 같이 켜지도록 바뀜(개별로 나중에 끌 수
+//       있음) — 더 이상 참여 여부와 완전히 독립적이지 않음, CommanderDashboard.tsx의
+//       applyParticipant 참고.
 //       AdminPanel의 TTS 필수인원(실제상황용 고정 명단)과는 별개 — 훈련은 매번 다른 사람을
 //       테스트하고 싶을 수 있어서 그때그때 참여인원설정 화면에서 고름. 아무도 안 체크했으면
 //       (tts_emp_nos 비어있음) 그 훈련은 전화 자체가 안 감 — 별도 on/off 체크박스는 없음.
