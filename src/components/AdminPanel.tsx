@@ -572,7 +572,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ employees, onRefresh }) 
         {([
           { key: 'list' as const, label: '👥 직원 목록' },
           { key: 'org'  as const, label: '🗂 재난 편제표' },
-          { key: 'history' as const, label: '🗃 기타관리' },
+          { key: 'history' as const, label: '🗃 보고서등' },
         ]).map(tab => (
           <button key={tab.key} type="button" onClick={() => setAdminTab(tab.key)} style={{
             flex: 1, padding: '8px 0', fontSize: '12px', fontWeight: 700, cursor: 'pointer', borderRadius: '7px',

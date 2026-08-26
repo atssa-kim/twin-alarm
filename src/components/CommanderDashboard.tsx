@@ -12,6 +12,24 @@ export const VARIANT_LABELS: Record<string, string> = {
   '지하주차장': '🚗 지하주차장',
 };
 
+// 재난 발생 위치 텍스트에 이 키워드가 포함되면 발령 즉시 해당 상황(variant)을 자동 확정 —
+// 지휘관이 발령 후 별도로 "상황 확정" 버튼을 누르지 않아도 출동조·소화조·소방안전관리자의
+// 임무가 그 상황에 맞게 바로 표시되도록 함(2026-08-26). 위에 없는 키워드가 먼저 매칭되면
+// 그 variant를 쓰고, 매칭이 없으면 기존처럼 미확정(null) 상태로 발령됨 — 나중에 수동 확정 가능.
+const LOCATION_VARIANT_KEYWORDS: [string, string][] = [
+  ['지하주차장', '지하주차장'],
+  ['UPS', 'UPS실'],
+  ['주방', 'K급주방'],
+  ['가스방호구역', '가스구역'],
+];
+function detectVariantFromLocation(location: string): string | null {
+  const lower = location.toLowerCase();
+  for (const [keyword, variant] of LOCATION_VARIANT_KEYWORDS) {
+    if (lower.includes(keyword.toLowerCase())) return variant;
+  }
+  return null;
+}
+
 // 전광판 표시용 상태 라벨 — 출동중 체크 여부와 무관하게 임무를 하나라도 체크하면 자동으로 '현장'
 // 상태가 됨(2026-07-24). 화면에는 데이터값 그대로 "현장"으로 표시.
 const responderStatusLabel = (status: string) => status;
@@ -383,9 +401,12 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
         ? allRoles.filter(r => FIRE_INITIAL_BADGES.has(r.badge))
         : allRoles;
 
+      // 화재는 위치 텍스트에 특정 구역 키워드가 있으면 발령 즉시 상황(variant)을 자동 확정
+      const autoVariant = isFireDisaster ? detectVariantFromLocation(location.trim()) : null;
+
       const incident = await db.declareIncident(
         selectedDisasterKey, modeLabel, location.trim(), scope, currentUser.empNo, drillEmpNos, shift,
-        ttsEmpNos
+        ttsEmpNos, autoVariant
       );
 
       const bulkTasks: Omit<MemberTask, 'updated_at' | 'done_by'>[] = [];

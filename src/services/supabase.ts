@@ -116,7 +116,7 @@ export interface DutyMatrixRow {
 // Database helper functions
 export const db = {
   // 1. Declare active incident
-  async declareIncident(disaster: string, mode: string, location: string, scope: string, declaredBy: string, drillEmpNos: string | null = null, shift: string = 'day', ttsEmpNos: string | null = null) {
+  async declareIncident(disaster: string, mode: string, location: string, scope: string, declaredBy: string, drillEmpNos: string | null = null, shift: string = 'day', ttsEmpNos: string | null = null, variant: string | null = null) {
     const incidentId = `inc_${Date.now()}`;
     const incident: Incident = {
       id: incidentId,
@@ -130,6 +130,7 @@ export const db = {
       drill_emp_nos: drillEmpNos,
       shift,
       tts_emp_nos: ttsEmpNos,
+      variant,
     };
 
     // Close any previous incidents just in case
