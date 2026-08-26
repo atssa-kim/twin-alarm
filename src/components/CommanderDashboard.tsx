@@ -394,7 +394,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
           .sort((a, b) => a.task_idx - b.task_idx)
           .forEach(task => {
             bulkTasks.push({
-              id: `${incident.id}_${role.role}_${task.task_idx}`,
+              id: `${incident.id}_${role.id}_${task.task_idx}`,
               incident_id: incident.id,
               emp_no: '',
               role: role.role,
@@ -475,7 +475,7 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
           .sort((a, b) => a.task_idx - b.task_idx)
           .forEach(task => {
             bulkTasks.push({
-              id: `${activeIncident.id}_${role.role}_${task.task_idx}`,
+              id: `${activeIncident.id}_${role.id}_${task.task_idx}`,
               incident_id: activeIncident.id,
               emp_no: '',
               role: role.role,
