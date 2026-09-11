@@ -7,7 +7,8 @@
  *           Storage 버킷 생성).
  *
  * 하는 일:
- *   1. facility_categories에 "실외기 현황 및 도면"(disaster='화재') 카테고리 1건 생성(이미 있으면 재사용).
+ *   1. facility_categories에 "실외기 현황"(disaster='화재') 카테고리 1건 생성(이미 있으면 재사용).
+ *      (2026-09-11: 라벨을 "실외기 현황 및 도면"→"실외기 현황"으로 정정 — fix-facility-outdoor-label-260911.ts)
  *   2. "실외기실 현황_위치도면.pdf"(2026-09-10)의 실외기 현황 표 109건을 facility_items로 등록.
  *   3. 도면 이미지 6장(B3/B2/B1/1층/36층 동관/36층 서관)을 Storage에 업로드하고
  *      facility_drawings에 등록.
@@ -165,7 +166,7 @@ const DRAWINGS = [
 const DRAWINGS_DIR = resolve('C:/kcoding/disa_app/images/facility/outdoor');
 
 async function main() {
-  const label = '실외기 현황 및 도면';
+  const label = '실외기 현황';
 
   let { data: cat } = await supabase.from('facility_categories').select('id').eq('label', label).maybeSingle();
   if (!cat) {
