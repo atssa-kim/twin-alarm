@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { type Incident, type Responder, type MemberTask, type EmployeeDB, db, supabase } from '../services/supabase';
 import { DISASTERS, FIRE_INITIAL_BADGES } from '../data/disasters';
 import { stopAllAlerts } from '../utils/audio';
@@ -101,6 +101,22 @@ const TEAM_ORDER = [
   '운영파트', '건축파트', '품질/안전파트',
   '보안1', '보안2', '보안3',
   '주차파트', '미화파트',
+];
+
+// 화재·전체훈련·주간 조합의 훈련참여인원 기본값 (2026-09-30 요청) — 참여는 전체 선택,
+// TTS는 각 파트장급 인원으로 고정. CommanderDashboard의 프리셋 useEffect에서 사용.
+const FIRE_FULL_DAY_TTS_EMP_NOS = [
+  'E-0001', // 김기창 · 센터장
+  'E-2001', // 손남열 · 기계파트장
+  'E-3001', // 이길호 · 전기파트장
+  'E-5001', // 이수용 · 건축파트장
+  'E-5007', // 김정훈 · 건축현장
+  'E-6001', // 안상오 · 품질/안전파트
+  'E-7001', // 김우현 · 보안1
+  'E-7004', // 길성용 · 보안3
+  'E-7005', // 김성진 · 보안3
+  'E-9001', // 김재석 · 주차파트
+  'E-8001', // 지정운 · 미화파트
 ];
 
 // 훈련 참여인원 선택기(1차 발령)와 2차 소집 대원 선택기가 거의 동일한 구조라 공통 컴포넌트로
@@ -318,6 +334,19 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
   const [openAccordions, setOpenAccordions] = useState<Set<string>>(new Set());
   // 훈련 중 TTS 즉시발신 대상 — 체크된 사람에게만 감(2026-07-24, 참여 여부와 독립)
   const [ttsEmps, setTtsEmps] = useState<Set<string>>(new Set());
+
+  // 화재·전체훈련·주간 조합에 처음 들어올 때 참여인원 전체선택 + TTS를 파트장급으로
+  // 자동 채움(2026-09-30). 같은 조합에 머무는 동안은 재적용하지 않아 수동 수정이
+  // 유지되고, 다른 조합으로 나갔다가 다시 들어오면 기본값이 다시 채워진다.
+  const appliedFirePresetKey = useRef<string | null>(null);
+  useEffect(() => {
+    const isTargetCombo = selectedDisasterKey === '화재' && selectedMode === '훈련' && fireSubMode === 'full' && fireShift === 'day';
+    if (!isTargetCombo) { appliedFirePresetKey.current = null; return; }
+    if (appliedFirePresetKey.current === 'applied' || employees.length === 0) return;
+    appliedFirePresetKey.current = 'applied';
+    setSelectedEmps(new Set(employees.map(e => e.emp_no)));
+    setTtsEmps(new Set(FIRE_FULL_DAY_TTS_EMP_NOS));
+  }, [selectedDisasterKey, selectedMode, fireSubMode, fireShift, employees]);
 
   // 전체훈련 승격 시 나머지 대원 선택
   const [escalateEmps, setEscalateEmps] = useState<Set<string>>(new Set());
