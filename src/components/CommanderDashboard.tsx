@@ -349,6 +349,21 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
     setTtsEmps(new Set(FIRE_FULL_DAY_TTS_EMP_NOS));
   }, [selectedDisasterKey, selectedMode, fireSubMode, fireShift, employees]);
 
+  // 화재·감지기동작·주간(=초기출동조 1차출동) 조합의 기본값(2026-10-01) — 전기파트·
+  // 소방파트를 참여인원+TTS로 자동 채움. 위 전체훈련 프리셋과 같은 방식으로 동작.
+  const appliedInitialPresetKey = useRef<string | null>(null);
+  useEffect(() => {
+    const isInitialCombo = selectedDisasterKey === '화재' && selectedMode === '훈련' && fireSubMode === 'initial' && fireShift === 'day';
+    if (!isInitialCombo) { appliedInitialPresetKey.current = null; return; }
+    if (appliedInitialPresetKey.current === 'applied' || employees.length === 0) return;
+    appliedInitialPresetKey.current = 'applied';
+    const initialResponseGroup = employees
+      .filter(e => ['전기파트', '전기파트장', '소방파트', '소방파트장'].includes(e.team))
+      .map(e => e.emp_no);
+    setSelectedEmps(new Set(initialResponseGroup));
+    setTtsEmps(new Set(initialResponseGroup));
+  }, [selectedDisasterKey, selectedMode, fireSubMode, fireShift, employees]);
+
   // 전체훈련 승격 시 나머지 대원 선택
   const [escalateEmps, setEscalateEmps] = useState<Set<string>>(new Set());
   const [escalateTtsEmps, setEscalateTtsEmps] = useState<Set<string>>(new Set());
@@ -463,9 +478,19 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
       if (selectedMode === '훈련' && selectedEmps.size > 0) {
         const selected = employees.filter(e => selectedEmps.has(e.emp_no));
         await db.setTrainingParticipants(incident.id, selected, []);
-        // 승격 패널 선택을 직전 훈련 참여인원과 동일하게 이어받음 + 패널 자동 오픈
-        setEscalateEmps(new Set(selectedEmps));
-        setEscalateTtsEmps(new Set(ttsEmps));
+        // 화재·감지기동작·주간(초기출동조 1차출동)에서 승격하는 경우 — 승격 패널은
+        // 1차출동에 이미 나간 인원 말고 "나머지 인원"을 기본값으로 하고, TTS는
+        // 주간 전체 프리셋에서 이미 연락한 이길호(전기파트장)만 제외 (2026-10-01).
+        const isInitialFireDrillDay = isFireDisaster && fireSubMode === 'initial' && fireShift === 'day';
+        if (isInitialFireDrillDay) {
+          const remaining = employees.filter(e => !selectedEmps.has(e.emp_no)).map(e => e.emp_no);
+          setEscalateEmps(new Set(remaining));
+          setEscalateTtsEmps(new Set(FIRE_FULL_DAY_TTS_EMP_NOS.filter(empNo => empNo !== 'E-3001')));
+        } else {
+          // 승격 패널 선택을 직전 훈련 참여인원과 동일하게 이어받음
+          setEscalateEmps(new Set(selectedEmps));
+          setEscalateTtsEmps(new Set(ttsEmps));
+        }
         setShowEscalatePanel(true);
       } else {
         setEscalateEmps(new Set());
