@@ -107,6 +107,7 @@ const TEAM_ORDER = [
 // TTS는 각 파트장급 인원으로 고정. CommanderDashboard의 프리셋 useEffect에서 사용.
 const FIRE_FULL_DAY_TTS_EMP_NOS = [
   'E-0001', // 김기창 · 센터장
+  'E-1003', // 박세훈 · 운영파트장
   'E-2001', // 손남열 · 기계파트장
   'E-3001', // 이길호 · 전기파트장
   'E-5001', // 이수용 · 건축파트장
