@@ -637,8 +637,10 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
         ) : (
         <>
           {/* 타임라인 스텝형 발령 폼 (2026-07-29 개편) — 번호 노드 + 세로 연결선.
-              2단계(발령 구분)는 훈련=남색 톤, 실제=적색 톤으로 대비. 접힌 "실제상황" 줄은
-              선택되지 않은 상태에서도 굵은 적색 테두리 + 큰 화살표로 눈에 띄게 처리. */}
+              2단계(발령 구분)는 훈련=남색 톤, 실제=적색 톤으로 대비. 선택되지 않은 줄은
+              훈련/실제 구분 없이 동일하게 흐린 테두리로 표시해 선택 여부를 명확히 함
+              (2026-09-30: "실제상황"만 미선택 시에도 굵은 적색으로 강조하던 처리를
+              제거 — 훈련상황 선택 중에 실제상황이 이미 활성화된 것처럼 보이는 문제). */}
           <form onSubmit={handleDeclare} style={{ position: 'relative', paddingLeft: '28px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ position: 'absolute', left: '11px', top: '11px', bottom: '11px', width: '2px', background: 'var(--border-glow)' }} />
 
@@ -685,13 +687,11 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                   const subLabel = isSel && isFireDisaster
                     ? (fireSubMode === 'initial' ? '감지기동작' : mode === '훈련' ? '전체훈련' : '화재상황')
                     : '';
-                  // 접혀 있어도 "실제상황"만은 굵은 적색 테두리·배경·큰 화살표로 강조 (위급 옵션임을 항상 표시)
-                  const collapsedUrgent = !isSel && isReal;
                   return (
                     <div key={mode} style={{
-                      border: `${isSel || collapsedUrgent ? 2 : 1.5}px solid ${isSel || collapsedUrgent ? color : 'rgba(11,37,69,0.12)'}`,
+                      border: `${isSel ? 2 : 1.5}px solid ${isSel ? color : 'rgba(11,37,69,0.12)'}`,
                       borderRadius: '12px', overflow: 'hidden',
-                      background: isSel ? color + '14' : collapsedUrgent ? '#fdeeee' : 'transparent',
+                      background: isSel ? color + '14' : 'transparent',
                       boxShadow: isSel ? `0 2px 8px ${color}33` : 'none',
                       transition: 'all 0.2s',
                     }}>
@@ -710,14 +710,14 @@ export const CommanderDashboard: React.FC<CommanderDashboardProps> = ({
                             background: color, color: '#fff', fontSize: '12px', fontWeight: 900,
                           }}>✓</span>
                         )}
-                        <span style={{ fontSize: '15px', fontWeight: isSel || collapsedUrgent ? 900 : 700, color: isSel || collapsedUrgent ? color : '#475569', flex: 1 }}>
+                        <span style={{ fontSize: '15px', fontWeight: isSel ? 900 : 700, color: isSel ? color : '#475569', flex: 1 }}>
                           {modeLabel}
                         </span>
                         {subLabel && (
                           <span style={{ fontSize: '11px', color: color, fontWeight: 800 }}>{subLabel}</span>
                         )}
-                        <span style={{ fontSize: collapsedUrgent ? '20px' : '10px', fontWeight: 800, color: collapsedUrgent ? color : '#475569', lineHeight: 1 }}>
-                          {isSel ? (isFireDisaster ? '▲' : '') : (collapsedUrgent ? '▸' : (isFireDisaster ? '▶' : ''))}
+                        <span style={{ fontSize: '10px', fontWeight: 800, color: '#475569', lineHeight: 1 }}>
+                          {isSel ? (isFireDisaster ? '▲' : '') : (isFireDisaster ? '▶' : '')}
                         </span>
                       </div>
                       {isSel && isFireDisaster && (
