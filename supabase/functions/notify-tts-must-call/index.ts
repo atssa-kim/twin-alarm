@@ -99,8 +99,20 @@ async function sendSolapiMessages(
     });
     const result = await resp.json();
     const sent = result?.groupInfo?.count?.total ?? messages.length;
-    console.log(`[${logLabel}] sent=${sent}, status=${resp.status}`);
+    // send-many 응답은 HTTP 200이어도 수신자별로 거부될 수 있음 — failedMessageList에
+    // 거부된 번호와 사유(statusCode/statusMessage)가 담겨오므로 그대로 기록해 나중에
+    // "왜 이 사람만 전화가 안 갔는지" 추적 가능하게 함 (2026-10-01, 특정 수신자만 반복
+    // 실패하던 사례 발견 후 추가 — 코드 버그가 아니라 SOLAPI가 그 번호를 거부한 것이었음).
+    const failedList: Array<{ to?: string; statusCode?: string; statusMessage?: string }> = Array.isArray(result?.failedMessageList)
+      ? result.failedMessageList
+      : [];
+    console.log(`[${logLabel}] sent=${sent}, status=${resp.status}, failed=${failedList.length}`);
     if (!resp.ok) return { sent, ok: false, error: `SOLAPI HTTP ${resp.status}: ${JSON.stringify(result).slice(0, 300)}` };
+    if (failedList.length > 0) {
+      const detail = failedList.map(f => `${f.to ?? '?'}(${f.statusCode ?? '?'}:${f.statusMessage ?? '?'})`).join(', ');
+      console.warn(`[${logLabel}] 일부 수신자 거부됨: ${detail}`);
+      return { sent, ok: true, error: `일부 발신 거부(${failedList.length}건): ${detail}`.slice(0, 500) };
+    }
     return { sent, ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -233,14 +245,15 @@ Deno.serve(async (req) => {
         ? `화재감지기 동작. ${location}. 확인 바랍니다.`
         : `${disaster} 발생. ${location}. 즉시 확인 바랍니다.`;
     const result = await sendVoiceCalls(phones, text);
-    if (!result.ok && phones.length > 0) {
-      console.error(`TTS 발신 실패(incident=${incidentId}, mode=${mode}):`, result.error);
+    if (result.error && phones.length > 0) {
+      console.error(`TTS 발신 문제(incident=${incidentId}, mode=${mode}):`, result.error);
     }
 
     await recordResult(supabase, incidentId, mode, {
       target_count: targetEmpNos.length,
       called_count: result.sent,
-      error: result.ok ? null : (result.error ?? '발신 실패'),
+      // ok=true여도 일부 수신자가 거부됐으면 그 상세 사유를 남김(위 sendSolapiMessages 참고)
+      error: result.error ?? (result.ok ? null : '발신 실패'),
     });
 
     return new Response(JSON.stringify({ called: result.sent, targets: targetEmpNos.length, ok: result.ok }), {
